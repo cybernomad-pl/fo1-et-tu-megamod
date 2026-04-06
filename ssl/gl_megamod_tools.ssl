@@ -32,7 +32,9 @@ procedure handle_lighter(variable target, variable target_pid);
 procedure handle_rope(variable target);
 procedure handle_crowbar(variable target);
 procedure handle_shovel_on_corpse(variable target);
+procedure handle_dismantle_scenery(variable target);
 procedure is_valid_dig_terrain;
+procedure is_mechanical_scenery(variable pid);
 
 procedure start begin
     if game_loaded then begin
@@ -157,6 +159,12 @@ procedure useobjon_handler begin
     // === ROPE on critter ===
     if (used_pid == PID_ROPE and target_type == OBJ_TYPE_CRITTER) then begin
         call handle_rope(target);
+        return;
+    end
+
+    // === TOOLS on scenery -> dismantle for junk ===
+    if ((used_pid == PID_MULTI_TOOL or used_pid == PID_SUPER_TOOL_KIT) and target_type == OBJ_TYPE_SCENERY) then begin
+        call handle_dismantle_scenery(target);
         return;
     end
 
@@ -294,6 +302,99 @@ procedure handle_shovel_on_corpse(variable target) begin
     give_exp_points(XP_BURY_CORPSE);
     display_msg("[Shovel] +" + XP_BURY_CORPSE + " XP");
     set_sfall_return(-1);
+end
+
+// ============================================================
+// DISMANTLE SCENERY -- tools on mechanical scenery = junk
+// ============================================================
+procedure handle_dismantle_scenery(variable target) begin
+    variable pid;
+    variable obj_id;
+    variable result;
+    variable junk_count;
+    variable caps_bonus;
+    variable skill_val;
+    variable roll;
+
+    pid := obj_pid(target);
+
+    if not(is_mechanical_scenery(pid)) then begin
+        display_msg("Nothing useful to salvage from this.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    obj_id := (tile_num(target) * 10000) + pid;
+
+    if (dismantled_scenery[obj_id] != 0) then begin
+        display_msg("You've already stripped this for parts.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    skill_val := has_skill(dude_obj, SKILL_REPAIR);
+    if (skill_val < 25) then begin
+        display_msg("You wouldn't know where to start. More Repair training needed.");
+        give_exp_points(3);
+        display_msg("[Repair] +3 XP");
+        set_sfall_return(-1);
+        return;
+    end
+
+    dismantled_scenery[obj_id] := 1;
+    save_array("megamod_repair_scen", dismantled_scenery);
+
+    roll := random(1, 100);
+    if (roll > skill_val) then begin
+        display_msg("You fumble with the parts. Nothing salvageable.");
+        give_exp_points(3);
+        display_msg("[Repair] +3 XP");
+        set_sfall_return(-1);
+        return;
+    end
+
+    junk_count := random(1, 3);
+    if (pid == 656 or pid == 55 or pid == 56) then
+        junk_count := random(2, 3);
+
+    variable i;
+    variable item;
+    for (i := 0; i < junk_count; i++) begin
+        item := create_object(PID_JUNK, 0, 0);
+        add_obj_to_inven(dude_obj, item);
+    end
+
+    caps_bonus := 0;
+    if (pid == 907 or pid == 908) then begin
+        caps_bonus := random(5, 25);
+        item_caps_adjust(dude_obj, caps_bonus);
+        display_msg("You salvage " + junk_count + " Junk and shake out " + caps_bonus + " bottle caps.");
+    end
+    else begin
+        display_msg("You salvage " + junk_count + " Junk.");
+    end
+
+    give_exp_points(25);
+    display_msg("[Repair] +25 XP");
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// SCENERY CLASSIFICATION
+// ============================================================
+procedure is_mechanical_scenery(variable pid) begin
+    if (pid == 9 or pid == 11 or pid == 12) then return 1;
+    if (pid >= 13 and pid <= 17) then return 1;
+    if (pid == 25 or pid == 26) then return 1;
+    if (pid >= 43 and pid <= 48) then return 1;
+    if (pid == 55 or pid == 56) then return 1;
+    if (pid == 158 or pid == 159) then return 1;
+    if (pid == 656) then return 1;
+    if (pid == 50) then return 1;
+    if (pid == 20 or pid == 21 or pid == 28 or pid == 29) then return 1;
+    if (pid == 32 or pid == 33) then return 1;
+    if (pid == 907 or pid == 908) then return 1;
+    return 0;
 end
 
 // ============================================================
