@@ -1,16 +1,15 @@
 /*
     General Repair -- fo1-et-tu-megamod
 
-    USE REPAIR SKILL on ground items/scenery for:
+    USE REPAIR SKILL on ground items for:
     - Ammo conversion (need tools + junk in inventory)
     - Disassemble electronics (need tools)
     - Weapon upgrade (need tools + junk, same weapon in inventory)
-    - Dismantle scenery (need tools)
 
-    USE LIGHTER on booze (from inventory) -> Molotov
+    Scenery dismantling has been MOVED to gl_megamod_tools.ssl
+    (via HOOK_USEOBJON with tools).
 
-    Hook: HOOK_USESKILLON (Repair skill on objects)
-    Hook: HOOK_USEOBJON (lighter on booze in inventory)
+    Hook: HOOK_USESKILLON (Repair skill on ground items)
 */
 
 #include "define.h"
@@ -21,15 +20,12 @@
 
 #define PID_JUNK  98
 
-#define XP_SCENERY           25
 #define XP_AMMO              5
 #define XP_CRAFT             10
 #define XP_DISASSEMBLE       10
 #define XP_UPGRADE_L1        25
 #define XP_UPGRADE_L2        50
 #define XP_FAIL              3
-
-variable dismantled_scenery;
 
 procedure start;
 procedure repair_skill_handler;
@@ -39,21 +35,14 @@ procedure remove_junk(variable count);
 procedure add_junk(variable count);
 procedure try_ammo_conversion(variable ammo_obj);
 procedure try_disassemble_item(variable item_obj);
-procedure try_dismantle_scenery(variable scen_obj);
 procedure try_weapon_upgrade(variable weapon_obj);
 procedure repair_skill_check(variable threshold);
-procedure is_mechanical_scenery(variable pid);
 procedure is_ammo(variable pid);
 procedure is_disassemblable(variable pid);
 procedure is_upgradeable_weapon(variable pid);
 
 procedure start begin
     if game_loaded then begin
-        dismantled_scenery := load_array("megamod_repair_scen");
-        if (dismantled_scenery == 0) then begin
-            dismantled_scenery := create_array_map;
-            save_array("megamod_repair_scen", dismantled_scenery);
-        end
         register_hook_proc(HOOK_USESKILLON, repair_skill_handler);
     end
 end
@@ -120,7 +109,7 @@ end
 
 // ============================================================
 // REPAIR SKILL ON OBJECTS -- main handler
-// Player uses Repair skill on ground item or scenery
+// Player uses Repair skill on ground item
 // ============================================================
 procedure repair_skill_handler begin
     variable user;
@@ -140,20 +129,6 @@ procedure repair_skill_handler begin
 
     target_pid := obj_pid(target);
     target_type := obj_type(target);
-
-    // === REPAIR ON SCENERY -> dismantle ===
-    if (target_type == OBJ_TYPE_SCENERY) then begin
-        if (is_mechanical_scenery(target_pid)) then begin
-            if not(has_tools) then begin
-                display_msg("You need tools for this.");
-                set_sfall_return(-1);
-                return;
-            end
-            call try_dismantle_scenery(target);
-            set_sfall_return(-1);
-            return;
-        end
-    end
 
     // === REPAIR ON GROUND ITEM ===
     if (target_type == OBJ_TYPE_ITEM) then begin
@@ -180,10 +155,6 @@ procedure repair_skill_handler begin
         end
     end
 end
-
-// ============================================================
-// LIGHTER ON BOOZE -> Molotov (from inventory screen)
-// ============================================================
 
 // ============================================================
 // AMMO CONVERSION -- Repair skill on ammo on ground
@@ -262,65 +233,6 @@ procedure try_disassemble_item(variable item_obj) begin
 end
 
 // ============================================================
-// DISMANTLE SCENERY -- Repair skill on scenery
-// ============================================================
-procedure try_dismantle_scenery(variable scen_obj) begin
-    variable pid;
-    variable obj_id;
-    variable result;
-    variable junk_count;
-    variable caps_bonus;
-
-    pid := obj_pid(scen_obj);
-
-    obj_id := (tile_num(scen_obj) * 10000) + pid;
-
-    if (dismantled_scenery[obj_id] != 0) then begin
-        display_msg("You've already stripped this for parts.");
-        return;
-    end
-
-    result := repair_skill_check(25);
-
-    if (result == -1) then begin
-        display_msg("You wouldn't know where to start. More Repair training needed.");
-        give_exp_points(XP_FAIL);
-        display_msg("[Repair] +" + XP_FAIL + " XP");
-        return;
-    end
-
-    dismantled_scenery[obj_id] := 1;
-    save_array("megamod_repair_scen", dismantled_scenery);
-
-    if (result == 0) then begin
-        display_msg("You fumble with the parts. Nothing salvageable.");
-        give_exp_points(XP_FAIL);
-        display_msg("[Repair] +" + XP_FAIL + " XP");
-        return;
-    end
-
-    junk_count := random(1, 3);
-
-    if (pid == 656 or pid == 55 or pid == 56) then
-        junk_count := random(2, 3);
-
-    call add_junk(junk_count);
-
-    caps_bonus := 0;
-    if (pid == 907 or pid == 908) then begin
-        caps_bonus := random(5, 25);
-        item_caps_adjust(dude_obj, caps_bonus);
-        display_msg("You salvage " + junk_count + " Junk and shake out " + caps_bonus + " bottle caps.");
-    end
-    else begin
-        display_msg("You salvage " + junk_count + " Junk.");
-    end
-
-    give_exp_points(XP_SCENERY);
-    display_msg("[Repair] +" + XP_SCENERY + " XP");
-end
-
-// ============================================================
 // WEAPON UPGRADE -- Repair skill on weapon on ground
 // ============================================================
 procedure try_weapon_upgrade(variable weapon_obj) begin
@@ -385,20 +297,3 @@ procedure try_weapon_upgrade(variable weapon_obj) begin
     display_msg("[Repair] +" + XP_UPGRADE_L1 + " XP");
 end
 
-// ============================================================
-// SCENERY CLASSIFICATION
-// ============================================================
-procedure is_mechanical_scenery(variable pid) begin
-    if (pid == 9 or pid == 11 or pid == 12) then return 1;
-    if (pid >= 13 and pid <= 17) then return 1;
-    if (pid == 25 or pid == 26) then return 1;
-    if (pid >= 43 and pid <= 48) then return 1;
-    if (pid == 55 or pid == 56) then return 1;
-    if (pid == 158 or pid == 159) then return 1;
-    if (pid == 656) then return 1;
-    if (pid == 50) then return 1;
-    if (pid == 20 or pid == 21 or pid == 28 or pid == 29) then return 1;
-    if (pid == 32 or pid == 33) then return 1;
-    if (pid == 907 or pid == 908) then return 1;
-    return 0;
-end
