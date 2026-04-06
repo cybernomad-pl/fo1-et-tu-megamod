@@ -1,0 +1,280 @@
+/*
+    gl_shovel.ssl -- Shovel: Dig Stash Holes & Bury Corpses
+    fo1-et-tu-megamod
+
+    USE SHOVEL (from inventory) -> Dig a container hole at player's feet
+    USE SHOVEL ON dead critter  -> Bury the corpse
+
+    Hook: HOOK_USEOBJ   (player activates Shovel from inventory)
+    Hook: HOOK_USEOBJON (player uses Shovel on a dead critter)
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/lib.arrays.h"
+
+/* ---- Config ---- */
+#define XP_DIG_HOLE       10
+#define XP_BURY_CORPSE    15
+#define DIG_TIME_MINUTES   5
+#define BURY_TIME_MINUTES 10
+#define MAX_HOLES_PER_MAP  5
+
+/* Container PID for the "hole" -- a bag placed on the ground */
+#define PID_STASH_CONTAINER  PID_BAG
+
+/* ---- Persistent data ---- */
+variable holes_array;     /* map: "mapIdx_tile" -> 1, tracks all dug holes */
+variable hole_count_map;  /* map: mapIdx -> count of holes on that map */
+variable first_dig_done;  /* map: "first_dig" -> 1 after first dig XP */
+
+/* ---- Forward declarations ---- */
+procedure start;
+procedure useobj_handler;
+procedure useobjon_handler;
+procedure is_valid_dig_terrain;
+procedure get_map_hole_count(variable mapIdx);
+procedure record_hole(variable mapIdx, variable tile);
+procedure do_dig_hole;
+procedure do_bury_corpse(variable corpse);
+
+/* ==================================================================
+   ENTRY POINT
+   ================================================================== */
+procedure start begin
+    if game_loaded then begin
+        /* Load persistent arrays */
+        holes_array := load_array("megamod_shovel_holes");
+        if (holes_array == 0) then begin
+            holes_array := create_array_map;
+            save_array("megamod_shovel_holes", holes_array);
+        end
+
+        hole_count_map := load_array("megamod_shovel_hcount");
+        if (hole_count_map == 0) then begin
+            hole_count_map := create_array_map;
+            save_array("megamod_shovel_hcount", hole_count_map);
+        end
+
+        first_dig_done := load_array("megamod_shovel_first");
+        if (first_dig_done == 0) then begin
+            first_dig_done := create_array_map;
+            save_array("megamod_shovel_first", first_dig_done);
+        end
+
+        register_hook_proc(HOOK_USEOBJ, useobj_handler);
+        register_hook_proc(HOOK_USEOBJON, useobjon_handler);
+    end
+end
+
+/* ==================================================================
+   TERRAIN CHECK
+   Outdoor / diggable ground: elevation 0 and no roof tile above.
+   We read the roof FID at the player's tile -- if there is a roof
+   (FID != 1) we assume indoors. Elevation > 0 usually means
+   underground / vault.
+   ================================================================== */
+procedure is_valid_dig_terrain begin
+    variable tile;
+    variable elev;
+    variable roof_fid;
+
+    tile := tile_num(dude_obj);
+    elev := elevation(dude_obj);
+
+    /* Underground levels are never diggable */
+    if (elev > 0) then return 0;
+
+    /* Check for roof -- if present, we're indoors */
+    roof_fid := get_tile_roof_fid(tile, elev);
+    if (roof_fid != 1) then return 0;
+
+    return 1;
+end
+
+/* ==================================================================
+   HOLE TRACKING HELPERS
+   ================================================================== */
+procedure get_map_hole_count(variable mapIdx) begin
+    variable count;
+    count := hole_count_map[mapIdx];
+    if (count == 0) then return 0;
+    return count;
+end
+
+procedure record_hole(variable mapIdx, variable tile) begin
+    variable key;
+    key := "" + mapIdx + "_" + tile;
+    holes_array[key] := 1;
+    hole_count_map[mapIdx] := get_map_hole_count(mapIdx) + 1;
+    save_array("megamod_shovel_holes", holes_array);
+    save_array("megamod_shovel_hcount", hole_count_map);
+end
+
+/* ==================================================================
+   DIG A HOLE -- create container at player's feet
+   ================================================================== */
+procedure do_dig_hole begin
+    variable tile;
+    variable elev;
+    variable mapIdx;
+    variable container;
+    variable key;
+    variable is_first;
+
+    tile := tile_num(dude_obj);
+    elev := elevation(dude_obj);
+    mapIdx := cur_map_index;
+
+    /* Check if there's already a hole at this exact spot */
+    key := "" + mapIdx + "_" + tile;
+    if (holes_array[key] != 0) then begin
+        display_msg("There's already a hole here.");
+        return;
+    end
+
+    /* Per-map limit */
+    if (get_map_hole_count(mapIdx) >= MAX_HOLES_PER_MAP) then begin
+        display_msg("Too many holes on this map. Fill one in first.");
+        return;
+    end
+
+    /* Digging takes time */
+    gfade_out(1);
+    game_time_advance(DIG_TIME_MINUTES * ONE_GAME_MINUTE);
+
+    /* Create the stash container on the ground */
+    container := create_object(PID_STASH_CONTAINER, tile, elev);
+
+    /* Record it */
+    call record_hole(mapIdx, tile);
+
+    gfade_in(1);
+
+    display_msg("You dig a hole in the ground. You can stash items here.");
+
+    /* XP bonus on first ever dig */
+    is_first := first_dig_done["first_dig"];
+    if (is_first == 0) then begin
+        first_dig_done["first_dig"] := 1;
+        save_array("megamod_shovel_first", first_dig_done);
+        give_exp_points(XP_DIG_HOLE);
+        display_msg("[Shovel] +" + XP_DIG_HOLE + " XP (first dig)");
+    end
+end
+
+/* ==================================================================
+   BURY A CORPSE -- remove dead critter from the map
+   ================================================================== */
+procedure do_bury_corpse(variable corpse) begin
+    variable tile;
+    variable elev;
+    variable name;
+
+    tile := tile_num(corpse);
+    elev := elevation(corpse);
+    name := obj_name(corpse);
+
+    /* Burying takes time */
+    gfade_out(1);
+    game_time_advance(BURY_TIME_MINUTES * ONE_GAME_MINUTE);
+
+    /* Remove the corpse */
+    destroy_object(corpse);
+
+    gfade_in(1);
+
+    display_msg("You bury the remains. No one will find them.");
+    give_exp_points(XP_BURY_CORPSE);
+    display_msg("[Shovel] +" + XP_BURY_CORPSE + " XP");
+end
+
+/* ==================================================================
+   HOOK: USEOBJ -- Player uses Shovel from inventory
+   arg0 = user critter, arg1 = object being used
+   return: -1 = engine default, 0 = put item back, 1 = remove item
+   ================================================================== */
+procedure useobj_handler begin
+    variable user;
+    variable item;
+    variable item_pid;
+
+    user := get_sfall_arg;
+    item := get_sfall_arg;
+
+    if (user != dude_obj) then return;
+    if (item == 0) then return;
+
+    item_pid := obj_pid(item);
+    if (item_pid != PID_SHOVEL) then return;
+
+    /* Shovel activated from inventory -- try to dig a hole */
+    if not(is_valid_dig_terrain) then begin
+        display_msg("You can't dig here. The ground is too hard.");
+        set_sfall_return(0);
+        return;
+    end
+
+    /* Check for combat */
+    if (combat_is_initialized) then begin
+        display_msg("No time to dig during combat!");
+        set_sfall_return(0);
+        return;
+    end
+
+    call do_dig_hole;
+    set_sfall_return(0);  /* keep shovel in inventory */
+end
+
+/* ==================================================================
+   HOOK: USEOBJON -- Player uses Shovel on a target object
+   arg0 = user critter, arg1 = used object, arg2 = target object
+   ================================================================== */
+procedure useobjon_handler begin
+    variable user;
+    variable used_obj;
+    variable target;
+    variable used_pid;
+    variable target_type;
+
+    user     := get_sfall_arg;
+    used_obj := get_sfall_arg;
+    target   := get_sfall_arg;
+
+    if (user != dude_obj) then return;
+    if (used_obj == 0 or target == 0) then return;
+
+    used_pid := obj_pid(used_obj);
+    if (used_pid != PID_SHOVEL) then return;
+
+    target_type := obj_type(target);
+
+    /* Shovel used on a critter -- check if it's dead */
+    if (target_type == OBJ_TYPE_CRITTER) then begin
+        if not(is_critter_dead(target)) then begin
+            display_msg("You can't bury someone who's still alive!");
+            set_sfall_return(-1);
+            return;
+        end
+
+        /* Terrain check */
+        if not(is_valid_dig_terrain) then begin
+            display_msg("You can't dig a grave here. The ground is too hard.");
+            set_sfall_return(-1);
+            return;
+        end
+
+        /* Combat check */
+        if (combat_is_initialized) then begin
+            display_msg("No time to dig graves during combat!");
+            set_sfall_return(-1);
+            return;
+        end
+
+        call do_bury_corpse(target);
+        set_sfall_return(-1);
+        return;
+    end
+end
