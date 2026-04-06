@@ -1,0 +1,144 @@
+/*
+    General Science -- fo1-et-tu-megamod
+    Use Science on anything, once. Learn something about it. Get XP.
+
+    Hook: HOOK_USESKILLON
+    Tracking: sfall persistent array (saved with game)
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/lib.arrays.h"
+
+#define SKILL_SCIENCE  12
+#define BASE_XP        5
+#define RARE_XP        15
+#define SCRIPT_NAME    "gl_science"
+
+variable examined_objects;
+variable initialized;
+
+procedure start;
+procedure useskillon_handler;
+procedure get_flavor_text(variable obj);
+procedure is_rare_object(variable obj);
+
+procedure start begin
+    if game_loaded then begin
+        // Load or create persistent array for tracking examined objects
+        examined_objects := load_array("megamod_science");
+        if (examined_objects == 0) then begin
+            examined_objects := create_array_map;
+            save_array("megamod_science", examined_objects);
+        end
+        register_hook_proc(HOOK_USESKILLON, useskillon_handler);
+        initialized := 1;
+    end
+end
+
+procedure useskillon_handler begin
+    variable user;
+    variable target;
+    variable skill;
+    variable obj_id;
+    variable xp_gain;
+    variable flavor;
+
+    user   := get_sfall_arg;   // who uses skill
+    target := get_sfall_arg;   // target object
+    skill  := get_sfall_arg;   // skill number
+
+    // Only Science, only player
+    if (skill != SKILL_SCIENCE) then return;
+    if (user != dude_obj) then return;
+    if (target == 0) then return;
+
+    // Generate unique ID for this object
+    obj_id := obj_pid(target);
+
+    // Check if already examined this type
+    if (examined_objects[obj_id] != 0) then begin
+        display_msg("You've already studied this type of object.");
+        return;
+    end
+
+    // Mark as examined
+    examined_objects[obj_id] := 1;
+    save_array("megamod_science", examined_objects);
+
+    // Determine XP
+    if (is_rare_object(target)) then
+        xp_gain := RARE_XP;
+    else
+        xp_gain := BASE_XP;
+
+    // Give XP
+    give_exp_points(xp_gain);
+
+    // Show flavor text
+    flavor := get_flavor_text(target);
+    display_msg(flavor);
+    display_msg("You gained " + xp_gain + " XP from scientific observation.");
+end
+
+procedure is_rare_object(variable obj) begin
+    variable pid;
+    pid := obj_pid(obj);
+
+    // Terminals, generators, vehicles, unique scenery
+    // TODO: expand this list based on actual PIDs
+    if (obj_type(obj) == OBJ_TYPE_SCENERY) then return 1;
+    if (obj_type(obj) == OBJ_TYPE_WALL) then return 0;
+
+    return 0;
+end
+
+procedure get_flavor_text(variable obj) begin
+    variable obj_type_val;
+    variable pid;
+
+    obj_type_val := obj_type(obj);
+    pid := obj_pid(obj);
+
+    // Critters
+    if (obj_type_val == OBJ_TYPE_CRITTER) then begin
+        if (critter_kill_type(obj) == KILL_TYPE_MAN) then
+            return "You observe the subject's behavior patterns. Survival instincts, mostly.";
+        if (critter_kill_type(obj) == KILL_TYPE_WOMAN) then
+            return "You note the subject's adapted physiology. The wasteland changes everyone.";
+        if (critter_kill_type(obj) == KILL_TYPE_CHILD) then
+            return "A child of the wasteland. Born into a world you're only now discovering.";
+        if (critter_kill_type(obj) == KILL_TYPE_SUPER_MUTANT) then
+            return "FEV mutation -- massive bone density increase, muscle hypertrophy. Fascinating and terrifying.";
+        if (critter_kill_type(obj) == KILL_TYPE_GHOUL) then
+            return "Prolonged radiation exposure without lethal dose. Necrotic tissue, but sentient. How?";
+        if (critter_kill_type(obj) == KILL_TYPE_BRAHMIN) then
+            return "Two-headed bovine. Radiation-induced mutation stabilized across generations.";
+        if (critter_kill_type(obj) == KILL_TYPE_RADSCORPION) then
+            return "Centruroides exilicauda, massively enlarged. The stinger contains potent neurotoxin.";
+        if (critter_kill_type(obj) == KILL_TYPE_RAT) then
+            return "Oversized rodent. Teeth could gnaw through pre-war steel. Keep your distance.";
+        if (critter_kill_type(obj) == KILL_TYPE_DEATHCLAW) then
+            return "Jackson's chameleon, post-FEV. Claws can shear through combat armor. Do NOT engage alone.";
+        return "An unfamiliar creature. You make a mental note of its characteristics.";
+    end
+
+    // Items
+    if (obj_type_val == OBJ_TYPE_ITEM) then begin
+        return "You examine the object closely. Pre-war manufacturing, mostly intact.";
+    end
+
+    // Scenery
+    if (obj_type_val == OBJ_TYPE_SCENERY) then begin
+        return "Interesting structure. You note the engineering principles at work.";
+    end
+
+    // Walls
+    if (obj_type_val == OBJ_TYPE_WALL) then begin
+        return "Construction material analysis: load-bearing capacity still adequate despite age.";
+    end
+
+    return "You study the object carefully. Every observation is a data point.";
+end
