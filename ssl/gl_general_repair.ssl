@@ -33,7 +33,6 @@ variable dismantled_scenery;
 
 procedure start;
 procedure repair_skill_handler;
-procedure useobjon_handler;
 procedure has_tools;
 procedure has_junk_count(variable count);
 procedure remove_junk(variable count);
@@ -56,7 +55,6 @@ procedure start begin
             save_array("megamod_repair_scen", dismantled_scenery);
         end
         register_hook_proc(HOOK_USESKILLON, repair_skill_handler);
-        register_hook_proc(HOOK_USEOBJON, useobjon_handler);
     end
 end
 
@@ -186,43 +184,6 @@ end
 // ============================================================
 // LIGHTER ON BOOZE -> Molotov (from inventory screen)
 // ============================================================
-procedure useobjon_handler begin
-    variable user;
-    variable used_obj;
-    variable target;
-    variable used_pid;
-    variable target_pid;
-    variable molotov;
-
-    user     := get_sfall_arg;
-    used_obj := get_sfall_arg;
-    target   := get_sfall_arg;
-
-    if (user != dude_obj) then return;
-    if (used_obj == 0 or target == 0) then return;
-
-    used_pid := obj_pid(used_obj);
-    target_pid := obj_pid(target);
-
-    // Lighter on Booze/Beer -> Molotov
-    if (used_pid == PID_LIGHTER) then begin
-        if (target_pid == PID_BOOZE or target_pid == PID_BEER) then begin
-            // Don't destroy during hook -- return 1 to remove lighter usage
-            // Create molotov, remove booze after
-            molotov := create_object(PID_MOLOTOV_COCKTAIL, 0, 0);
-            add_obj_to_inven(dude_obj, molotov);
-
-            rm_obj_from_inven(dude_obj, target);
-            destroy_object(target);
-
-            display_msg("You stuff a rag in the bottle and flick the lighter. Molotov ready.");
-            give_exp_points(XP_CRAFT);
-            display_msg("[Repair] +" + XP_CRAFT + " XP");
-            set_sfall_return(-1);
-            return;
-        end
-    end
-end
 
 // ============================================================
 // AMMO CONVERSION -- Repair skill on ammo on ground
