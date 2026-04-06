@@ -79,15 +79,69 @@ procedure useskillon_handler begin
     obj_type_val := obj_type(target);
     skill_val := has_skill(dude_obj, SKILL_SCIENCE);
 
-    // === DEAD CRITTER (autopsy) ===
+    // === SCIENCE CRAFTING -- recipes using Science on ground items ===
+    if (obj_type_val == OBJ_TYPE_ITEM) then begin
+        // Scorpion Tail + Booze in inventory = Antidote
+        if (obj_id == PID_SCORPION_TAIL) then begin
+            variable has_booze;
+            has_booze := obj_is_carrying_obj_pid(dude_obj, PID_BOOZE) + obj_is_carrying_obj_pid(dude_obj, PID_BEER);
+            if (has_booze > 0) then begin
+                variable roll;
+                variable threshold;
+                threshold := 35;
+                if (skill_val < threshold) then begin
+                    display_msg("You study the venom sac but lack the knowledge to extract it safely. More Science training needed.");
+                    give_exp_points(3);
+                    display_msg("[Science] +3 XP");
+                    set_sfall_return(-1);
+                    return;
+                end
+                roll := random(1, 100);
+                if (roll > skill_val) then begin
+                    // Fail -- lose tail, keep booze
+                    destroy_object(target);
+                    display_msg("You puncture the venom sac. The contents are ruined.");
+                    give_exp_points(3);
+                    display_msg("[Science] +3 XP");
+                    set_sfall_return(-1);
+                    return;
+                end
+                // Success -- consume tail from ground + booze from inventory -> antidote
+                destroy_object(target);
+                variable booze_item;
+                booze_item := obj_carrying_pid_obj(dude_obj, PID_BOOZE);
+                if (booze_item == 0) then
+                    booze_item := obj_carrying_pid_obj(dude_obj, PID_BEER);
+                rm_obj_from_inven(dude_obj, booze_item);
+                destroy_object(booze_item);
+                variable antidote;
+                antidote := create_object(PID_ANTIDOTE, 0, 0);
+                add_obj_to_inven(dude_obj, antidote);
+                display_msg("You carefully extract the venom and mix it with alcohol. Crude, but effective. Antidote ready.");
+                give_exp_points(25);
+                display_msg("[Science: Craft] +25 XP");
+                set_sfall_return(-1);
+                return;
+            end
+            else begin
+                display_msg("The venom sac is intact. You'd need alcohol to make an antidote.");
+                set_sfall_return(-1);
+                return;
+            end
+        end
+    end
+
+    // === DEAD CRITTER (autopsy) -- tracked per individual corpse, not per PID ===
     if (obj_type_val == OBJ_TYPE_CRITTER) then begin
-        if (critter_state(target) bwand DAM_DEAD) then begin
-            if (autopsied_objects[obj_id] != 0) then begin
-                display_msg("You've already dissected this type of creature.");
+        if (is_critter_dead(target)) then begin
+            variable corpse_id;
+            corpse_id := (tile_num(target) * 10000) + obj_id;
+            if (autopsied_objects[corpse_id] != 0) then begin
+                display_msg("You've already dissected this one.");
                 return;
             end
             msg := get_dead_critter_observation(target, skill_val);
-            autopsied_objects[obj_id] := 1;
+            autopsied_objects[corpse_id] := 1;
             save_array("megamod_autopsy", autopsied_objects);
             display_msg(msg);
             return;
