@@ -13,7 +13,6 @@
 #include "sfall/define_extra.h"
 #include "sfall/lib.arrays.h"
 
-#define SKILL_SCIENCE      12
 #define BASE_XP            5
 #define RARE_XP            15
 #define AUTOPSY_XP         25
