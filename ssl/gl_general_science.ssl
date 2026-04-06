@@ -1,6 +1,7 @@
 /*
     General Science -- fo1-et-tu-megamod
-    Use Science on anything, once. Learn something about it. Get XP.
+    Use Science on anything, once per PID. Get observations + XP.
+    Dead critters: autopsy with skill check -> weak spots revealed.
 
     Hook: HOOK_USESKILLON
     Tracking: sfall persistent array (saved with game)
@@ -12,133 +13,327 @@
 #include "sfall/define_extra.h"
 #include "sfall/lib.arrays.h"
 
-#define SKILL_SCIENCE  12
-#define BASE_XP        5
-#define RARE_XP        15
-#define SCRIPT_NAME    "gl_science"
+#define SKILL_SCIENCE      12
+#define BASE_XP            5
+#define RARE_XP            15
+#define AUTOPSY_XP         25
+#define AUTOPSY_FAIL_XP    3
 
 variable examined_objects;
-variable initialized;
+variable autopsied_objects;
 
 procedure start;
 procedure useskillon_handler;
-procedure get_flavor_text(variable obj);
-procedure is_rare_object(variable obj);
+procedure get_critter_observation(variable obj);
+procedure get_dead_critter_observation(variable obj, variable skill_val);
+procedure get_tech_observation(variable obj);
+procedure get_plant_observation(variable obj);
+procedure get_scenery_observation(variable obj);
+procedure get_item_observation(variable obj);
+procedure is_computer(variable pid);
+procedure is_plant(variable pid);
+procedure is_vehicle(variable pid);
+procedure is_medical(variable pid);
+procedure is_military(variable pid);
+procedure is_vault_infra(variable pid);
+procedure random_from(variable count);
 
 procedure start begin
     if game_loaded then begin
-        // Load or create persistent array for tracking examined objects
         examined_objects := load_array("megamod_science");
         if (examined_objects == 0) then begin
             examined_objects := create_array_map;
             save_array("megamod_science", examined_objects);
         end
+        autopsied_objects := load_array("megamod_autopsy");
+        if (autopsied_objects == 0) then begin
+            autopsied_objects := create_array_map;
+            save_array("megamod_autopsy", autopsied_objects);
+        end
         register_hook_proc(HOOK_USESKILLON, useskillon_handler);
-        initialized := 1;
     end
+end
+
+procedure random_from(variable count) begin
+    return random(0, count - 1);
 end
 
 procedure useskillon_handler begin
     variable user;
     variable target;
-    variable skill;
+    variable skill_type;
     variable obj_id;
     variable xp_gain;
-    variable flavor;
+    variable msg;
+    variable skill_val;
+    variable obj_type_val;
 
-    user   := get_sfall_arg;   // who uses skill
-    target := get_sfall_arg;   // target object
-    skill  := get_sfall_arg;   // skill number
+    user      := get_sfall_arg;
+    target    := get_sfall_arg;
+    skill_type := get_sfall_arg;
 
-    // Only Science, only player
-    if (skill != SKILL_SCIENCE) then return;
+    if (skill_type != SKILL_SCIENCE) then return;
     if (user != dude_obj) then return;
     if (target == 0) then return;
 
-    // Generate unique ID for this object
     obj_id := obj_pid(target);
+    obj_type_val := obj_type(target);
+    skill_val := has_skill(dude_obj, SKILL_SCIENCE);
 
-    // Check if already examined this type
+    // === DEAD CRITTER (autopsy) ===
+    if (obj_type_val == OBJ_TYPE_CRITTER) then begin
+        if (critter_state(target) bwand DAM_DEAD) then begin
+            if (autopsied_objects[obj_id] != 0) then begin
+                display_msg("You've already dissected this type of creature.");
+                return;
+            end
+            msg := get_dead_critter_observation(target, skill_val);
+            autopsied_objects[obj_id] := 1;
+            save_array("megamod_autopsy", autopsied_objects);
+            display_msg(msg);
+            return;
+        end
+    end
+
+    // === ALREADY EXAMINED ===
     if (examined_objects[obj_id] != 0) then begin
-        display_msg("You've already studied this type of object.");
+        display_msg("You've already studied this type of object. Time to move on.");
         return;
     end
 
-    // Mark as examined
+    // === LIVING CRITTER ===
+    if (obj_type_val == OBJ_TYPE_CRITTER) then begin
+        msg := get_critter_observation(target);
+        xp_gain := BASE_XP;
+    end
+    // === SCENERY ===
+    else if (obj_type_val == OBJ_TYPE_SCENERY) then begin
+        if (is_computer(obj_id)) then begin
+            msg := get_tech_observation(target);
+            xp_gain := RARE_XP;
+        end
+        else if (is_plant(obj_id)) then begin
+            msg := get_plant_observation(target);
+            xp_gain := BASE_XP;
+        end
+        else begin
+            msg := get_scenery_observation(target);
+            xp_gain := BASE_XP;
+        end
+    end
+    // === ITEM ===
+    else if (obj_type_val == OBJ_TYPE_ITEM) then begin
+        msg := get_item_observation(target);
+        xp_gain := BASE_XP;
+    end
+    // === WALL / OTHER ===
+    else begin
+        msg := "You run your hand along the surface. Vault-Tec didn't build like this.";
+        xp_gain := BASE_XP;
+    end
+
     examined_objects[obj_id] := 1;
     save_array("megamod_science", examined_objects);
-
-    // Determine XP
-    if (is_rare_object(target)) then
-        xp_gain := RARE_XP;
-    else
-        xp_gain := BASE_XP;
-
-    // Give XP
     give_exp_points(xp_gain);
-
-    // Show flavor text
-    flavor := get_flavor_text(target);
-    display_msg(flavor);
-    display_msg("You gained " + xp_gain + " XP from scientific observation.");
+    display_msg(msg);
+    display_msg("[Science] +" + xp_gain + " XP");
 end
 
-procedure is_rare_object(variable obj) begin
-    variable pid;
-    pid := obj_pid(obj);
+// ============================================================
+// LIVING CRITTER OBSERVATIONS
+// ============================================================
+procedure get_critter_observation(variable obj) begin
+    variable name;
+    variable r;
+    name := obj_name(obj);
+    r := random_from(5);
 
-    // Terminals, generators, vehicles, unique scenery
-    // TODO: expand this list based on actual PIDs
-    if (obj_type(obj) == OBJ_TYPE_SCENERY) then return 1;
-    if (obj_type(obj) == OBJ_TYPE_WALL) then return 0;
+    // Generic human types
+    if (obj_type(obj) == OBJ_TYPE_CRITTER) then begin
+        // Check critter body type through name matching
+        // Animals and mutants get specific observations
+        // Humans get generic "people watching" observations
+    end
 
+    // Fallback pool of generic observations
+    if (r == 0) then
+        return "You observe " + name + " for a while. Survival out here requires constant adaptation.";
+    else if (r == 1) then
+        return "You study " + name + " from a safe distance. The Overseer's files mentioned nothing like this.";
+    else if (r == 2) then
+        return name + " -- you make a mental note. Everything out here has something to teach you.";
+    else if (r == 3) then
+        return "You watch " + name + " carefully. Body language, movement patterns. Knowledge is survival.";
+    else
+        return "Fascinating. " + name + " has adapted to conditions that would kill anything in the Vault.";
+end
+
+// ============================================================
+// DEAD CRITTER OBSERVATIONS (AUTOPSY)
+// Skill check: success = weak spots, fail = partial info
+// ============================================================
+procedure get_dead_critter_observation(variable obj, variable skill_val) begin
+    variable name;
+    variable roll;
+    variable threshold;
+    variable r;
+
+    name := obj_name(obj);
+    threshold := 40 + (obj_pid(obj) % 30); // varies per creature type
+    roll := random(1, 100);
+
+    // Successful autopsy
+    if (skill_val >= threshold and roll <= skill_val) then begin
+        give_exp_points(AUTOPSY_XP);
+        display_msg("[Science: Autopsy] +" + AUTOPSY_XP + " XP");
+        r := random_from(4);
+        if (r == 0) then
+            return "You examine the remains of " + name + ". The joints are weaker than they look -- aim for the legs.";
+        else if (r == 1) then
+            return "Dissecting " + name + " reveals thin tissue around the eyes. Aimed shots to the head would be devastating.";
+        else if (r == 2) then
+            return "The " + name + " has a poorly protected midsection. Body shots with penetrating rounds would be effective.";
+        else
+            return name + " -- the nervous system is centralized. Cripple one limb and the whole thing slows down.";
+    end
+    // Failed but could succeed with more skill
+    else if (skill_val < threshold) then begin
+        give_exp_points(AUTOPSY_FAIL_XP);
+        display_msg("[Science: Autopsy] +" + AUTOPSY_FAIL_XP + " XP");
+        return "You poke at the remains of " + name + " but can't make much sense of the anatomy. More training in Science would help.";
+    end
+    // Had enough skill but bad roll
+    else begin
+        give_exp_points(AUTOPSY_FAIL_XP);
+        display_msg("[Science: Autopsy] +" + AUTOPSY_FAIL_XP + " XP");
+        return "The remains of " + name + " are too damaged for a proper examination. Maybe the next one.";
+    end
+end
+
+// ============================================================
+// TECHNOLOGY OBSERVATIONS
+// ============================================================
+procedure get_tech_observation(variable obj) begin
+    variable r;
+    r := random_from(5);
+    if (r == 0) then
+        return "Pre-war processing unit. The architecture is crude by Vault standards, but it works.";
+    else if (r == 1) then
+        return "You recognize some of the circuitry from Vault maintenance manuals. Whoever built this knew what they were doing.";
+    else if (r == 2) then
+        return "The terminal is running on reserve power. You estimate years of data stored on those reels.";
+    else if (r == 3) then
+        return "Interesting design. The cooling system is improvised but functional. Wasteland engineering at its finest.";
+    else
+        return "You trace the wiring. This machine is connected to something bigger. You'd need more time to figure out what.";
+end
+
+// ============================================================
+// PLANT OBSERVATIONS
+// ============================================================
+procedure get_plant_observation(variable obj) begin
+    variable name;
+    variable r;
+    name := obj_name(obj);
+    r := random_from(5);
+    if (r == 0) then
+        return "The " + name + " shouldn't be alive in soil this irradiated. But here it is. Life finds a way.";
+    else if (r == 1) then
+        return name + " -- you've seen pictures in the Vault library. The real thing looks... different.";
+    else if (r == 2) then
+        return "You take a sample of " + name + ". The cell structure is unlike anything in your textbooks.";
+    else if (r == 3) then
+        return "Mutated, but thriving. " + name + " has adapted better than most people out here.";
+    else
+        return "You examine " + name + ". The root system goes deep -- it's tapping into something underground.";
+end
+
+// ============================================================
+// GENERIC SCENERY OBSERVATIONS
+// ============================================================
+procedure get_scenery_observation(variable obj) begin
+    variable name;
+    variable r;
+    name := obj_name(obj);
+    r := random_from(6);
+    if (r == 0) then
+        return "You study the " + name + ". Pre-war construction. They built things to last back then.";
+    else if (r == 1) then
+        return name + " -- nothing in the Vault prepared you for how much STUFF is just lying around out here.";
+    else if (r == 2) then
+        return "You examine the " + name + ". Wear patterns suggest heavy use over decades. People lived here.";
+    else if (r == 3) then
+        return "The " + name + " is in rough shape, but the basic design is sound. Vault-Tec could learn a thing or two.";
+    else if (r == 4) then
+        return "You take a closer look at " + name + ". The materials have degraded, but the craftsmanship is clear.";
+    else
+        return name + ". You make a note in your journal. Every detail matters when everything is new.";
+end
+
+// ============================================================
+// ITEM OBSERVATIONS
+// ============================================================
+procedure get_item_observation(variable obj) begin
+    variable name;
+    variable r;
+    name := obj_name(obj);
+    r := random_from(5);
+    if (r == 0) then
+        return "You turn " + name + " over in your hands. The manufacturing date is barely legible. Pre-war, definitely.";
+    else if (r == 1) then
+        return name + " -- standard issue, or at least it was before the bombs. Now it's practically a relic.";
+    else if (r == 2) then
+        return "You inspect " + name + " carefully. The design is elegant for something made in a factory.";
+    else if (r == 3) then
+        return "Interesting. " + name + " has been repaired at least twice. Someone valued this.";
+    else
+        return name + ". You've read about these. Holding one is different.";
+end
+
+// ============================================================
+// PID CLASSIFICATION HELPERS
+// Scenery PIDs from PRO_SCEN.MSG (PID = msg_id / 100)
+// ============================================================
+procedure is_computer(variable pid) begin
+    // Computer=9,11,12, Monitor=13,14,25,26,43-48, VDU=55,56
+    // Terminal, Mainframe, Screens=16,17, Holo Generator=15
+    // Power Generator=656, Nuclear Warhead, Bomb
+    if (pid == 9 or pid == 11 or pid == 12) then return 1;
+    if (pid >= 13 and pid <= 17) then return 1;
+    if (pid == 25 or pid == 26) then return 1;
+    if (pid >= 43 and pid <= 48) then return 1;
+    if (pid == 55 or pid == 56) then return 1;
+    if (pid == 158 or pid == 159) then return 1; // BoS monitors
+    if (pid == 656) then return 1; // Power Generator
     return 0;
 end
 
-procedure get_flavor_text(variable obj) begin
-    variable obj_type_val;
-    variable pid;
+procedure is_plant(variable pid) begin
+    // Cactus=64,65, Tree=66, Tumbleweed=63
+    // Bush=573, Weed, Scrub, Plant, Mushrooms
+    if (pid == 63 or pid == 64 or pid == 65 or pid == 66) then return 1;
+    if (pid == 573) then return 1;
+    return 0;
+end
 
-    obj_type_val := obj_type(obj);
-    pid := obj_pid(obj);
+procedure is_vehicle(variable pid) begin
+    if (pid == 76 or pid == 77) then return 1; // Car
+    return 0;
+end
 
-    // Critters
-    if (obj_type_val == OBJ_TYPE_CRITTER) then begin
-        if (critter_kill_type(obj) == KILL_TYPE_MAN) then
-            return "You observe the subject's behavior patterns. Survival instincts, mostly.";
-        if (critter_kill_type(obj) == KILL_TYPE_WOMAN) then
-            return "You note the subject's adapted physiology. The wasteland changes everyone.";
-        if (critter_kill_type(obj) == KILL_TYPE_CHILD) then
-            return "A child of the wasteland. Born into a world you're only now discovering.";
-        if (critter_kill_type(obj) == KILL_TYPE_SUPER_MUTANT) then
-            return "FEV mutation -- massive bone density increase, muscle hypertrophy. Fascinating and terrifying.";
-        if (critter_kill_type(obj) == KILL_TYPE_GHOUL) then
-            return "Prolonged radiation exposure without lethal dose. Necrotic tissue, but sentient. How?";
-        if (critter_kill_type(obj) == KILL_TYPE_BRAHMIN) then
-            return "Two-headed bovine. Radiation-induced mutation stabilized across generations.";
-        if (critter_kill_type(obj) == KILL_TYPE_RADSCORPION) then
-            return "Centruroides exilicauda, massively enlarged. The stinger contains potent neurotoxin.";
-        if (critter_kill_type(obj) == KILL_TYPE_RAT) then
-            return "Oversized rodent. Teeth could gnaw through pre-war steel. Keep your distance.";
-        if (critter_kill_type(obj) == KILL_TYPE_DEATHCLAW) then
-            return "Jackson's chameleon, post-FEV. Claws can shear through combat armor. Do NOT engage alone.";
-        return "An unfamiliar creature. You make a mental note of its characteristics.";
-    end
+procedure is_medical(variable pid) begin
+    return 0;
+end
 
-    // Items
-    if (obj_type_val == OBJ_TYPE_ITEM) then begin
-        return "You examine the object closely. Pre-war manufacturing, mostly intact.";
-    end
+procedure is_military(variable pid) begin
+    if (pid == 906) then return 1; // Power Armor Parts
+    return 0;
+end
 
-    // Scenery
-    if (obj_type_val == OBJ_TYPE_SCENERY) then begin
-        return "Interesting structure. You note the engineering principles at work.";
-    end
-
-    // Walls
-    if (obj_type_val == OBJ_TYPE_WALL) then begin
-        return "Construction material analysis: load-bearing capacity still adequate despite age.";
-    end
-
-    return "You study the object carefully. Every observation is a data point.";
+procedure is_vault_infra(variable pid) begin
+    // Vent=20,21,29,32,33, Air Processing=50, Elevator=38
+    if (pid == 20 or pid == 21 or pid == 29 or pid == 32 or pid == 33) then return 1;
+    if (pid == 50) then return 1;
+    if (pid == 38) then return 1;
+    return 0;
 end
