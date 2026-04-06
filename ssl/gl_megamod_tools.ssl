@@ -1,0 +1,305 @@
+/*
+    Megamod Tools -- unified HOOK_USEOBJON + HOOK_USEOBJ handler
+    Replaces separate gl_rope_tie, gl_crowbar, gl_shovel, gl_general_repair (USEOBJON part)
+
+    ONE hook, ONE handler, no conflicts.
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/lib.arrays.h"
+
+#define PID_JUNK             98
+#define PID_GRAVESITE        344
+
+#define XP_CRAFT             10
+#define XP_ROPE              100
+#define XP_CROWBAR_OK        10
+#define XP_CROWBAR_FAIL      3
+#define XP_DIG_HOLE          10
+#define XP_BURY_CORPSE       15
+
+variable dismantled_scenery;
+variable holes_array;
+variable hole_count_map;
+
+procedure start;
+procedure useobjon_handler;
+procedure useobj_handler;
+procedure handle_lighter(variable target, variable target_pid);
+procedure handle_rope(variable target);
+procedure handle_crowbar(variable target);
+procedure handle_shovel_on_corpse(variable target);
+procedure is_valid_dig_terrain;
+
+procedure start begin
+    if game_loaded then begin
+        dismantled_scenery := load_array("megamod_repair_scen");
+        if (dismantled_scenery == 0) then begin
+            dismantled_scenery := create_array_map;
+            save_array("megamod_repair_scen", dismantled_scenery);
+        end
+        holes_array := load_array("megamod_shovel_holes");
+        if (holes_array == 0) then begin
+            holes_array := create_array_map;
+            save_array("megamod_shovel_holes", holes_array);
+        end
+        hole_count_map := load_array("megamod_shovel_hcount");
+        if (hole_count_map == 0) then begin
+            hole_count_map := create_array_map;
+            save_array("megamod_shovel_hcount", hole_count_map);
+        end
+        register_hook_proc(HOOK_USEOBJON, useobjon_handler);
+        register_hook_proc(HOOK_USEOBJ, useobj_handler);
+    end
+end
+
+// ============================================================
+// USEOBJ -- player uses item from inventory (shovel dig)
+// ============================================================
+procedure useobj_handler begin
+    variable user;
+    variable item;
+    variable item_pid;
+    variable my_tile;
+    variable map_idx;
+    variable hole_key;
+    variable count;
+    variable hole;
+
+    user := get_sfall_arg;
+    item := get_sfall_arg;
+
+    if (user != dude_obj) then return;
+    if (item == 0) then return;
+
+    item_pid := obj_pid(item);
+
+    if (item_pid != PID_SHOVEL) then return;
+
+    if (combat_is_initialized) then begin
+        display_msg("No time for digging right now.");
+        set_sfall_return(0);
+        return;
+    end
+
+    if not(is_valid_dig_terrain) then begin
+        display_msg("The ground here is too hard to dig.");
+        set_sfall_return(0);
+        return;
+    end
+
+    my_tile := tile_num(dude_obj);
+    map_idx := cur_map_index;
+    hole_key := "" + map_idx + "_" + my_tile;
+
+    if (holes_array[hole_key] == 1) then begin
+        display_msg("There's already a dug out hole here.");
+        set_sfall_return(0);
+        return;
+    end
+
+    count := hole_count_map["" + map_idx];
+    if (count >= 5) then begin
+        display_msg("You've dug enough holes on this map.");
+        set_sfall_return(0);
+        return;
+    end
+
+    // Dig
+    gfade_out(1);
+    game_time_advance(300);
+
+    hole := create_object(PID_GRAVESITE, my_tile, dude_elevation);
+    holes_array[hole_key] := 1;
+    save_array("megamod_shovel_holes", holes_array);
+
+    hole_count_map["" + map_idx] := count + 1;
+    save_array("megamod_shovel_hcount", hole_count_map);
+
+    gfade_in(1);
+    display_msg("You dig a hole and line it. Use it to stash your gear.");
+    give_exp_points(XP_DIG_HOLE);
+    display_msg("[Shovel] +" + XP_DIG_HOLE + " XP");
+    set_sfall_return(0);
+end
+
+// ============================================================
+// USEOBJON -- unified handler for all tool-on-object interactions
+// ============================================================
+procedure useobjon_handler begin
+    variable user;
+    variable used_obj;
+    variable target;
+    variable used_pid;
+    variable target_pid;
+    variable target_type;
+
+    user     := get_sfall_arg;
+    used_obj := get_sfall_arg;
+    target   := get_sfall_arg;
+
+    if (user != dude_obj) then return;
+    if (used_obj == 0 or target == 0) then return;
+
+    used_pid := obj_pid(used_obj);
+    target_pid := obj_pid(target);
+    target_type := obj_type(target);
+
+    // === LIGHTER ===
+    if (used_pid == PID_LIGHTER) then begin
+        call handle_lighter(target, target_pid);
+        return;
+    end
+
+    // === ROPE on critter ===
+    if (used_pid == PID_ROPE and target_type == OBJ_TYPE_CRITTER) then begin
+        call handle_rope(target);
+        return;
+    end
+
+    // === CROWBAR on locked door/container ===
+    if (used_pid == PID_CROWBAR and (target_type == OBJ_TYPE_SCENERY or target_type == OBJ_TYPE_ITEM)) then begin
+        call handle_crowbar(target);
+        return;
+    end
+
+    // === SHOVEL on dead critter ===
+    if (used_pid == PID_SHOVEL and target_type == OBJ_TYPE_CRITTER) then begin
+        call handle_shovel_on_corpse(target);
+        return;
+    end
+end
+
+// ============================================================
+// LIGHTER -- on booze = molotov
+// ============================================================
+procedure handle_lighter(variable target, variable target_pid) begin
+    variable molotov;
+
+    if (target_pid == PID_BOOZE or target_pid == PID_BEER) then begin
+        molotov := create_object(PID_MOLOTOV_COCKTAIL, 0, 0);
+        add_obj_to_inven(dude_obj, molotov);
+        rm_obj_from_inven(dude_obj, target);
+        destroy_object(target);
+        display_msg("You stuff a rag in the bottle and flick the lighter. Molotov ready.");
+        give_exp_points(XP_CRAFT);
+        display_msg("[Craft] +" + XP_CRAFT + " XP");
+        set_sfall_return(-1);
+    end
+end
+
+// ============================================================
+// ROPE -- tie down knocked critter
+// ============================================================
+procedure handle_rope(variable target) begin
+    variable state;
+
+    if (is_critter_dead(target)) then begin
+        display_msg("They're already dead. No point in tying them up.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    state := critter_state(target);
+    if not(state bwand DAM_KNOCKED_DOWN) then begin
+        if not(state bwand DAM_KNOCKED_OUT) then begin
+            display_msg("They need to be on the ground first.");
+            set_sfall_return(-1);
+            return;
+        end
+    end
+
+    // Tie them up
+    critter_injure(target, DAM_CRIP_ARM_LEFT);
+    critter_injure(target, DAM_CRIP_ARM_RIGHT);
+    critter_injure(target, DAM_CRIP_LEG_LEFT);
+    critter_injure(target, DAM_CRIP_LEG_RIGHT);
+    set_team(target, TEAM_PLAYER);
+
+    // Consume rope
+    variable rope;
+    rope := obj_carrying_pid_obj(dude_obj, PID_ROPE);
+    if (rope) then begin
+        rm_obj_from_inven(dude_obj, rope);
+        destroy_object(rope);
+    end
+
+    display_msg("You bind them tight. They're not going anywhere.");
+    give_exp_points(XP_ROPE);
+    display_msg("[Rope] +" + XP_ROPE + " XP");
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// CROWBAR -- force open locked doors/containers
+// ============================================================
+procedure handle_crowbar(variable target) begin
+    variable st;
+    variable roll;
+
+    if not(obj_is_locked(target)) then begin
+        display_msg("It's not locked.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    st := get_critter_stat(dude_obj, STAT_st);
+    roll := random(1, 10);
+
+    if (roll <= st) then begin
+        obj_unlock(target);
+        display_msg("You wedge the crowbar in and force it open.");
+        give_exp_points(XP_CROWBAR_OK);
+        display_msg("[Crowbar] +" + XP_CROWBAR_OK + " XP");
+    end
+    else begin
+        display_msg("You strain against it, but it won't budge. Need more muscle.");
+        give_exp_points(XP_CROWBAR_FAIL);
+        display_msg("[Crowbar] +" + XP_CROWBAR_FAIL + " XP");
+    end
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// SHOVEL on dead critter -- bury corpse
+// ============================================================
+procedure handle_shovel_on_corpse(variable target) begin
+    if not(is_critter_dead(target)) then begin
+        display_msg("They're not dead. You can't bury the living.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    if (combat_is_initialized) then begin
+        display_msg("No time for burial right now.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    if not(is_valid_dig_terrain) then begin
+        display_msg("The ground here is too hard to bury anything.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    gfade_out(1);
+    game_time_advance(600);
+    destroy_object(target);
+    gfade_in(1);
+
+    display_msg("You bury the remains. No one will find them.");
+    give_exp_points(XP_BURY_CORPSE);
+    display_msg("[Shovel] +" + XP_BURY_CORPSE + " XP");
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// TERRAIN CHECK -- outdoor ground only
+// ============================================================
+procedure is_valid_dig_terrain begin
+    if (dude_elevation > 0) then return 0;
+    return 1;
+end
