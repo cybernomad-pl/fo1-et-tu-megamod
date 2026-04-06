@@ -1,0 +1,54 @@
+/*
+    Megamod Init -- fo1-et-tu-megamod
+    Gives Vault Dweller starting kit on first load.
+    Lighter, Rope, Shovel -- always in inventory from the start.
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+
+variable kit_given;
+
+procedure start;
+procedure give_starting_kit;
+
+procedure start begin
+    if game_loaded then begin
+        kit_given := load_array("megamod_kit");
+        if (kit_given == 0) then begin
+            kit_given := create_array_map;
+            save_array("megamod_kit", kit_given);
+        end
+        // Check on every game load if kit was given
+        if (kit_given["given"] != 1) then begin
+            call give_starting_kit;
+        end
+    end
+end
+
+procedure give_starting_kit begin
+    variable item;
+
+    // Only give if player doesn't already have them
+    if (obj_is_carrying_obj_pid(dude_obj, PID_LIGHTER) == 0) then begin
+        item := create_object(PID_LIGHTER, 0, 0);
+        add_obj_to_inven(dude_obj, item);
+    end
+
+    if (obj_is_carrying_obj_pid(dude_obj, PID_ROPE) == 0) then begin
+        item := create_object(PID_ROPE, 0, 0);
+        add_obj_to_inven(dude_obj, item);
+    end
+
+    if (obj_is_carrying_obj_pid(dude_obj, PID_SHOVEL) == 0) then begin
+        item := create_object(PID_SHOVEL, 0, 0);
+        add_obj_to_inven(dude_obj, item);
+    end
+
+    kit_given["given"] := 1;
+    save_array("megamod_kit", kit_given);
+
+    display_msg("You check your pack. Lighter, rope, shovel. The basics.");
+end
