@@ -79,9 +79,9 @@ procedure useskillon_handler begin
     obj_type_val := obj_type(target);
     skill_val := has_skill(dude_obj, SKILL_SCIENCE);
 
-    // === SCIENCE CRAFTING -- recipes using Science on ground items ===
+    // === SCIENCE CRAFTING -- only triggers if player has ingredients ===
     if (obj_type_val == OBJ_TYPE_ITEM) then begin
-        // Scorpion Tail + Booze in inventory = Antidote
+        // Scorpion Tail + Booze in inventory = Antidote (ONLY if you have booze)
         if (obj_id == PID_SCORPION_TAIL) then begin
             variable has_booze;
             has_booze := obj_is_carrying_obj_pid(dude_obj, PID_BOOZE) + obj_is_carrying_obj_pid(dude_obj, PID_BEER);
@@ -92,21 +92,17 @@ procedure useskillon_handler begin
                 if (skill_val < threshold) then begin
                     display_msg("You study the venom sac but lack the knowledge to extract it safely. More Science training needed.");
                     give_exp_points(3);
-                    display_msg("[Science] +3 XP");
                     set_sfall_return(-1);
                     return;
                 end
                 roll := random(1, 100);
                 if (roll > skill_val) then begin
-                    // Fail -- lose tail, keep booze
                     destroy_object(target);
                     display_msg("You puncture the venom sac. The contents are ruined.");
                     give_exp_points(3);
-                    display_msg("[Science] +3 XP");
                     set_sfall_return(-1);
                     return;
                 end
-                // Success -- consume tail from ground + booze from inventory -> antidote
                 destroy_object(target);
                 variable booze_item;
                 booze_item := obj_carrying_pid_obj(dude_obj, PID_BOOZE);
@@ -119,15 +115,10 @@ procedure useskillon_handler begin
                 add_obj_to_inven(dude_obj, antidote);
                 display_msg("You carefully extract the venom and mix it with alcohol. Crude, but effective. Antidote ready.");
                 give_exp_points(25);
-                display_msg("[Science: Craft] +25 XP");
                 set_sfall_return(-1);
                 return;
             end
-            else begin
-                display_msg("The venom sac is intact. You'd need alcohol to make an antidote.");
-                set_sfall_return(-1);
-                return;
-            end
+            // No booze -- fall through to normal observation below
         end
     end
 
@@ -161,11 +152,15 @@ procedure useskillon_handler begin
     end
     // === SCENERY ===
     else if (obj_type_val == OBJ_TYPE_SCENERY) then begin
-        if (is_computer(obj_id)) then begin
+        // obj_pid returns full encoded PID (0x02000000 + proto_id for scenery)
+        // classifiers use bare proto numbers, so strip the type prefix
+        variable scenery_proto;
+        scenery_proto := obj_id - 33554432;
+        if (is_computer(scenery_proto)) then begin
             msg := get_tech_observation(target);
             xp_gain := RARE_XP;
         end
-        else if (is_plant(obj_id)) then begin
+        else if (is_plant(scenery_proto)) then begin
             msg := get_plant_observation(target);
             xp_gain := BASE_XP;
         end
@@ -187,9 +182,8 @@ procedure useskillon_handler begin
 
     examined_objects[obj_id] := 1;
     save_array("megamod_science", examined_objects);
-    give_exp_points(xp_gain);
     display_msg(msg);
-    display_msg("[Science] +" + xp_gain + " XP");
+    give_exp_points(xp_gain);
 end
 
 // ============================================================
@@ -415,20 +409,17 @@ procedure get_dead_critter_observation(variable obj, variable skill_val) begin
     // --- FAILED: not enough skill ---
     if (skill_val < threshold) then begin
         give_exp_points(AUTOPSY_FAIL_XP);
-        display_msg("[Science: Autopsy] +" + AUTOPSY_FAIL_XP + " XP");
         return "You prod the remains of " + name + " but the anatomy makes no sense to you. Need more Science training.";
     end
 
     // --- FAILED: bad roll ---
     if (roll > skill_val) then begin
         give_exp_points(AUTOPSY_FAIL_XP);
-        display_msg("[Science: Autopsy] +" + AUTOPSY_FAIL_XP + " XP");
         return "The " + name + " corpse is too mangled for a clean dissection. Maybe the next one.";
     end
 
     // --- SUCCESS: creature-specific findings ---
     give_exp_points(AUTOPSY_XP);
-    display_msg("[Science: Autopsy] +" + AUTOPSY_XP + " XP");
 
     // Rats
     if (pid == PID_RAT_CAVE or pid == PID_TOUGH_RAT or pid == PID_RADIATED_RAT or pid == PID_TOUGH_RADIATED_RAT or pid == PID_PIGRAT or pid == PID_MEAN_PIG_RAT) then
@@ -547,7 +538,7 @@ procedure get_scenery_observation(variable obj) begin
     if (r == 0) then
         return "You study the " + name + ". Pre-war construction. They built things to last back then.";
     else if (r == 1) then
-        return name + " -- nothing in the Vault prepared you for how much STUFF is just lying around out here.";
+        return "You crouch beside the " + name + ". Scavengers have picked this area clean, but the structure tells a story.";
     else if (r == 2) then
         return "You examine the " + name + ". Wear patterns suggest heavy use over decades. People lived here.";
     else if (r == 3) then
@@ -841,10 +832,12 @@ procedure is_computer(variable pid) begin
 end
 
 procedure is_plant(variable pid) begin
-    // Cactus=64,65, Tree=66, Tumbleweed=63
-    // Bush=573, Weed, Scrub, Plant, Mushrooms
-    if (pid == 63 or pid == 64 or pid == 65 or pid == 66) then return 1;
-    if (pid == 573) then return 1;
+    // Cactus=64,65, Tree=66,67,68, Tumbleweed=63
+    // Scrub=102-105, Weed=125-127, Bush=573,943,944
+    if (pid >= 63 and pid <= 68) then return 1;
+    if (pid >= 102 and pid <= 105) then return 1;
+    if (pid >= 125 and pid <= 127) then return 1;
+    if (pid == 573 or pid == 943 or pid == 944) then return 1;
     return 0;
 end
 
