@@ -193,74 +193,309 @@ procedure useskillon_handler begin
 end
 
 // ============================================================
-// LIVING CRITTER OBSERVATIONS
+// LIVING CRITTER OBSERVATIONS -- PID-specific
 // ============================================================
 procedure get_critter_observation(variable obj) begin
     variable name;
+    variable pid;
     variable r;
     name := obj_name(obj);
-    r := random_from(5);
+    pid := obj_pid(obj);
+    r := random_from(3);
 
-    // Generic human types
-    if (obj_type(obj) == OBJ_TYPE_CRITTER) then begin
-        // Check critter body type through name matching
-        // Animals and mutants get specific observations
-        // Humans get generic "people watching" observations
+    // --- Rats ---
+    if (pid == PID_RAT_CAVE or pid == PID_TOUGH_RAT or pid == PID_RADIATED_RAT or pid == PID_TOUGH_RADIATED_RAT or pid == PID_PIGRAT or pid == PID_MEAN_PIG_RAT) then begin
+        if (r == 0) then
+            return "Oversized rodent. Radiation has tripled its mass but the teeth grew faster than the brain.";
+        else if (r == 1) then
+            return "The rat watches you back. Beady eyes, twitching nose. It's sizing you up as a meal.";
+        else
+            return "Patchy fur, visible tumors. The radiation keeps them breeding faster than it kills them.";
     end
 
-    // Fallback pool of generic observations
+    // --- Mole Rats ---
+    if (pid == PID_GREATER_MOLE_RAT or pid == PID_LESSER_MOLE_RAT) then begin
+        if (r == 0) then
+            return "Burrowing claws like shovels. This thing can dig through concrete if it's hungry enough.";
+        else if (r == 1) then
+            return "Mole rat. Blind as a cave fish but those claws will gut you before you smell it coming.";
+        else
+            return "The snout twitches. It navigates by vibration -- step heavy and it knows exactly where you are.";
+    end
+
+    // --- Radscorpions ---
+    if (pid == PID_RADSCORPION or pid == PID_NASTY_RADSCORPION) then begin
+        if (r == 0) then
+            return "Two meters of chitin, pincers, and a tail full of neurotoxin. The wasteland's apex predator.";
+        else if (r == 1) then
+            return "The stinger drips. One hit and your nervous system shuts down in minutes without antidote.";
+        else
+            return "Pre-war emperor scorpion, scaled up by a factor of twenty. The exoskeleton deflects small arms.";
+    end
+
+    // --- Dogs ---
+    if (pid == PID_DOG or pid == PID_DOGMEAT or pid == PID_COYOTE) then begin
+        if (r == 0) then
+            return "Lean, scarred, alert. Wasteland dogs don't beg -- they hunt, or they die.";
+        else if (r == 1) then
+            return "Descended from pre-war pets, probably. Nothing pet-like about those teeth now.";
+        else
+            return "It tracks by scent. In the dust and wind out here, that nose is worth more than your eyes.";
+    end
+
+    // --- Brahmin ---
+    if (pid == PID_BRAHMIN or pid == PID_LARGE_BRAHMIN) then begin
+        if (r == 0) then
+            return "Two heads, four stomachs, and it eats irradiated scrub grass. Evolution's ugly masterpiece.";
+        else if (r == 1) then
+            return "The second head watches you while the first grazes. Twice the brain, twice the paranoia.";
+        else
+            return "Pack animal, milk source, leather, and meat. The most valuable creature in the wasteland.";
+    end
+
+    // --- Deathclaws ---
+    if (pid == PID_DEATHCLAW or pid == PID_DEATHCLAW_SPAWN) then begin
+        if (r == 0) then
+            return "Jackson's chameleon, post-FEV. Six hundred pounds of muscle, claws, and bad intentions.";
+        else if (r == 1) then
+            return "The claws can shear through power armor plating. You do NOT want to be within arm's reach.";
+        else
+            return "Fast, smart, and territorial. If you can see one, the rest of the pack already sees you.";
+    end
+
+    // --- Mantis ---
+    if (pid == PID_MANTIS or pid == PID_GREAT_MANTIS) then begin
+        if (r == 0) then
+            return "Praying mantis, supersized. The forelegs snap shut faster than you can blink.";
+        else if (r == 1) then
+            return "Compound eyes track motion. Stand still and you might live. Might.";
+        else
+            return "Hollow chitin makes it lighter than it looks. That's why it's so damn fast.";
+    end
+
+    // --- Floaters ---
+    if (pid == PID_FLOATER or pid == PID_BLOODY_FLOATER) then begin
+        if (r == 0) then
+            return "FEV reject. The tentacles secrete digestive acid -- it eats you before you're dead.";
+        else if (r == 1) then
+            return "No skeleton, no brain you can find. Just a sack of gas, muscle, and hunger.";
+        else
+            return "It drifts closer than you'd like. The whip-tentacles have a six-foot reach.";
+    end
+
+    // --- Centaurs ---
+    if (pid == PID_CENTAUR_LESSER or pid == PID_GREATER_CENTAUR) then begin
+        if (r == 0) then
+            return "Used to be human. Maybe more than one human. The FEV doesn't care about blueprints.";
+        else if (r == 1) then
+            return "Extra limbs at wrong angles, mouths where they shouldn't be. You try not to count the faces.";
+        else
+            return "Slow, but the spit is toxic. Keep your distance and don't let it corner you.";
+    end
+
+    // --- Floating Eyes ---
+    if (pid == PID_FLOATING_EYE) then begin
+        if (r == 0) then
+            return "Mutated... something. One giant eye, hovering. Your Vault textbooks have nothing on this.";
+        else if (r == 1) then
+            return "It pulses faintly. Hypnotic, if you stare too long. Don't stare too long.";
+        else
+            return "Bio-luminescent membrane keeps it aloft. The lens focuses on you. It's watching back.";
+    end
+
+    // --- Super Mutants ---
+    if (pid == PID_SUPER_MUTANT or pid == PID_TOUGH_SUPER_MUTANT or pid == PID_SUPER_MUTANT_GUARD or pid == PID_MEAN_SUPER_MUTANT or pid == PID_MAD_SUPER_MUTANT or pid == PID_DEADLY_SUPER_MUTANT or pid == PID_SUPER_MUTANT_MEDIC or pid == PID_LOU or pid == PID_HARRY) then begin
+        if (r == 0) then
+            return "FEV-mutated human. Eight feet tall, dense muscle tissue. Small arms won't cut it.";
+        else if (r == 1) then
+            return "The skin is like cured leather over concrete. You'd need armor-piercing rounds or explosives.";
+        else
+            return "Decreased intelligence in most subjects, but the physical enhancements are terrifying.";
+    end
+
+    // --- Nightkin ---
+    if (pid == PID_NIGHTKIN or pid == PID_NIGHTKIN_GUARD or pid == PID_NIGHTKIN_GUARD_2) then begin
+        if (r == 0) then
+            return "Nightkin. Elite mutant with Stealth Boy addiction. The blue skin means it's already unstable.";
+        else if (r == 1) then
+            return "Stealth Boy dependency has eroded what was left of its mind. Paranoid, violent, unpredictable.";
+        else
+            return "Faster and smarter than regular mutants. The psychosis makes it more dangerous, not less.";
+    end
+
+    // --- Ghouls ---
+    if (pid == PID_GHOUL or pid == PID_GHOUL_GUARD or pid == PID_ZOMBIE_GUARD) then begin
+        if (r == 0) then
+            return "Radiation-scarred human. The necrotic tissue should have killed them decades ago, but here they are.";
+        else if (r == 1) then
+            return "Centuries old, some of them. The radiation preserves as much as it destroys.";
+        else
+            return "Underneath the rot, the bone structure is still human. They remember being people.";
+    end
+
+    // --- Glowing Ones ---
+    if (pid == PID_GLOWING_ONE or pid == PID_GLOWER or pid == PID_MAD_GLOWING_ONE) then begin
+        if (r == 0) then
+            return "Irradiated ghoul, still cooking from the inside. The glow is Cherenkov radiation. Don't get close.";
+        else if (r == 1) then
+            return "Walking reactor meltdown. The radiation burst on death could give you a lethal dose.";
+        else
+            return "The luminescence heals nearby ghouls. They orbit it like moths around a lamp.";
+    end
+
+    // --- Mr. Handy / Robots ---
+    if (pid == PID_MRHANDY) then begin
+        if (r == 0) then
+            return "General Atomics Mr. Handy. Three arms, jet propulsion, and two centuries of deferred maintenance.";
+        else if (r == 1) then
+            return "The fusion core is still running. Pre-war engineering built these to outlast their owners.";
+        else
+            return "Domestic model repurposed for security. The saw arm wasn't in the original brochure.";
+    end
+
+    // --- Robobrain ---
+    if (pid == PID_ROBOBRAIN) then begin
+        if (r == 0) then
+            return "Human brain in a jar on treads. The ethics committee signed off on this, apparently.";
+        else if (r == 1) then
+            return "The dome casing is bulletproof. Target the treads or the sensor array.";
+        else
+            return "Pre-war military project. The brain is preserved in bio-gel. It might still be conscious.";
+    end
+
+    // --- Children ---
+    if (pid == PID_BOY) then begin
+        if (r == 0) then
+            return "Small, quick, and harder to hit than you'd think. Wasteland kids grow up fast or not at all.";
+        else if (r == 1) then
+            return "No formal schooling, no Vault. Everything they know, they learned by not dying.";
+        else
+            return "Check your pockets after this one gets close.";
+    end
+
+    // --- Tandi ---
+    if (pid == PID_TANDI) then begin
+        if (r == 0) then
+            return "Young, sharp-eyed, restless. Aradesh's daughter doesn't want to spend her life behind walls.";
+        else if (r == 1) then
+            return "Natural leader. She doesn't know it yet, but the people around her do.";
+        else
+            return "More curious about the outside world than afraid of it. Remind you of anyone?";
+    end
+
+    // --- Master ---
+    if (pid == PID_MASTER) then begin
+        return "Your mind recoils. Flesh, machine, and something else fused into a single consciousness. This is the source.";
+    end
+
+    // --- Generic human fallback ---
     if (r == 0) then
-        return "You observe " + name + " for a while. Survival out here requires constant adaptation.";
+        return "You study " + name + " from a distance. Posture, gait, hand placement. Tells you who's armed and who's scared.";
     else if (r == 1) then
-        return "You study " + name + " from a safe distance. The Overseer's files mentioned nothing like this.";
-    else if (r == 2) then
-        return name + " -- you make a mental note. Everything out here has something to teach you.";
-    else if (r == 3) then
-        return "You watch " + name + " carefully. Body language, movement patterns. Knowledge is survival.";
+        return name + ". Weathered skin, calloused hands. Everyone out here carries their history on their face.";
     else
-        return "Fascinating. " + name + " has adapted to conditions that would kill anything in the Vault.";
+        return "You observe " + name + ". Survival out here writes itself on the body -- scars, muscle, the way the eyes move.";
 end
 
 // ============================================================
 // DEAD CRITTER OBSERVATIONS (AUTOPSY)
-// Skill check: success = weak spots, fail = partial info
+// Skill check: success = creature-specific weak spots
 // ============================================================
 procedure get_dead_critter_observation(variable obj, variable skill_val) begin
     variable name;
+    variable pid;
     variable roll;
     variable threshold;
-    variable r;
 
     name := obj_name(obj);
-    threshold := 40 + (obj_pid(obj) % 30); // varies per creature type
+    pid := obj_pid(obj);
+    threshold := 40 + (pid % 30); // varies per creature type
     roll := random(1, 100);
 
-    // Successful autopsy
-    if (skill_val >= threshold and roll <= skill_val) then begin
-        give_exp_points(AUTOPSY_XP);
-        display_msg("[Science: Autopsy] +" + AUTOPSY_XP + " XP");
-        r := random_from(4);
-        if (r == 0) then
-            return "You examine the remains of " + name + ". The joints are weaker than they look -- aim for the legs.";
-        else if (r == 1) then
-            return "Dissecting " + name + " reveals thin tissue around the eyes. Aimed shots to the head would be devastating.";
-        else if (r == 2) then
-            return "The " + name + " has a poorly protected midsection. Body shots with penetrating rounds would be effective.";
-        else
-            return name + " -- the nervous system is centralized. Cripple one limb and the whole thing slows down.";
-    end
-    // Failed but could succeed with more skill
-    else if (skill_val < threshold) then begin
+    // --- FAILED: not enough skill ---
+    if (skill_val < threshold) then begin
         give_exp_points(AUTOPSY_FAIL_XP);
         display_msg("[Science: Autopsy] +" + AUTOPSY_FAIL_XP + " XP");
-        return "You poke at the remains of " + name + " but can't make much sense of the anatomy. More training in Science would help.";
+        return "You prod the remains of " + name + " but the anatomy makes no sense to you. Need more Science training.";
     end
-    // Had enough skill but bad roll
-    else begin
+
+    // --- FAILED: bad roll ---
+    if (roll > skill_val) then begin
         give_exp_points(AUTOPSY_FAIL_XP);
         display_msg("[Science: Autopsy] +" + AUTOPSY_FAIL_XP + " XP");
-        return "The remains of " + name + " are too damaged for a proper examination. Maybe the next one.";
+        return "The " + name + " corpse is too mangled for a clean dissection. Maybe the next one.";
     end
+
+    // --- SUCCESS: creature-specific findings ---
+    give_exp_points(AUTOPSY_XP);
+    display_msg("[Science: Autopsy] +" + AUTOPSY_XP + " XP");
+
+    // Rats
+    if (pid == PID_RAT_CAVE or pid == PID_TOUGH_RAT or pid == PID_RADIATED_RAT or pid == PID_TOUGH_RADIATED_RAT or pid == PID_PIGRAT or pid == PID_MEAN_PIG_RAT) then
+        return "Thin skull, fragile spine. One solid hit to the head drops them. The belly is soft too -- aim low with burst fire.";
+
+    // Mole rats
+    if (pid == PID_GREATER_MOLE_RAT or pid == PID_LESSER_MOLE_RAT) then
+        return "The digging claws are anchored to a weak shoulder joint. Cripple one foreleg and it can't burrow or charge.";
+
+    // Radscorpions
+    if (pid == PID_RADSCORPION or pid == PID_NASTY_RADSCORPION) then
+        return "Nerve cluster at the base of the tail. One precise shot severs the stinger. The underbelly between the legs has no chitin.";
+
+    // Dogs
+    if (pid == PID_DOG or pid == PID_DOGMEAT or pid == PID_COYOTE) then
+        return "Lean muscle, fast twitch fibers. Hard to hit on the move. The ribcage is narrow -- a side shot punctures both lungs.";
+
+    // Brahmin
+    if (pid == PID_BRAHMIN or pid == PID_LARGE_BRAHMIN) then
+        return "Four stomachs full of fermented scrub. One ruptured and the methane could knock you out. The neck joint between heads is weak.";
+
+    // Deathclaws
+    if (pid == PID_DEATHCLAW or pid == PID_DEATHCLAW_SPAWN) then
+        return "The belly scales are thinner than the dorsal plating. The eyes are soft tissue. Aim high or aim low -- the middle is armor.";
+
+    // Mantis
+    if (pid == PID_MANTIS or pid == PID_GREAT_MANTIS) then
+        return "The forelegs lock hydraulically. Break the joint and the whole striking mechanism fails. The thorax is hollow -- easy to punch through.";
+
+    // Floaters
+    if (pid == PID_FLOATER or pid == PID_BLOODY_FLOATER) then
+        return "The gas bladder is pressurized. Puncture it and the thing deflates. Aim for the central mass -- the tentacles are just muscle.";
+
+    // Centaurs
+    if (pid == PID_CENTAUR_LESSER or pid == PID_GREATER_CENTAUR) then
+        return "Multiple fused nervous systems with no clear brain. Destroy enough mass and it stops moving. Fire works best.";
+
+    // Super Mutants
+    if (pid == PID_SUPER_MUTANT or pid == PID_TOUGH_SUPER_MUTANT or pid == PID_SUPER_MUTANT_GUARD or pid == PID_MEAN_SUPER_MUTANT or pid == PID_MAD_SUPER_MUTANT or pid == PID_DEADLY_SUPER_MUTANT or pid == PID_SUPER_MUTANT_MEDIC or pid == PID_LOU or pid == PID_HARRY) then
+        return "The muscle density is incredible but the joints are still human-scale. Legs, knees, elbows. Cripple the joints, then finish it.";
+
+    // Nightkin
+    if (pid == PID_NIGHTKIN or pid == PID_NIGHTKIN_GUARD or pid == PID_NIGHTKIN_GUARD_2) then
+        return "Stealth Boy residue in the tissue. The cloaking damages nerve endings -- they feel less pain. Double-tap everything.";
+
+    // Ghouls
+    if (pid == PID_GHOUL or pid == PID_GHOUL_GUARD or pid == PID_ZOMBIE_GUARD) then
+        return "Necrotic tissue is pain-resistant. They keep fighting with injuries that would drop a human. Head shots only.";
+
+    // Glowing Ones
+    if (pid == PID_GLOWING_ONE or pid == PID_GLOWER or pid == PID_MAD_GLOWING_ONE) then
+        return "The irradiated tissue heals fast. Kill it quick or it regenerates. The radiation burst at death has a ten-foot radius.";
+
+    // Floating Eye
+    if (pid == PID_FLOATING_EYE) then
+        return "The lens is the weak point. One clean shot pops it. The hypnotic pulse stops when the membrane ruptures.";
+
+    // Mr. Handy
+    if (pid == PID_MRHANDY) then
+        return "The fusion core is behind the center plate. Two shots and it goes critical. Avoid the saw arm radius.";
+
+    // Robobrain
+    if (pid == PID_ROBOBRAIN) then
+        return "The brain dome is shielded but the treads are exposed. Immobilize it, then take out the sensor array on top.";
+
+    // Generic human fallback
+    return "Standard human anatomy. The wasteland hasn't changed the basics -- head, heart, spine. Aim for what ends it fast.";
 end
 
 // ============================================================
@@ -325,22 +560,266 @@ end
 
 // ============================================================
 // ITEM OBSERVATIONS
+// Subtype-aware + PID-specific unique texts
 // ============================================================
+#define PID_LOCAL_JUNK                  (98)
+
 procedure get_item_observation(variable obj) begin
     variable name;
     variable r;
+    variable pid;
+    variable subtype;
+
     name := obj_name(obj);
+    pid := obj_pid(obj);
+    subtype := obj_item_subtype(obj);
     r := random_from(5);
+
+    // ---- PID-SPECIFIC UNIQUE ITEMS ----
+
+    // Bones
+    if (pid == PID_VAULT_DWELLER_BONES or pid == PID_HUMAN_BONES or pid == PID_ANNA_BONES) then begin
+        if (r == 0) then
+            return "Bleached white by the sun. You can't tell what species. You're not sure you want to know.";
+        else if (r == 1) then
+            return "The bones are brittle and dry. Whoever this was, they've been gone a long time.";
+        else if (r == 2) then
+            return "You turn a bone over in your hands. No tool marks, no teeth marks. That's... something.";
+        else if (r == 3) then
+            return "A grim reminder. The wasteland doesn't bury its dead -- it just forgets them.";
+        else
+            return "You examine the remains with clinical detachment. The Vault didn't prepare you for this.";
+    end
+
+    // Scorpion Tail
+    if (pid == PID_SCORPION_TAIL) then begin
+        if (r == 0) then
+            return "The stinger is still sharp. Handle with care -- the venom sac looks intact.";
+        else if (r == 1) then
+            return "You hold it at arm's length. The chitin is surprisingly light for something that can punch through leather.";
+        else
+            return "Dried venom crusts the tip. Probably still potent. You wrap it carefully.";
+    end
+
+    // Water Chip
+    if (pid == PID_WATER_CHIP) then begin
+        if (r == 0) then
+            return "The chip is smaller than you expected. Hard to believe the whole Vault depends on this little thing.";
+        else if (r == 1) then
+            return "Pre-war microcontroller. Standard water purification logic. Irreplaceable, given the circumstances.";
+        else
+            return "You cradle it like it's made of glass. Because for your Vault, it might as well be.";
+    end
+
+    // Radio
+    if (pid == PID_RADIO) then begin
+        if (r == 0) then
+            return "You fiddle with the dial. Static, static, and more static. But somewhere out there, someone is broadcasting.";
+        else if (r == 1) then
+            return "Vacuum tubes, hand-wound coils. Crude, but the wasteland doesn't have transistor fabs.";
+        else
+            return "The casing is dented but the internals look intact. Someone kept this working through sheer stubbornness.";
+    end
+
+    // Nuka-Cola
+    if (pid == PID_NUKA_COLA) then begin
+        if (r == 0) then
+            return "The label promises 'refreshment and vitality.' The radiation probably adds the vitality.";
+        else if (r == 1) then
+            return "Still carbonated after all these years. You're impressed and slightly terrified by the preservatives.";
+        else if (r == 2) then
+            return "You hold it up to the light. The liquid glows faintly. That can't be good. Or maybe it's great.";
+        else
+            return "Warm Nuka-Cola. The Vault vending machines at least kept them cold. Luxury is relative out here.";
+    end
+
+    // Flower
+    if (pid == PID_FLOWER) then begin
+        if (r == 0) then
+            return "Delicate petals in a world of rust and ruin. You didn't think anything this fragile could survive out here.";
+        else if (r == 1) then
+            return "The colors are muted, almost grey. But it's alive, and that counts for something.";
+        else
+            return "You lean in and smell it. Faint sweetness under the ever-present dust. A small miracle.";
+    end
+
+    // Rock
+    if (pid == PID_ROCK) then begin
+        if (r == 0) then
+            return "It's a rock. But out here, everything is a potential tool.";
+        else if (r == 1) then
+            return "Smooth, heavy, fits the palm. The oldest weapon in human history, and still effective.";
+        else
+            return "Sedimentary layers visible on the edge. Millions of years of geology, and it ends up in your pocket.";
+    end
+
+    // Rope
+    if (pid == PID_ROPE) then begin
+        if (r == 0) then
+            return "You test the tensile strength. Frayed in places, but it'll hold your weight. Probably.";
+        else if (r == 1) then
+            return "Good rope is worth its weight in caps out here. You coil it properly -- the Vault taught you that much.";
+        else
+            return "Braided fiber, hand-twisted. Someone spent real time making this. It shows.";
+    end
+
+    // Motor
+    if (pid == PID_MOTOR) then begin
+        if (r == 0) then
+            return "The windings are intact. With the right parts, this could run again.";
+        else if (r == 1) then
+            return "Pre-war electric motor. The magnets are still strong. Whoever finds a use for this will be sitting pretty.";
+        else
+            return "Heavy, greasy, and beautiful in its simplicity. The wasteland runs on salvage like this.";
+    end
+
+    // Junk
+    if (pid == PID_LOCAL_JUNK) then begin
+        if (r == 0) then
+            return "Scrap metal, bent wire, a cracked gear. Junk to most. Parts to someone who knows what they're doing.";
+        else if (r == 1) then
+            return "You sort through it. Nothing useful on its own, but combined with the right tools...";
+        else
+            return "One person's trash. The wasteland doesn't really have treasure, so this is the next best thing.";
+    end
+
+    // Flare
+    if (pid == PID_FLARE) then begin
+        if (r == 0) then
+            return "Magnesium compound tip, waterproof casing. Military surplus. Should burn bright for a few minutes.";
+        else if (r == 1) then
+            return "You check the striker. Still good. Light in the darkness -- sometimes that's all you need.";
+        else
+            return "The warning label is half-melted but readable: 'Do not aim at face.' Sound advice.";
+    end
+
+    // Lighter
+    if (pid == PID_LIGHTER) then begin
+        if (r == 0) then
+            return "Brushed metal case, worn smooth by someone's thumb. You flick it. First try.";
+        else if (r == 1) then
+            return "There's an engraving on the bottom, too scratched to read. Someone carried this for years.";
+        else
+            return "Fuel's low but the flint is good. Fire on demand -- the oldest human luxury.";
+    end
+
+    // Psychic Nullifier
+    if (pid == PID_PSYCHIC_NULLIFIER) then begin
+        if (r == 0) then
+            return "The circuitry doesn't match anything in your Vault training. It hums faintly when you hold it to your temple.";
+        else if (r == 1) then
+            return "You have no idea what half these components do. But you feel... quieter when you hold it. Calmer.";
+        else
+            return "Whoever built this understood something about the human brain that your textbooks didn't cover.";
+    end
+
+    // Holodisk
+    if (pid == PID_HOLODISK or pid == PID_HOLODISK_FAKE_V13) then begin
+        if (r == 0) then
+            return "Optical storage medium. The data density is impressive -- whole libraries on a disc this size.";
+        else if (r == 1) then
+            return "You tilt it in the light. No visible scratches. Whatever's on here, it's probably still readable.";
+        else
+            return "Someone recorded this for a reason. Out here, information might be the most valuable currency.";
+    end
+
+    // ---- SUBTYPE-BASED FALLBACK TEXTS ----
+
+    // Weapons
+    if (subtype == item_type_weapon) then begin
+        if (r == 0) then
+            return "You field-strip it mentally. The mechanism is simple but effective.";
+        else if (r == 1) then
+            return "The " + name + " has seen action. Scratch marks on the barrel, worn grip. A survivor's weapon.";
+        else if (r == 2) then
+            return "You check the action on " + name + ". Stiff, but functional. A good cleaning would do wonders.";
+        else if (r == 3) then
+            return "Heavier than the training models in the Vault. The real thing always is.";
+        else
+            return name + ". You run through firing positions in your head. The Vault range was good for something.";
+    end
+
+    // Armor
+    if (subtype == item_type_armor) then begin
+        if (r == 0) then
+            return "You knock on it. Solid. Would stop most of what the wasteland throws at you.";
+        else if (r == 1) then
+            return "The " + name + " is heavier than it looks. But you'd rather carry weight than carry wounds.";
+        else if (r == 2) then
+            return "Layered construction. Someone who understood ballistics designed this.";
+        else if (r == 3) then
+            return "You check the joints and seams on " + name + ". Weak points exist, but they're well-hidden.";
+        else
+            return name + ". The Vault suit suddenly feels very thin by comparison.";
+    end
+
+    // Ammo
+    if (subtype == item_type_ammo) then begin
+        if (r == 0) then
+            return "You check the primer and casing. Still viable.";
+        else if (r == 1) then
+            return "Factory-sealed " + name + ". Pre-war quality. You count them twice -- every round matters.";
+        else if (r == 2) then
+            return "Some discoloration on the casings, but the propellant smells right. Should fire clean.";
+        else if (r == 3) then
+            return "You roll a round between your fingers. The weight feels right. No duds in this batch.";
+        else
+            return name + ". Currency, leverage, and last resort -- all in a brass casing.";
+    end
+
+    // Drugs / Chems
+    if (subtype == item_type_drug) then begin
+        if (r == 0) then
+            return "You read the dosage label on " + name + ". The chemistry is sound, but the expiration date is optimistic.";
+        else if (r == 1) then
+            return "The seal on " + name + " is intact. Pharmaceutical grade -- or what passed for it before the war.";
+        else if (r == 2) then
+            return "You hold " + name + " up to the light. The solution is still clear. Should be safe. Probably.";
+        else if (r == 3) then
+            return name + ". The Vault med-bay had crates of these. Out here, one dose could save your life.";
+        else
+            return "You sniff " + name + " cautiously. Chemical tang, slight sweetness. The compounds haven't degraded much.";
+    end
+
+    // Containers
+    if (subtype == item_type_container) then begin
+        if (r == 0) then
+            return "Sturdy construction. The latch mechanism is crude but it keeps things dry. That matters out here.";
+        else if (r == 1) then
+            return "You test the hinges. Some rust, but it holds. Storage is survival when you're always on the move.";
+        else if (r == 2) then
+            return "The " + name + " smells like old leather and dust. It's seen more of the wasteland than you have.";
+        else if (r == 3) then
+            return "You check the seams for holes. Watertight. In the Vault, that was nothing. Out here, it's everything.";
+        else
+            return name + ". You appreciate good craftsmanship more now that you've seen what passes for it in the wastes.";
+    end
+
+    // Key Items
+    if (subtype == item_type_key_item) then begin
+        if (r == 0) then
+            return "You turn " + name + " over in your hands. Something about it feels important. Trust your gut.";
+        else if (r == 1) then
+            return "Not much to look at, but you've learned that appearances mean nothing out here.";
+        else if (r == 2) then
+            return name + ". You pocket it carefully. The wasteland rewards those who hold onto the right things.";
+        else if (r == 3) then
+            return "Your instinct says keep this. Your instinct has kept you alive so far.";
+        else
+            return name + ". You don't know what it's for yet, but you will.";
+    end
+
+    // Misc Items (fallback for item_type_misc_item and anything else)
     if (r == 0) then
-        return "You turn " + name + " over in your hands. The manufacturing date is barely legible. Pre-war, definitely.";
+        return "You turn " + name + " over in your hands. Out here, you never know what might come in handy.";
     else if (r == 1) then
-        return name + " -- standard issue, or at least it was before the bombs. Now it's practically a relic.";
-    else if (r == 2) then
-        return "You inspect " + name + " carefully. The design is elegant for something made in a factory.";
-    else if (r == 3) then
-        return "Interesting. " + name + " has been repaired at least twice. Someone valued this.";
-    else
         return name + ". You've read about these. Holding one is different.";
+    else if (r == 2) then
+        return "You examine " + name + ". Worn but functional. The wasteland doesn't keep things that don't earn their place.";
+    else if (r == 3) then
+        return "Interesting. " + name + " has been repaired at least twice. Someone valued this enough to keep fixing it.";
+    else
+        return name + ". Another piece of the world outside the Vault. You're building quite a collection of knowledge.";
 end
 
 // ============================================================

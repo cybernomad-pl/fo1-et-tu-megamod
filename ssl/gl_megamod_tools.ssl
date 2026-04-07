@@ -7,6 +7,7 @@
 
 #include "define.h"
 #include "command.h"
+// scenepid.h already included via define.h
 #include "sfall/sfall.h"
 #include "sfall/define_extra.h"
 #include "sfall/lib.arrays.h"
@@ -20,6 +21,16 @@
 #define XP_CROWBAR_FAIL      3
 #define XP_DIG_HOLE          10
 #define XP_BURY_CORPSE       15
+#define XP_CAMPFIRE          15
+
+// Flammable scenery PIDs (full encoded: 0x02000000 + proto_id)
+#define PID_TUMBLEWEED       (33554495)  // proto 63
+// PID_TREE_OLD (33554498) = proto 66 -- defined in scenepid.h
+// PID_SCRUB_1..4 (33554534..37) = proto 102..105 -- defined in scenepid.h
+// PID_WEED_1..3 (33554557..59) = proto 125..127 -- defined in scenepid.h
+// PID_BUSH_GREEN_1..2 (33555375..76) = proto 943..944 -- defined in scenepid.h
+// PID_FIRE_PIT (33555044) = proto 612 -- defined in scenepid.h
+// PID_BURNING_BARREL (33554433) = proto 1 -- defined in scenepid.h
 
 variable dismantled_scenery;
 variable holes_array;
@@ -27,14 +38,16 @@ variable hole_count_map;
 
 procedure start;
 procedure useobjon_handler;
-procedure useobj_handler;
 procedure handle_lighter(variable target, variable target_pid);
 procedure handle_rope(variable target);
 procedure handle_crowbar(variable target);
 procedure handle_shovel_on_corpse(variable target);
+procedure handle_shovel_dig(variable target);
 procedure handle_dismantle_scenery(variable target);
+procedure handle_lighter_on_scenery(variable target, variable target_pid);
 procedure is_valid_dig_terrain;
 procedure is_mechanical_scenery(variable pid);
+procedure is_flammable_scenery(variable pid);
 
 procedure start begin
     if game_loaded then begin
@@ -54,79 +67,10 @@ procedure start begin
             save_array("megamod_shovel_hcount", hole_count_map);
         end
         register_hook_proc(HOOK_USEOBJON, useobjon_handler);
-        register_hook_proc(HOOK_USEOBJ, useobj_handler);
     end
 end
 
-// ============================================================
-// USEOBJ -- player uses item from inventory (shovel dig)
-// ============================================================
-procedure useobj_handler begin
-    variable user;
-    variable item;
-    variable item_pid;
-    variable my_tile;
-    variable map_idx;
-    variable hole_key;
-    variable count;
-    variable hole;
-
-    user := get_sfall_arg;
-    item := get_sfall_arg;
-
-    if (user != dude_obj) then return;
-    if (item == 0) then return;
-
-    item_pid := obj_pid(item);
-
-    if (item_pid != PID_SHOVEL) then return;
-
-    if (combat_is_initialized) then begin
-        display_msg("No time for digging right now.");
-        set_sfall_return(0);
-        return;
-    end
-
-    if not(is_valid_dig_terrain) then begin
-        display_msg("The ground here is too hard to dig.");
-        set_sfall_return(0);
-        return;
-    end
-
-    my_tile := tile_num(dude_obj);
-    map_idx := cur_map_index;
-    hole_key := "" + map_idx + "_" + my_tile;
-
-    if (holes_array[hole_key] == 1) then begin
-        display_msg("There's already a dug out hole here.");
-        set_sfall_return(0);
-        return;
-    end
-
-    count := hole_count_map["" + map_idx];
-    if (count >= 5) then begin
-        display_msg("You've dug enough holes on this map.");
-        set_sfall_return(0);
-        return;
-    end
-
-    // Dig
-    gfade_out(1);
-    game_time_advance(300);
-
-    hole := create_object(PID_GRAVESITE, my_tile, dude_elevation);
-    holes_array[hole_key] := 1;
-    save_array("megamod_shovel_holes", holes_array);
-
-    hole_count_map["" + map_idx] := count + 1;
-    save_array("megamod_shovel_hcount", hole_count_map);
-
-    gfade_in(1);
-    display_msg("You dig a hole and line it. Use it to stash your gear.");
-    give_exp_points(XP_DIG_HOLE);
-    display_msg("[Shovel] +" + XP_DIG_HOLE + " XP");
-    set_sfall_return(0);
-end
+// (useobj_handler removed -- shovel has no Use flag, moved to USEOBJON via handle_shovel_dig)
 
 // ============================================================
 // USEOBJON -- unified handler for all tool-on-object interactions
@@ -174,19 +118,26 @@ procedure useobjon_handler begin
         return;
     end
 
-    // === SHOVEL on dead critter ===
+    // === SHOVEL on dead critter -> bury ===
     if (used_pid == PID_SHOVEL and target_type == OBJ_TYPE_CRITTER) then begin
         call handle_shovel_on_corpse(target);
+        return;
+    end
+
+    // === SHOVEL on scenery -> dig hole (stash) ===
+    if (used_pid == PID_SHOVEL and target_type == OBJ_TYPE_SCENERY) then begin
+        call handle_shovel_dig(target);
         return;
     end
 end
 
 // ============================================================
-// LIGHTER -- on booze = molotov
+// LIGHTER -- on booze = molotov, on flammable scenery = campfire
 // ============================================================
 procedure handle_lighter(variable target, variable target_pid) begin
     variable molotov;
 
+    // Lighter + booze = molotov cocktail
     if (target_pid == PID_BOOZE or target_pid == PID_BEER) then begin
         molotov := create_object(PID_MOLOTOV_COCKTAIL, 0, 0);
         add_obj_to_inven(dude_obj, molotov);
@@ -196,7 +147,53 @@ procedure handle_lighter(variable target, variable target_pid) begin
         give_exp_points(XP_CRAFT);
         display_msg("[Craft] +" + XP_CRAFT + " XP");
         set_sfall_return(-1);
+        return;
     end
+
+    // Lighter + flammable scenery = campfire
+    if (obj_type(target) == OBJ_TYPE_SCENERY) then begin
+        if (is_flammable_scenery(target_pid)) then begin
+            call handle_lighter_on_scenery(target, target_pid);
+            return;
+        end
+    end
+end
+
+// ============================================================
+// LIGHTER ON SCENERY -- burn flammable brush/trees into campfire
+// ============================================================
+procedure handle_lighter_on_scenery(variable target, variable target_pid) begin
+    variable fire_tile;
+    variable fire_elev;
+    variable fire;
+
+    if (combat_is_initialized) then begin
+        display_msg("No time to start a fire right now.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    fire_tile := tile_num(target);
+    fire_elev := elevation(target);
+
+    // Remove the flammable scenery
+    destroy_object(target);
+
+    // Create a fire pit at the same location
+    fire := create_object(PID_FIRE_PIT, fire_tile, fire_elev);
+
+    // Set the fire object to emit light (distance=8, intensity=65536 = max)
+    set_object_data(fire, OBJ_DATA_LIGHT_DISTANCE, 8);
+    set_object_data(fire, OBJ_DATA_LIGHT_INTENSITY, 65536);
+
+    display_msg("You light it up. The fire crackles and spreads warmth.");
+    give_exp_points(XP_CAMPFIRE);
+    display_msg("[Campfire] +" + XP_CAMPFIRE + " XP");
+
+    // TODO: Create CAMP marker on the worldmap at current location.
+    // Worldmap markers require separate worldmap scripting (wmAreaMarkVisited or similar).
+
+    set_sfall_return(-1);
 end
 
 // ============================================================
@@ -398,9 +395,91 @@ procedure is_mechanical_scenery(variable pid) begin
 end
 
 // ============================================================
-// TERRAIN CHECK -- outdoor ground only
+// FLAMMABLE SCENERY -- brush, weeds, tumbleweed, dead tree
+// NOT cactus (PID_CACTUS_1, PID_CACTUS_2 -- too moist to burn)
+// ============================================================
+procedure is_flammable_scenery(variable pid) begin
+    // Tumbleweed (proto 63 -- no header define)
+    if (pid == PID_TUMBLEWEED) then return 1;
+    // Dead/old tree (proto 66)
+    if (pid == PID_TREE_OLD) then return 1;
+    // Scrub 1-4 (proto 102-105)
+    if (pid == PID_SCRUB_1 or pid == PID_SCRUB_2 or pid == PID_SCRUB_3 or pid == PID_SCRUB_4) then return 1;
+    // Weed 1-3 (proto 125-127)
+    if (pid == PID_WEED_1 or pid == PID_WEED_2 or pid == PID_WEED_3) then return 1;
+    // Green bush 1-2 (proto 943-944)
+    if (pid == PID_BUSH_GREEN_1 or pid == PID_BUSH_GREEN_2) then return 1;
+    return 0;
+end
+
+// ============================================================
+// SHOVEL on scenery -> dig stash hole nearby
+// ============================================================
+procedure handle_shovel_dig(variable target) begin
+    variable my_tile;
+    variable map_idx;
+    variable hole_key;
+    variable count;
+    variable hole;
+
+    if (combat_is_initialized) then begin
+        display_msg("No time for digging right now.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    if not(is_valid_dig_terrain) then begin
+        display_msg("The ground here is too hard to dig.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    my_tile := tile_num(dude_obj);
+    map_idx := cur_map_index;
+    hole_key := "" + map_idx + "_" + my_tile;
+
+    if (holes_array[hole_key] == 1) then begin
+        display_msg("There's already a hole here.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    count := hole_count_map["" + map_idx];
+    if (count >= 5) then begin
+        display_msg("You've dug enough holes on this map.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    gfade_out(1);
+    game_time_advance(300);
+
+    hole := create_object(PID_GRAVESITE, my_tile, dude_elevation);
+
+    holes_array[hole_key] := 1;
+    save_array("megamod_shovel_holes", holes_array);
+    hole_count_map["" + map_idx] := count + 1;
+    save_array("megamod_shovel_hcount", hole_count_map);
+
+    gfade_in(1);
+    display_msg("You dig a hole. Use it to stash your gear.");
+    give_exp_points(XP_DIG_HOLE);
+    display_msg("[Shovel] +" + XP_DIG_HOLE + " XP");
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// TERRAIN CHECK -- outdoor ground only (elevation 0, no roof)
 // ============================================================
 procedure is_valid_dig_terrain begin
+    variable tile;
+    variable roof_fid;
+
     if (dude_elevation > 0) then return 0;
+
+    tile := tile_num(dude_obj);
+    roof_fid := get_tile_roof_fid(tile, 0);
+    if (roof_fid != 1) then return 0;
+
     return 1;
 end
