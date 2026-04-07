@@ -10,10 +10,11 @@
 // scenepid.h already included via define.h
 #include "sfall/sfall.h"
 #include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
 #include "sfall/lib.arrays.h"
 
 #define PID_JUNK             98
-#define PID_GRAVESITE        344
+#define PID_GRAVESITE        345
 
 #define XP_CRAFT             10
 #define XP_ROPE              100
@@ -35,9 +36,12 @@
 variable dismantled_scenery;
 variable holes_array;
 variable hole_count_map;
+variable lighter_lit;
 
 procedure start;
 procedure useobjon_handler;
+procedure useobj_handler;
+procedure gamemode_handler;
 procedure handle_lighter(variable target, variable target_pid);
 procedure handle_rope(variable target);
 procedure handle_crowbar(variable target);
@@ -67,10 +71,189 @@ procedure start begin
             save_array("megamod_shovel_hcount", hole_count_map);
         end
         register_hook_proc(HOOK_USEOBJON, useobjon_handler);
+        register_hook_proc(HOOK_USEOBJ, useobj_handler);
+
+        // Enable "Use" action on Shovel (vanilla has no Use flag)
+        set_proto_data(PID_SHOVEL, PROTO_IT_FLAGS,
+            get_proto_data(PID_SHOVEL, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+
+        // Enable "Use" + "Use On" on Lighter (vanilla has neither)
+        set_proto_data(PID_LIGHTER, PROTO_IT_FLAGS,
+            get_proto_data(PID_LIGHTER, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE bwor ITEM_ACTION_USEON);
+
+        // Tandi + flare: change on every map enter via gamemode hook
+        register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
+
+        // Restore lighter light if it was on when game saved
+        variable saved_lighter := load_array("megamod_lighter");
+        if (saved_lighter != 0) then begin
+            lighter_lit := saved_lighter["lit"];
+            if (lighter_lit == 1) then begin
+                set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 4);
+                set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 40000);
+            end
+        end
+        else begin
+            lighter_lit := 0;
+        end
     end
 end
 
-// (useobj_handler removed -- shovel has no Use flag, moved to USEOBJON via handle_shovel_dig)
+// ============================================================
+// GAMEMODE -- fires on map enter, used for Tandi FID swap
+// ============================================================
+#define TANDI_ART_INDEX  86  // hfprim = black-haired tribal girl (FO2 female player)
+
+procedure gamemode_handler begin
+    variable lst;
+    variable obj;
+
+    // Swap Tandi's appearance on every map
+    lst := list_begin(LIST_CRITTERS);
+    obj := list_next(lst);
+    while (obj) do begin
+        if (obj_pid(obj) == PID_TANDI) then begin
+            art_change_fid_num(obj, TANDI_ART_INDEX);
+        end
+        obj := list_next(lst);
+    end
+    list_end(lst);
+
+    // === EASY MAIN QUEST: water chip = vault 13 access ===
+    if (dude_item_count(PID_WATER_CHIP) > 0) then begin
+        if (global_var(GVAR_VAULT_WATER) < 1) then begin
+            set_global_var(GVAR_VAULT_WATER, 1);
+        end
+        // Set access code holodisk flag too
+        set_global_var(GVAR_HOLODISK_ACCESS_CODE, 1);
+        // Unlock all locked scenery on V13 maps (doors, vault door)
+        if (CUR_MAP_VAULTENT or CUR_MAP_VAULT13 or CUR_MAP_V13ENT) then begin
+            variable lst2;
+            variable door;
+            lst2 := list_begin(LIST_SCENERY);
+            door := list_next(lst2);
+            while (door) do begin
+                if (obj_is_locked(door)) then begin
+                    obj_unlock(door);
+                end
+                door := list_next(lst2);
+            end
+            list_end(lst2);
+        end
+    end
+
+    // Re-apply flare boost if player has active flare in hand
+    if (obj_is_carrying_obj_pid(dude_obj, PID_ACTIVE_FLARE) > 0) then begin
+        set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 8);
+        set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 65536);
+    end
+
+    // Re-apply lighter glow if it was on
+    if (lighter_lit == 1) then begin
+        set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 4);
+        set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 40000);
+    end
+end
+
+// ============================================================
+// USEOBJ -- lighter used from inventory = toggle personal light
+// ============================================================
+procedure useobj_handler begin
+    variable user;
+    variable item;
+    variable item_pid;
+    variable arr;
+
+    user := get_sfall_arg;
+    item := get_sfall_arg;
+
+    if (user != dude_obj) then return;
+
+    item_pid := obj_pid(item);
+
+    // === LIGHTER -- toggle personal light ===
+    if (item_pid == PID_LIGHTER) then begin
+        if (lighter_lit == 0) then begin
+            lighter_lit := 1;
+            set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 5);
+            set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 65536);
+            tile_refresh_display;
+            display_msg("You flick the lighter open. A small flame pushes back the dark.");
+        end
+        else begin
+            lighter_lit := 0;
+            set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 0);
+            set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 0);
+            tile_refresh_display;
+            display_msg("You snap the lighter shut. Darkness closes in.");
+        end
+        arr := create_array_map;
+        arr["lit"] := lighter_lit;
+        save_array("megamod_lighter", arr);
+        set_sfall_return(-1);
+        return;
+    end
+
+    // === FLARE -- boost player light significantly when lit ===
+    if (item_pid == PID_FLARE) then begin
+        set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 8);
+        set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 65536);
+        tile_refresh_display;
+        display_msg("The flare hisses to life, bathing the area in harsh red light.");
+        return;
+    end
+
+    // === SHOVEL -- dig a stash hole at your feet ===
+    if (item_pid == PID_SHOVEL) then begin
+        if (combat_is_initialized) then begin
+            display_msg("No time for digging right now.");
+            set_sfall_return(-1);
+            return;
+        end
+        if not(is_valid_dig_terrain) then begin
+            display_msg("The ground here is too hard to dig.");
+            set_sfall_return(-1);
+            return;
+        end
+
+        variable my_tile;
+        variable map_idx;
+        variable hole_key;
+        variable count;
+        variable hole;
+
+        my_tile := tile_num(dude_obj);
+        map_idx := cur_map_index;
+        hole_key := "" + map_idx + "_" + my_tile;
+
+        if (holes_array[hole_key] == 1) then begin
+            display_msg("There's already a hole here.");
+            set_sfall_return(-1);
+            return;
+        end
+
+        count := hole_count_map["" + map_idx];
+        if (count >= 5) then begin
+            display_msg("You've dug enough holes on this map.");
+            set_sfall_return(-1);
+            return;
+        end
+
+        gfade_out(1);
+        game_time_advance(300);
+        hole := create_object(PID_GRAVESITE, my_tile, dude_elevation);
+        holes_array[hole_key] := 1;
+        save_array("megamod_shovel_holes", holes_array);
+        hole_count_map["" + map_idx] := count + 1;
+        save_array("megamod_shovel_hcount", hole_count_map);
+        gfade_in(1);
+
+        display_msg("You dig a hole. Use it to stash your gear.");
+        give_exp_points(XP_DIG_HOLE);
+        set_sfall_return(-1);
+        return;
+    end
+end
 
 // ============================================================
 // USEOBJON -- unified handler for all tool-on-object interactions
@@ -106,7 +289,29 @@ procedure useobjon_handler begin
         return;
     end
 
-    // === TOOLS on scenery -> dismantle for junk ===
+    // === ELECTRONIC LOCKPICK on locked scenery -> force open electronic locks ===
+    if ((used_pid == PID_ELECTRONIC_LOCKPICKS or used_pid == PID_ELEC_LOCKPICK_MKII) and (target_type == OBJ_TYPE_SCENERY or target_type == OBJ_TYPE_ITEM)) then begin
+        if (obj_is_locked(target)) then begin
+            obj_unlock(target);
+            obj_open(target);
+            display_msg("You bypass the electronic lock.");
+            set_sfall_return(-1);
+            return;
+        end
+    end
+
+    // === MULTI-TOOL on locked scenery -> master key, opens anything ===
+    if ((used_pid == PID_MULTI_TOOL or used_pid == PID_SUPER_TOOL_KIT) and (target_type == OBJ_TYPE_SCENERY or target_type == OBJ_TYPE_ITEM)) then begin
+        if (obj_is_locked(target)) then begin
+            obj_unlock(target);
+            obj_open(target);
+            display_msg("You work the lock open with your tools.");
+            set_sfall_return(-1);
+            return;
+        end
+    end
+
+    // === MULTI-TOOL on scenery -> dismantle for junk ===
     if ((used_pid == PID_MULTI_TOOL or used_pid == PID_SUPER_TOOL_KIT) and target_type == OBJ_TYPE_SCENERY) then begin
         call handle_dismantle_scenery(target);
         return;
@@ -145,7 +350,6 @@ procedure handle_lighter(variable target, variable target_pid) begin
         destroy_object(target);
         display_msg("You stuff a rag in the bottle and flick the lighter. Molotov ready.");
         give_exp_points(XP_CRAFT);
-        display_msg("[Craft] +" + XP_CRAFT + " XP");
         set_sfall_return(-1);
         return;
     end
@@ -186,9 +390,9 @@ procedure handle_lighter_on_scenery(variable target, variable target_pid) begin
     set_object_data(fire, OBJ_DATA_LIGHT_DISTANCE, 8);
     set_object_data(fire, OBJ_DATA_LIGHT_INTENSITY, 65536);
 
+    tile_refresh_display;
     display_msg("You light it up. The fire crackles and spreads warmth.");
     give_exp_points(XP_CAMPFIRE);
-    display_msg("[Campfire] +" + XP_CAMPFIRE + " XP");
 
     // TODO: Create CAMP marker on the worldmap at current location.
     // Worldmap markers require separate worldmap scripting (wmAreaMarkVisited or similar).
@@ -234,7 +438,6 @@ procedure handle_rope(variable target) begin
 
     display_msg("You bind them tight. They're not going anywhere.");
     give_exp_points(XP_ROPE);
-    display_msg("[Rope] +" + XP_ROPE + " XP");
     set_sfall_return(-1);
 end
 
@@ -258,12 +461,10 @@ procedure handle_crowbar(variable target) begin
         obj_unlock(target);
         display_msg("You wedge the crowbar in and force it open.");
         give_exp_points(XP_CROWBAR_OK);
-        display_msg("[Crowbar] +" + XP_CROWBAR_OK + " XP");
     end
     else begin
         display_msg("You strain against it, but it won't budge. Need more muscle.");
         give_exp_points(XP_CROWBAR_FAIL);
-        display_msg("[Crowbar] +" + XP_CROWBAR_FAIL + " XP");
     end
     set_sfall_return(-1);
 end
@@ -297,7 +498,6 @@ procedure handle_shovel_on_corpse(variable target) begin
 
     display_msg("You bury the remains. No one will find them.");
     give_exp_points(XP_BURY_CORPSE);
-    display_msg("[Shovel] +" + XP_BURY_CORPSE + " XP");
     set_sfall_return(-1);
 end
 
@@ -333,7 +533,6 @@ procedure handle_dismantle_scenery(variable target) begin
     if (skill_val < 25) then begin
         display_msg("You wouldn't know where to start. More Repair training needed.");
         give_exp_points(3);
-        display_msg("[Repair] +3 XP");
         set_sfall_return(-1);
         return;
     end
@@ -345,34 +544,61 @@ procedure handle_dismantle_scenery(variable target) begin
     if (roll > skill_val) then begin
         display_msg("You fumble with the parts. Nothing salvageable.");
         give_exp_points(3);
-        display_msg("[Repair] +3 XP");
         set_sfall_return(-1);
         return;
     end
 
+    variable loot_pid;
+    variable loot_name;
     junk_count := random(1, 3);
-    if (pid == 656 or pid == 55 or pid == 56) then
+
+    // Different junk based on scenery type
+    // Computers, monitors, terminals -> small energy cells
+    if (pid == 9 or pid == 11 or pid == 12 or (pid >= 13 and pid <= 17) or (pid >= 43 and pid <= 48)) then begin
+        loot_pid := PID_SMALL_ENERGY_CELL;
+        loot_name := "Small Energy Cell";
+        junk_count := random(1, 2);
+    end
+    // VDU screens, big electronics -> micro fusion cells
+    else if (pid == 55 or pid == 56 or pid == 656) then begin
+        loot_pid := PID_MICRO_FUSION_CELL;
+        loot_name := "Micro Fusion Cell";
+        junk_count := random(1, 2);
+    end
+    // Vents, pipes, air processing -> flares (scrap metal + chemicals)
+    else if (pid == 20 or pid == 21 or pid == 29 or pid == 32 or pid == 33 or pid == 50) then begin
+        loot_pid := PID_FLARE;
+        loot_name := "Flare";
         junk_count := random(2, 3);
+    end
+    // Vending machines -> caps + junk
+    else if (pid == 907 or pid == 908) then begin
+        loot_pid := PID_JUNK;
+        loot_name := "Junk";
+        caps_bonus := random(5, 25);
+        item_caps_adjust(dude_obj, caps_bonus);
+    end
+    // Everything else -> generic junk
+    else begin
+        loot_pid := PID_JUNK;
+        loot_name := "Junk";
+    end
 
     variable i;
     variable item;
     for (i := 0; i < junk_count; i++) begin
-        item := create_object(PID_JUNK, 0, 0);
+        item := create_object(loot_pid, 0, 0);
         add_obj_to_inven(dude_obj, item);
     end
 
-    caps_bonus := 0;
-    if (pid == 907 or pid == 908) then begin
-        caps_bonus := random(5, 25);
-        item_caps_adjust(dude_obj, caps_bonus);
-        display_msg("You salvage " + junk_count + " Junk and shake out " + caps_bonus + " bottle caps.");
+    if (caps_bonus > 0) then begin
+        display_msg("You salvage " + junk_count + "x " + loot_name + " and shake out " + caps_bonus + " caps.");
     end
     else begin
-        display_msg("You salvage " + junk_count + " Junk.");
+        display_msg("You salvage " + junk_count + "x " + loot_name + ".");
     end
 
     give_exp_points(25);
-    display_msg("[Repair] +25 XP");
     set_sfall_return(-1);
 end
 
@@ -464,7 +690,6 @@ procedure handle_shovel_dig(variable target) begin
     gfade_in(1);
     display_msg("You dig a hole. Use it to stash your gear.");
     give_exp_points(XP_DIG_HOLE);
-    display_msg("[Shovel] +" + XP_DIG_HOLE + " XP");
     set_sfall_return(-1);
 end
 
