@@ -47,6 +47,22 @@ procedure give_starting_kit begin
         add_obj_to_inven(dude_obj, item);
     end
 
+    // Easy Main Quest: water chip in starting inventory
+    if (obj_is_carrying_obj_pid(dude_obj, PID_WATER_CHIP) == 0) then begin
+        item := create_object(PID_WATER_CHIP, 0, 0);
+        add_obj_to_inven(dude_obj, item);
+    end
+
+    if (obj_is_carrying_obj_pid(dude_obj, PID_ELECTRONIC_LOCKPICKS) == 0) then begin
+        item := create_object(PID_ELECTRONIC_LOCKPICKS, 0, 0);
+        add_obj_to_inven(dude_obj, item);
+    end
+
+    if (obj_is_carrying_obj_pid(dude_obj, PID_RADIO) == 0) then begin
+        item := create_object(PID_RADIO, 0, 0);
+        add_obj_to_inven(dude_obj, item);
+    end
+
     kit_given["given"] := 1;
     save_array("megamod_kit", kit_given);
 
