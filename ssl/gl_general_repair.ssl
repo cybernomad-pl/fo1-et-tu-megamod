@@ -27,8 +27,11 @@
 #define XP_UPGRADE_L2        50
 #define XP_FAIL              3
 
+variable dismantled_scenery;
+
 procedure start;
 procedure repair_skill_handler;
+procedure try_dismantle_scenery(variable target);
 procedure has_tools;
 procedure has_junk_count(variable count);
 procedure remove_junk(variable count);
@@ -43,7 +46,13 @@ procedure is_upgradeable_weapon(variable pid);
 
 procedure start begin
     if game_loaded then begin
+        dismantled_scenery := load_array("megamod_repair_scen");
+        if (dismantled_scenery == 0) then begin
+            dismantled_scenery := create_array_map;
+            save_array("megamod_repair_scen", dismantled_scenery);
+        end
         register_hook_proc(HOOK_USESKILLON, repair_skill_handler);
+        set_ini_setting("megamod.ini|repair_start|loaded", 1);
     end
 end
 
@@ -129,6 +138,23 @@ procedure repair_skill_handler begin
 
     target_pid := obj_pid(target);
     target_type := obj_type(target);
+
+    set_ini_setting("megamod.ini|repair|fired", 1);
+    set_ini_setting("megamod.ini|repair|target_type", target_type);
+    set_ini_setting("megamod.ini|repair|target_pid", target_pid);
+
+    // === REPAIR ON SCENERY = dismantle for junk (needs tools) ===
+    if (target_type == OBJ_TYPE_SCENERY) then begin
+        if not(has_tools) then begin
+            display_msg("You need tools for this.");
+            set_sfall_return(-1);
+            return;
+        end
+        set_ini_setting("megamod.ini|repair|action", "dismantle_scenery");
+        call try_dismantle_scenery(target);
+        set_sfall_return(-1);
+        return;
+    end
 
     // === REPAIR ON GROUND ITEM ===
     if (target_type == OBJ_TYPE_ITEM) then begin
@@ -295,5 +321,74 @@ procedure try_weapon_upgrade(variable weapon_obj) begin
 
     give_exp_points(XP_UPGRADE_L1);
     display_msg("[Repair] +" + XP_UPGRADE_L1 + " XP");
+end
+
+// ============================================================
+// DISMANTLE SCENERY -- Repair skill on ANY scenery = junk
+// ============================================================
+procedure try_dismantle_scenery(variable target) begin
+    variable pid;
+    variable obj_id;
+    variable proto;
+    variable junk_count;
+    variable loot_pid;
+    variable loot_name;
+    variable caps_bonus;
+    variable i;
+    variable item;
+
+    pid := obj_pid(target);
+    proto := pid - 33554432;
+
+    set_ini_setting("megamod.ini|dismantle|pid", pid);
+    set_ini_setting("megamod.ini|dismantle|proto", proto);
+
+    obj_id := (tile_num(target) * 10000) + pid;
+
+    if (dismantled_scenery[obj_id] != 0) then begin
+        display_msg("Already stripped.");
+        return;
+    end
+
+    dismantled_scenery[obj_id] := 1;
+    save_array("megamod_repair_scen", dismantled_scenery);
+
+    caps_bonus := 0;
+    junk_count := random(1, 3);
+
+    // Electronics -> small energy cells
+    if (proto == 9 or proto == 11 or proto == 12 or (proto >= 13 and proto <= 17) or (proto >= 43 and proto <= 48) or proto == 25 or proto == 26 or proto == 158 or proto == 159) then begin
+        loot_pid := PID_SMALL_ENERGY_CELL;
+        loot_name := "Small Energy Cell";
+        junk_count := random(1, 2);
+    end
+    else if (proto == 55 or proto == 56 or proto == 656) then begin
+        loot_pid := PID_MICRO_FUSION_CELL;
+        loot_name := "Micro Fusion Cell";
+        junk_count := random(1, 2);
+    end
+    else if (proto == 907 or proto == 908) then begin
+        loot_pid := PID_JUNK;
+        loot_name := "Junk";
+        caps_bonus := random(5, 25);
+        item_caps_adjust(dude_obj, caps_bonus);
+    end
+    else begin
+        loot_pid := PID_JUNK;
+        loot_name := "Junk";
+    end
+
+    for (i := 0; i < junk_count; i++) begin
+        item := create_object(loot_pid, 0, 0);
+        add_obj_to_inven(dude_obj, item);
+    end
+
+    if (caps_bonus > 0) then
+        display_msg("You salvage " + junk_count + "x " + loot_name + " + " + caps_bonus + " caps.");
+    else
+        display_msg("You salvage " + junk_count + "x " + loot_name + ".");
+
+    give_exp_points(25);
+    set_ini_setting("megamod.ini|dismantle|done", 1);
 end
 
