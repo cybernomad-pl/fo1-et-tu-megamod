@@ -1,0 +1,111 @@
+/*
+    Lighter mod -- USE lighter = create light-emitting junk on ground
+    Junk follows player. Tiny sprite, big light.
+*/
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
+#include "sfall/lib.arrays.h"
+
+#define LOG(s, k, v) set_ini_setting("megamod.ini|" + s + "|" + k, v)
+#define PID_JUNK 98
+#define LIGHT_DIST 20
+#define LIGHT_INT 65536
+
+variable lighter_lit;
+variable light_obj;
+
+procedure start;
+procedure useobj_handler;
+procedure map_enter_p_proc;
+procedure map_update_p_proc;
+
+procedure start begin
+    if game_loaded then begin
+        register_hook_proc(HOOK_USEOBJ, useobj_handler);
+        set_proto_data(PID_LIGHTER, PROTO_IT_FLAGS,
+            get_proto_data(PID_LIGHTER, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE bwor ITEM_ACTION_USEON);
+        set_global_script_repeat(30);
+
+        variable saved := load_array("megamod_lighter");
+        if (saved != 0) then begin
+            lighter_lit := saved["lit"];
+        end
+        else begin
+            lighter_lit := 0;
+        end
+        light_obj := 0;
+        LOG("lighter_mod", "loaded", 1);
+        LOG("lighter_mod", "lit", lighter_lit);
+    end
+end
+
+procedure map_enter_p_proc begin
+    LOG("lighter_map", "enter", lighter_lit);
+    if (lighter_lit == 1) then begin
+        if (light_obj == 0) then begin
+            light_obj := create_object(PID_JUNK, tile_num(dude_obj), dude_elevation);
+            set_object_data(light_obj, OBJ_DATA_FLAGS, get_object_data(light_obj, OBJ_DATA_FLAGS) bwor FLAG_FLAT bwor FLAG_NOBLOCK bwor FLAG_TRANSNONE);
+            set_object_data(light_obj, OBJ_DATA_LIGHT_DISTANCE, LIGHT_DIST);
+            set_object_data(light_obj, OBJ_DATA_LIGHT_INTENSITY, LIGHT_INT);
+            tile_refresh_display;
+            LOG("lighter_map", "created", light_obj);
+        end
+    end
+end
+
+procedure map_update_p_proc begin
+    if (lighter_lit == 1 and light_obj != 0) then begin
+        move_to(light_obj, tile_num(dude_obj), dude_elevation);
+    end
+end
+
+procedure useobj_handler begin
+    variable user;
+    variable item;
+    variable item_pid;
+    variable arr;
+
+    user := get_sfall_arg;
+    item := get_sfall_arg;
+    if (user != dude_obj) then return;
+    if (item == 0) then return;
+    item_pid := obj_pid(item);
+    if (item_pid != PID_LIGHTER) then return;
+
+    LOG("lighter", "used", lighter_lit);
+
+    if (lighter_lit == 0) then begin
+        lighter_lit := 1;
+        light_obj := create_object(PID_JUNK, tile_num(dude_obj), dude_elevation);
+        // Make invisible
+        set_object_data(light_obj, OBJ_DATA_FLAGS, get_object_data(light_obj, OBJ_DATA_FLAGS) bwor FLAG_FLAT bwor FLAG_NOBLOCK bwor FLAG_TRANSNONE);
+        // Set light
+        set_object_data(light_obj, OBJ_DATA_LIGHT_DISTANCE, LIGHT_DIST);
+        set_object_data(light_obj, OBJ_DATA_LIGHT_INTENSITY, LIGHT_INT);
+        LOG("lighter", "obj_created", light_obj);
+        LOG("lighter", "flags", get_object_data(light_obj, OBJ_DATA_FLAGS));
+        LOG("lighter", "light_dist", get_object_data(light_obj, OBJ_DATA_LIGHT_DISTANCE));
+        tile_refresh_display;
+        LOG("lighter", "refreshed", 1);
+        display_msg("You flick the lighter open. A small flame pushes back the dark.");
+    end
+    else begin
+        lighter_lit := 0;
+        if (light_obj != 0) then begin
+            destroy_object(light_obj);
+            light_obj := 0;
+            LOG("lighter", "destroyed", 1);
+        end
+        tile_refresh_display;
+        display_msg("You snap the lighter shut. Darkness closes in.");
+    end
+
+    arr := create_array_map;
+    arr["lit"] := lighter_lit;
+    save_array("megamod_lighter", arr);
+    LOG("lighter", "lit", lighter_lit);
+    set_sfall_return(-1);
+end
