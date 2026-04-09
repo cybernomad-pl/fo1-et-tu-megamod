@@ -1,0 +1,344 @@
+/*
+
+   Junktown - Ismarc
+
+*/
+
+/* Include Files */
+#include "define.h"
+//#include "area/necropolis.h"
+
+#define NAME                    SCRIPT_ISMARC
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_JUNKTOWN)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure critter_p_proc;
+procedure damage_p_proc;
+procedure destroy_p_proc;
+procedure map_enter_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+procedure timed_event_p_proc;
+
+procedure Ismarc01;
+procedure Ismarc02;
+procedure Ismarc03;
+procedure Ismarc04;
+procedure Ismarc05;
+procedure Ismarc06;
+procedure Ismarc07;
+procedure Ismarc08;
+procedure Ismarc09;
+procedure Ismarc10;
+procedure Ismarc11;
+procedure Ismarc12;
+procedure IsmarcEnd;
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+variable night_person;
+variable wake_time;
+variable sleep_time;
+variable home_tile;
+variable sleep_tile;
+
+variable tmp_hostile;
+variable initial := 0;
+variable singing;
+variable song_line_base;
+variable song_line_offset;
+variable line05flag;
+variable line06flag;
+variable line07flag;
+variable line08flag;
+variable line11flag;
+variable line12flag;
+
+#define LVAR_Sleeping                     (4)
+
+procedure start begin
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   else begin
+      if (local_var(LVAR_Sleeping) == 0) then begin
+         if (self_tile != home_tile) then begin
+            self_walk_to_tile(home_tile);
+         end
+         else if (self_cur_rot != 2) then begin
+            self_rotate(2);
+         end
+      end
+      if ((game_time_hour >= 1500) and (game_time_hour <= 1900) and not(singing)) then begin
+         rm_timer_event(self_obj);
+         add_timer_event(self_obj, game_ticks(random(30, 60)), 1);
+         singing := 1;
+         song_line_offset := 0;
+         song_line_base := 0;
+      end
+      sleeping
+   end
+   if REP_ENEMY_JUNKTOWN_CITIZENS then begin
+      if (self_can_see_dude) then begin
+         attack(dude_obj);
+      end
+   end
+end
+
+procedure damage_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_ENEMY_JUNKTOWN, 1);
+   end
+end
+
+procedure destroy_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_DUDE_ENEMY_JUNK_CITIZEN, 1);
+      set_global_var(GVAR_ENEMY_JUNKTOWN, 1);
+   end
+   inc_good_critter
+end
+
+procedure map_enter_p_proc begin
+   if junktown_invaded then begin
+      destroy_object(self_obj);
+   end
+   set_self_team(TEAM_JUNKTOWNER);
+
+   if map_first_run or (days_since_visited >= 7) then begin
+      self_caps_adjust(random(20, 50));
+   end
+
+   sleep_tile := 7000;
+   home_tile := 19089;
+   sleep_time := 2210;
+   wake_time := 1420;
+end
+
+procedure pickup_p_proc begin
+   tmp_hostile := 1;
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   set_tma_data_generic(TMA_MSG_JUNKCSNO);
+
+   dude_look_at_self;
+   get_reaction
+   start_dialog_at_node(Ismarc01);
+end
+
+procedure timed_event_p_proc begin
+   if (fixed_param == 1) then begin
+      if (song_line_base == 0) then begin
+         song_line_base := (random(0, 2) * 4) + 127;
+         song_line_offset := 0;
+      end
+      if (song_line_offset < 4) then begin
+         reg_anim_clear(self_obj);
+         reg_anim_begin();
+         reg_anim_animate(self_obj, ANIM_dodge_anim, -1);
+         reg_anim_animate(self_obj, ANIM_hit_from_back, 3);
+         reg_anim_animate(self_obj, ANIM_hit_from_front, 3);
+         reg_anim_animate(self_obj, ANIM_dodge_anim, 3);
+         reg_anim_animate(self_obj, ANIM_stand, 3);
+         reg_anim_end();
+         float_msg(self_obj, mstr(song_line_base + song_line_offset), FLOAT_MSG_NORMAL);
+         song_line_offset := song_line_offset + 1;
+         add_timer_event(self_obj, game_ticks(5), 1);
+      end
+      else begin
+         singing := 0;
+         song_line_offset := 0;
+         song_line_base := 0;
+      end
+   end
+end
+
+procedure Ismarc01 begin
+   if bad_critter_reaction then begin
+      Reply(102);
+   end
+   else begin
+      Reply(103);
+   end
+   NOption(900, NodeRecruit, 4);
+   GOption(104, Ismarc02, 4);
+   BOption(105, Ismarc03, 4);
+   NOption(106, IsmarcEnd, 4);
+   BLowOption(107, Ismarc04);
+end
+
+procedure Ismarc02 begin
+   UpReact
+   if bad_critter_reaction then begin
+      call Ismarc03;
+   end
+   else begin
+      Reply(109);
+      call Ismarc10;
+   end
+end
+
+procedure Ismarc03 begin
+   BMessage(108);
+end
+
+procedure Ismarc04 begin
+   BMessage(114);
+end
+
+procedure Ismarc05 begin
+   line05flag := 1;
+   Reply(115);
+   call Ismarc09;
+end
+
+procedure Ismarc06 begin
+   line06flag := 1;
+   mark_on_map(AREA_HUB)
+   Reply(120);
+   call Ismarc09;
+end
+
+procedure Ismarc07 begin
+   line07flag := 1;
+   mark_on_map(AREA_BROTHERHOOD)
+
+   Reply(121);
+   call Ismarc09;
+end
+
+procedure Ismarc08 begin
+   line08flag := 1;
+   mark_on_map(AREA_BONEYARD)
+
+   Reply(122);
+   call Ismarc09;
+end
+
+procedure Ismarc09 begin
+   if (not(line06flag)) then begin
+      NOption(116, Ismarc06, 4);
+   end
+   if (not(line07flag)) then begin
+      NOption(117, Ismarc07, 4);
+   end
+   if (not(line08flag)) then begin
+      NOption(118, Ismarc08, 4);
+   end
+   NOption(119, IsmarcEnd, 4);
+end
+
+procedure Ismarc10 begin
+   if (not(line05flag)) then begin
+      NOption(110, Ismarc05, 4);
+   end
+   if (not(line11flag)) then begin
+      GOption(111, Ismarc11, 4);
+   end
+   if (not(line12flag)) then begin
+      NOption(112, Ismarc12, 4);
+   end
+   NOption(113, IsmarcEnd, 4);
+end
+
+procedure Ismarc11 begin
+   variable LVar0 := 0;
+   if (dude_caps >= 5) then begin
+      UpReact
+      LVar0 := rm_mult_objs_from_inven(dude_obj, dude_item(PID_BOTTLE_CAPS), 5);
+      LVar0 := create_object(PID_BOTTLE_CAPS, 0, 0);
+      add_mult_objs_to_inven(self_obj, LVar0, 5);
+      Reply(123);
+      GOption(g_more, Ismarc10, 1);
+   end
+   else begin
+      Reply(124);
+      call Ismarc10;
+   end
+end
+
+procedure Ismarc12 begin
+   Reply(125);
+   call Ismarc10;
+end
+
+procedure IsmarcEnd begin
+end
+
+procedure NodeRecruit begin
+   if (party_member_count(0) >= 5) then begin
+      display_msg("Your party is full.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg("Ismarc joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end
