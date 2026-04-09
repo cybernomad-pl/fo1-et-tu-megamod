@@ -1,0 +1,22 @@
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+
+procedure start;
+procedure map_enter_p_proc;
+
+variable loaded := 0;
+
+procedure start begin
+    if game_loaded then begin
+        loaded := 1;
+        set_ini_setting("megamod.ini|log|started", 1);
+        display_msg(">>> MEGAMOD TEST: game_loaded <<<");
+    end
+end
+
+procedure map_enter_p_proc begin
+    set_ini_setting("megamod.ini|log|map_enter", cur_map_index);
+    display_msg(">>> MEGAMOD TEST: map_enter map=" + cur_map_index + " <<<");
+end
