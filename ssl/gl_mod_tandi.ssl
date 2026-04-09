@@ -1,0 +1,60 @@
+/*
+    Sexy Tandi + Easy Quest mod
+*/
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
+#include "sfall/lib.arrays.h"
+
+#define LOG(s, k, v) set_ini_setting("megamod.ini|" + s + "|" + k, v)
+#define TANDI_ART_INDEX 86
+
+procedure start;
+procedure gamemode_handler;
+
+procedure start begin
+    if game_loaded then begin
+        register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
+        LOG("tandi_mod", "loaded", 1);
+    end
+end
+
+procedure gamemode_handler begin
+    variable lst;
+    variable obj;
+
+    // Swap Tandi FID on every map
+    lst := list_begin(LIST_CRITTERS);
+    obj := list_next(lst);
+    while (obj) do begin
+        if (obj != 0) then begin
+            if (obj_pid(obj) == PID_TANDI) then begin
+                art_change_fid_num(obj, TANDI_ART_INDEX);
+            end
+        end
+        obj := list_next(lst);
+    end
+    list_end(lst);
+
+    // Easy Main Quest: water chip = vault 13 access
+    if (dude_item_count(PID_WATER_CHIP) > 0) then begin
+        if (global_var(GVAR_VAULT_WATER) < 1) then
+            set_global_var(GVAR_VAULT_WATER, 1);
+        set_global_var(GVAR_HOLODISK_ACCESS_CODE, 1);
+
+        if (CUR_MAP_VAULTENT or CUR_MAP_VAULT13 or CUR_MAP_V13ENT) then begin
+            variable lst2;
+            variable door;
+            lst2 := list_begin(LIST_SCENERY);
+            door := list_next(lst2);
+            while (door) do begin
+                if (door != 0 and obj_is_locked(door)) then
+                    obj_unlock(door);
+                door := list_next(lst2);
+            end
+            list_end(lst2);
+        end
+    end
+end
