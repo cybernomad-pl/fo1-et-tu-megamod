@@ -1,0 +1,377 @@
+/*
+
+   Vault 13 - Officer / Security
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/vault13.h"
+#include "maps/v13ent.h"
+
+#define NAME                    SCRIPT_OFFICER
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_V13)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure critter_p_proc;
+procedure damage_p_proc;
+procedure destroy_p_proc;
+procedure map_enter_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+
+procedure Officer00;
+procedure Officer01;
+procedure Officer02;
+procedure Officer03;
+procedure Officer04;
+procedure Officer05;
+procedure Officer06;
+procedure Officer07;
+procedure Officer08;
+procedure Officer09;
+procedure Officer10;
+procedure Officer11;
+procedure Officer12;
+procedure Officer13;
+procedure Officer14;
+procedure Officer15;
+procedure Officer15a;
+procedure Officer16;
+procedure Officer17;
+procedure Officer18;
+procedure Officer19;
+procedure Officer20;
+procedure Officer21;
+procedure Officer21a;
+procedure Officer22;
+procedure Officer23;
+procedure Officer24;
+procedure Officer25;
+procedure Officer26;
+procedure Officer27;
+procedure Officer28;
+procedure Officer29;
+procedure Officer30;
+procedure Officer31;
+procedure OfficerCombat;
+procedure OfficerEnd;
+procedure OfficerJoin;
+procedure OfficerJoinAccept;
+
+variable tmp_hostile;
+
+import variable SecDoor_ptr;
+import variable armory_access;
+import variable Officer_ptr;
+
+#define LVAR_Home_Tile                  (5)
+#define LVAR_Home_Rotation              (6)
+
+#define armory_hex   (21292)
+
+procedure start begin
+end
+
+procedure critter_p_proc begin
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   else begin
+      if REP_ENEMY_VAULT13 then begin
+         if (self_can_see_dude) then begin
+            dialogue_system_enter;
+         end
+      end
+      else begin
+         if ((armory_access == 1) and not(obj_is_open(SecDoor_ptr))) then begin
+            use_obj(SecDoor_ptr);
+         end
+         else if (armory_access == 2) then begin
+            self_rotate(5);
+            float_msg(self_obj, mstr(159), FLOAT_MSG_NORMAL);
+            armory_access := 0;
+            set_map_var(1, armory_access);
+         end
+         else if (not(armory_access) and (dude_elevation == self_elevation)) then begin
+            if (tile_distance(dude_tile, armory_hex) < 2) then begin
+               tmp_hostile := 1;
+            end
+         end
+      end
+   end
+end
+
+procedure damage_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_VAULT_13_HOSTILE, 1);
+   end
+end
+
+procedure destroy_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_VAULT_13_HOSTILE, 1);
+   end
+   inc_good_critter
+   Officer_ptr := 0;
+end
+
+procedure map_enter_p_proc begin
+   if (local_var(LVAR_Home_Tile) == 0) then begin
+      set_local_var(LVAR_Home_Tile, self_tile);
+      set_local_var(LVAR_Home_Rotation, self_cur_rot);
+   end
+   else begin
+      if not(is_loading_game) then begin
+         critter_attempt_placement(self_obj, local_var(LVAR_Home_Tile), self_elevation);
+         self_rotate(local_var(LVAR_Home_Rotation));
+      end
+   end
+
+   if (v13_invaded) then begin
+      invasion_kill_critter_V13;
+   end
+
+   set_self_team(TEAM_VAULT13);
+   Officer_ptr := self_obj;
+end
+
+procedure pickup_p_proc begin
+   tmp_hostile := 1;
+end
+
+procedure talk_p_proc begin
+   set_tma_data_generic(TMA_MSG_VAULT13);
+
+   dude_look_at_self;
+
+   get_reaction
+   if REP_ENEMY_VAULT13 then begin
+      start_dialog_at_node(Officer00);
+   end
+   else if dude_is_armed and (local_var(14) == 0) then begin
+      start_dialog_at_node(Officer27);
+   end
+   else if waterchip_returned then begin
+      start_dialog_at_node(Officer01);
+   end
+   else if (local_var(LVAR_reaction_level) > BAD) then begin
+      if (armory_access) then begin
+         start_dialog_at_node(Officer25);
+      end
+      else begin
+         start_dialog_at_node(Officer02);
+      end
+   end
+   else if (armory_access) then begin
+      start_dialog_at_node(Officer26);
+   end
+   else begin
+      start_dialog_at_node(Officer18);
+   end
+end
+
+procedure Officer00 begin
+   BMessage(100);
+   tmp_hostile := 1;
+end
+
+procedure Officer01 begin
+   NMessage(101);
+end
+
+procedure Officer02 begin
+   Reply(102);
+   NOption(200, OfficerJoin, 4);
+   NOption(103, Officer04, 4);
+   NOption(104, Officer08, 5);
+   NOption(105, Officer11, 6);
+   NLowOption(106, Officer03);
+end
+
+procedure Officer03 begin
+   Reply(107);
+   NOption(159, OfficerEnd, 4);
+end
+
+procedure Officer04 begin
+   Reply(108);
+   NOption(109, OfficerEnd, 4);
+   NOption(110, Officer05, 5);
+end
+
+procedure Officer05 begin
+   Reply(111);
+   NOption(112, Officer06, 5);
+   NOption(113, Officer07, 6);
+end
+
+procedure Officer06 begin
+   Reply(114);
+   NOption(115, OfficerEnd, 5);
+end
+
+procedure Officer07 begin
+   UpReact
+   GMessage(116);
+end
+
+procedure Officer08 begin
+   Reply(117);
+   NOption(118, Officer09, 4);
+   NOption(119, Officer10, 4);
+end
+
+procedure Officer09 begin
+   DownReact
+   BMessage(120);
+end
+
+procedure Officer10 begin
+   NMessage(121);
+end
+
+procedure Officer11 begin
+   Reply(122);
+   NOption(123, Officer13, 5);
+   NOption(124, Officer12, 5);
+end
+
+procedure Officer12 begin
+   NMessage(125);
+end
+
+procedure Officer13 begin
+   Reply(126);
+   NOption(127, Officer15, 5);
+   NOption(128, Officer14, 5);
+end
+
+procedure Officer14 begin
+   NMessage(129);
+end
+
+procedure Officer15 begin
+   Reply(130);
+   NOption(131, Officer15a, 5);
+end
+
+procedure Officer15a begin
+   if (dude_skill_success(SKILL_SPEECH, 0)) then begin
+      call Officer17;
+   end
+   else begin
+      call Officer16;
+   end
+end
+
+procedure Officer16 begin
+   NMessage(132);
+end
+
+procedure Officer17 begin
+   armory_access := 1;
+   set_map_var(1, armory_access);
+   NMessage(133);
+end
+
+procedure Officer18 begin
+   Reply(mstr(134) + dude_name + mstr(135));
+   NOption(200, OfficerJoin, 4);
+   NOption(136, Officer20, 4);
+   NOption(137, Officer21, 5);
+   NLowOption(138, Officer19);
+end
+
+procedure Officer19 begin
+   NMessage(139);
+end
+
+procedure Officer20 begin
+   NMessage(140);
+end
+
+procedure Officer21 begin
+   Reply(141);
+   NOption(142, Officer22, 5);
+   NOption(143, Officer21a, 5);
+end
+
+procedure Officer21a begin
+   if (dude_skill_success(SKILL_SPEECH, 0)) then begin
+      call Officer23;
+   end
+   else begin
+      call Officer24;
+   end
+end
+
+procedure Officer22 begin
+   Reply(144);
+   NOption(145, OfficerEnd, 5);
+   BOption(146, OfficerCombat, 5);
+end
+
+procedure Officer23 begin
+   NMessage(147);
+end
+
+procedure Officer24 begin
+   NMessage(148);
+end
+
+procedure Officer25 begin
+   NMessage(149);
+end
+
+procedure Officer26 begin
+   NMessage(150);
+end
+
+procedure Officer27 begin
+   NMessage(151);
+end
+
+procedure Officer28 begin
+   Reply(152);
+   NOption(153, Officer30, 4);
+   NOption(154, Officer31, 5);
+   NLowOption(155, Officer29);
+end
+
+procedure Officer29 begin
+   NMessage(156);
+end
+
+procedure Officer30 begin
+   NMessage(157);
+end
+
+procedure Officer31 begin
+   NMessage(158);
+end
+
+procedure OfficerCombat begin
+   BigDownReact
+   tmp_hostile := 1;
+end
+
+procedure OfficerEnd begin
+end
+
+procedure OfficerJoin begin
+   Reply(201);
+   NOption(202, OfficerJoinAccept, 4);
+   NOption(203, OfficerEnd, 4);
+end
+
+procedure OfficerJoinAccept begin
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg(mstr(204));
+end
