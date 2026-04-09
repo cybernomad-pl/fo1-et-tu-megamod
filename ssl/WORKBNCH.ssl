@@ -1,0 +1,248 @@
+/*
+    Workbench -- Multi-Tool crafting dialog NPC
+    Created temporarily by gl_megamod_tools when player USEs multi-tool.
+    Has talk_p_proc with crafting menu.
+*/
+
+#include "define.h"
+
+#define NAME  (1015)
+
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/lib.arrays.h"
+
+variable parts_array;
+
+procedure start;
+procedure talk_p_proc;
+procedure critter_p_proc;
+procedure destroy_p_proc;
+
+procedure NodeMain;
+procedure NodeSearchParts;
+procedure NodeBreakDown;
+procedure NodeShowParts;
+procedure NodeCancel;
+
+procedure add_part(variable part_name, variable amount);
+procedure do_search_parts;
+procedure do_break_down;
+
+procedure start begin
+    parts_array := load_array("megamod_parts");
+    if (parts_array == 0) then begin
+        parts_array := create_array_map;
+        save_array("megamod_parts", parts_array);
+    end
+end
+
+procedure critter_p_proc begin
+    // Auto-trigger dialog when player is near
+    if (self_can_see_dude) then begin
+        dialogue_system_enter;
+    end
+end
+
+procedure destroy_p_proc begin
+end
+
+procedure talk_p_proc begin
+    start_gdialog(NAME, self_obj, 4, -1, -1);
+    gSay_Start;
+    call NodeMain;
+    gSay_End;
+    end_dialogue;
+
+    // Self-destruct after dialog
+    destroy_object(self_obj);
+end
+
+procedure NodeMain begin
+    gSay_Reply(NAME, 100);
+
+    giQ_Option(4, NAME, mstr(101), NodeSearchParts, 1);
+    giQ_Option(4, NAME, mstr(102), NodeBreakDown, 1);
+    giQ_Option(4, NAME, mstr(103), NodeShowParts, 1);
+    giQ_Option(4, NAME, mstr(104), NodeCancel, 1);
+end
+
+procedure NodeSearchParts begin
+    call do_search_parts;
+    gSay_Reply(NAME, 110);
+    giQ_Option(4, NAME, mstr(105), NodeMain, 1);
+    giQ_Option(4, NAME, mstr(104), NodeCancel, 1);
+end
+
+procedure NodeBreakDown begin
+    call do_break_down;
+    gSay_Reply(NAME, 120);
+    giQ_Option(4, NAME, mstr(105), NodeMain, 1);
+    giQ_Option(4, NAME, mstr(104), NodeCancel, 1);
+end
+
+procedure NodeShowParts begin
+    variable msg;
+    msg := "Parts: ";
+    if (parts_array["electronic"] > 0) then
+        msg := msg + "Electronic:" + parts_array["electronic"] + " ";
+    if (parts_array["metal"] > 0) then
+        msg := msg + "Metal:" + parts_array["metal"] + " ";
+    if (parts_array["wiring"] > 0) then
+        msg := msg + "Wiring:" + parts_array["wiring"] + " ";
+    if (parts_array["casings"] > 0) then
+        msg := msg + "Casings:" + parts_array["casings"] + " ";
+    if (parts_array["powder"] > 0) then
+        msg := msg + "Powder:" + parts_array["powder"] + " ";
+    if (parts_array["bullets_10mm_jhp"] > 0) then
+        msg := msg + "10mmJHP:" + parts_array["bullets_10mm_jhp"] + " ";
+    if (parts_array["bullets_10mm_ap"] > 0) then
+        msg := msg + "10mmAP:" + parts_array["bullets_10mm_ap"] + " ";
+    if (parts_array["spring"] > 0) then
+        msg := msg + "Springs:" + parts_array["spring"] + " ";
+    if (parts_array["firing_pin"] > 0) then
+        msg := msg + "FiringPins:" + parts_array["firing_pin"] + " ";
+    display_msg(msg);
+
+    gSay_Reply(NAME, 130);
+    giQ_Option(4, NAME, mstr(105), NodeMain, 1);
+    giQ_Option(4, NAME, mstr(104), NodeCancel, 1);
+end
+
+procedure NodeCancel begin
+end
+
+// ============================================================
+procedure add_part(variable part_name, variable amount) begin
+    variable cur;
+    cur := parts_array[part_name];
+    parts_array[part_name] := cur + amount;
+    save_array("megamod_parts", parts_array);
+    display_msg("  +" + amount + " " + part_name);
+end
+
+procedure do_search_parts begin
+    variable scan_lst;
+    variable scan_obj;
+    variable best_obj;
+    variable best_dist;
+    variable cur_dist;
+    variable pid;
+    variable proto;
+    variable obj_id;
+    variable dismantled;
+
+    dismantled := load_array("megamod_repair_scen");
+    if (dismantled == 0) then begin
+        dismantled := create_array_map;
+        save_array("megamod_repair_scen", dismantled);
+    end
+
+    best_obj := 0;
+    best_dist := 999;
+
+    scan_lst := list_begin(LIST_SCENERY);
+    scan_obj := list_next(scan_lst);
+    while (scan_obj) do begin
+        if (scan_obj != 0 and elevation(scan_obj) == dude_elevation) then begin
+            cur_dist := tile_distance(tile_num(dude_obj), tile_num(scan_obj));
+            if (cur_dist <= 3 and cur_dist < best_dist) then begin
+                obj_id := (tile_num(scan_obj) * 10000) + obj_pid(scan_obj);
+                if (dismantled[obj_id] == 0) then begin
+                    best_dist := cur_dist;
+                    best_obj := scan_obj;
+                end
+            end
+        end
+        scan_obj := list_next(scan_lst);
+    end
+    list_end(scan_lst);
+
+    if (best_obj == 0) then begin
+        display_msg("Nothing to search nearby.");
+        return;
+    end
+
+    pid := obj_pid(best_obj);
+    proto := pid - 33554432;
+    obj_id := (tile_num(best_obj) * 10000) + pid;
+    dismantled[obj_id] := 1;
+    save_array("megamod_repair_scen", dismantled);
+
+    display_msg("You search " + obj_name(best_obj) + "...");
+
+    // Electronics
+    if (proto == 9 or proto == 11 or proto == 12 or (proto >= 13 and proto <= 17) or (proto >= 43 and proto <= 48) or proto == 25 or proto == 26 or proto == 158 or proto == 159) then begin
+        call add_part("electronic", random(1, 3));
+        call add_part("wiring", random(1, 2));
+    end
+    else if (proto == 55 or proto == 56 or proto == 656) then begin
+        call add_part("electronic", random(2, 4));
+        call add_part("wiring", random(1, 3));
+    end
+    else if (proto == 20 or proto == 21 or proto == 28 or proto == 29 or proto == 32 or proto == 33 or proto == 50) then begin
+        call add_part("metal", random(2, 4));
+    end
+    else begin
+        variable r;
+        r := random(0, 2);
+        if (r == 0) then call add_part("metal", random(1, 2));
+        else if (r == 1) then call add_part("wiring", 1);
+        else call add_part("electronic", 1);
+    end
+    give_exp_points(25);
+end
+
+procedure do_break_down begin
+    variable inv_item;
+
+    // Ammo first
+    inv_item := obj_carrying_pid_obj(dude_obj, PID_10MM_JHP);
+    if (inv_item) then begin
+        rm_obj_from_inven(dude_obj, inv_item);
+        destroy_object(inv_item);
+        display_msg("Breaking down 10mm JHP...");
+        call add_part("casings", random(5, 10));
+        call add_part("powder", random(3, 6));
+        call add_part("bullets_10mm_jhp", random(5, 10));
+        give_exp_points(10);
+        return;
+    end
+
+    inv_item := obj_carrying_pid_obj(dude_obj, PID_10MM_AP);
+    if (inv_item) then begin
+        rm_obj_from_inven(dude_obj, inv_item);
+        destroy_object(inv_item);
+        display_msg("Breaking down 10mm AP...");
+        call add_part("casings", random(5, 10));
+        call add_part("powder", random(3, 6));
+        call add_part("bullets_10mm_ap", random(5, 10));
+        give_exp_points(10);
+        return;
+    end
+
+    inv_item := obj_carrying_pid_obj(dude_obj, PID_KNIFE);
+    if (inv_item) then begin
+        rm_obj_from_inven(dude_obj, inv_item);
+        destroy_object(inv_item);
+        display_msg("Stripping the knife...");
+        call add_part("metal", random(1, 2));
+        give_exp_points(10);
+        return;
+    end
+
+    inv_item := obj_carrying_pid_obj(dude_obj, PID_10MM_PISTOL);
+    if (inv_item) then begin
+        rm_obj_from_inven(dude_obj, inv_item);
+        destroy_object(inv_item);
+        display_msg("Stripping the 10mm Pistol...");
+        call add_part("metal", random(2, 3));
+        call add_part("spring", 1);
+        call add_part("firing_pin", 1);
+        give_exp_points(15);
+        return;
+    end
+
+    display_msg("Nothing in inventory to break down.");
+end
