@@ -1,0 +1,299 @@
+/*
+    General Repair -- fo1-et-tu-megamod
+
+    USE REPAIR SKILL on ground items for:
+    - Ammo conversion (need tools + junk in inventory)
+    - Disassemble electronics (need tools)
+    - Weapon upgrade (need tools + junk, same weapon in inventory)
+
+    Scenery dismantling has been MOVED to gl_megamod_tools.ssl
+    (via HOOK_USEOBJON with tools).
+
+    Hook: HOOK_USESKILLON (Repair skill on ground items)
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/lib.arrays.h"
+
+#define PID_JUNK  98
+
+#define XP_AMMO              5
+#define XP_CRAFT             10
+#define XP_DISASSEMBLE       10
+#define XP_UPGRADE_L1        25
+#define XP_UPGRADE_L2        50
+#define XP_FAIL              3
+
+procedure start;
+procedure repair_skill_handler;
+procedure has_tools;
+procedure has_junk_count(variable count);
+procedure remove_junk(variable count);
+procedure add_junk(variable count);
+procedure try_ammo_conversion(variable ammo_obj);
+procedure try_disassemble_item(variable item_obj);
+procedure try_weapon_upgrade(variable weapon_obj);
+procedure repair_skill_check(variable threshold);
+procedure is_ammo(variable pid);
+procedure is_disassemblable(variable pid);
+procedure is_upgradeable_weapon(variable pid);
+
+procedure start begin
+    if game_loaded then begin
+        register_hook_proc(HOOK_USESKILLON, repair_skill_handler);
+    end
+end
+
+procedure has_tools begin
+    if (obj_is_carrying_obj_pid(dude_obj, PID_MULTI_TOOL) > 0) then return 1;
+    if (obj_is_carrying_obj_pid(dude_obj, PID_SUPER_TOOL_KIT) > 0) then return 1;
+    return 0;
+end
+
+procedure has_junk_count(variable count) begin
+    return (obj_is_carrying_obj_pid(dude_obj, PID_JUNK) >= count);
+end
+
+procedure remove_junk(variable count) begin
+    variable i;
+    variable item;
+    for (i := 0; i < count; i++) begin
+        item := obj_carrying_pid_obj(dude_obj, PID_JUNK);
+        if (item) then begin
+            rm_obj_from_inven(dude_obj, item);
+            destroy_object(item);
+        end
+    end
+end
+
+procedure add_junk(variable count) begin
+    variable i;
+    variable item;
+    for (i := 0; i < count; i++) begin
+        item := create_object(PID_JUNK, 0, 0);
+        add_obj_to_inven(dude_obj, item);
+    end
+end
+
+procedure repair_skill_check(variable threshold) begin
+    variable skill_val;
+    variable roll;
+    skill_val := has_skill(dude_obj, SKILL_REPAIR);
+    if (skill_val < threshold) then return -1;
+    roll := random(1, 100);
+    if (roll <= skill_val) then return 1;
+    return 0;
+end
+
+procedure is_ammo(variable pid) begin
+    if (pid == PID_10MM_JHP or pid == PID_10MM_AP) then return 1;
+    if (pid == PID_44_MAGNUM_JHP or pid == PID_44_FMJ_MAGNUM) then return 1;
+    if (pid == PID_5MM_JHP or pid == PID_5MM_AP) then return 1;
+    return 0;
+end
+
+procedure is_disassemblable(variable pid) begin
+    if (pid == PID_GEIGER_COUNTER or pid == PID_MOTION_SENSOR or pid == PID_STEALTH_BOY) then return 1;
+    return 0;
+end
+
+procedure is_upgradeable_weapon(variable pid) begin
+    if (pid == PID_10MM_PISTOL or pid == PID_SHOTGUN or pid == PID_COMBAT_SHOTGUN) then return 1;
+    if (pid == PID_10MM_SMG or pid == PID_HUNTING_RIFLE or pid == PID_SNIPER_RIFLE) then return 1;
+    if (pid == PID_LASER_PISTOL or pid == PID_DESERT_EAGLE) then return 1;
+    return 0;
+end
+
+// ============================================================
+// REPAIR SKILL ON OBJECTS -- main handler
+// Player uses Repair skill on ground item
+// ============================================================
+procedure repair_skill_handler begin
+    variable user;
+    variable target;
+    variable skill_type;
+    variable target_pid;
+    variable target_type;
+
+    user       := get_sfall_arg;
+    target     := get_sfall_arg;
+    skill_type := get_sfall_arg;
+
+    // Only Repair skill, only player
+    if (skill_type != SKILL_REPAIR) then return;
+    if (user != dude_obj) then return;
+    if (target == 0) then return;
+
+    target_pid := obj_pid(target);
+    target_type := obj_type(target);
+
+    // === REPAIR ON GROUND ITEM ===
+    if (target_type == OBJ_TYPE_ITEM) then begin
+        if not(has_tools) then begin
+            display_msg("You need tools for this.");
+            set_sfall_return(-1);
+            return;
+        end
+
+        if (is_ammo(target_pid)) then begin
+            call try_ammo_conversion(target);
+            set_sfall_return(-1);
+            return;
+        end
+        if (is_disassemblable(target_pid)) then begin
+            call try_disassemble_item(target);
+            set_sfall_return(-1);
+            return;
+        end
+        if (is_upgradeable_weapon(target_pid)) then begin
+            call try_weapon_upgrade(target);
+            set_sfall_return(-1);
+            return;
+        end
+    end
+end
+
+// ============================================================
+// AMMO CONVERSION -- Repair skill on ammo on ground
+// ============================================================
+procedure try_ammo_conversion(variable ammo_obj) begin
+    variable pid;
+    variable target_pid;
+    variable result;
+    variable item;
+
+    pid := obj_pid(ammo_obj);
+
+    if not(has_junk_count(1)) then begin
+        display_msg("You don't have the needed junk.");
+        return;
+    end
+
+    if (pid == PID_10MM_JHP) then target_pid := PID_10MM_AP;
+    else if (pid == PID_10MM_AP) then target_pid := PID_10MM_JHP;
+    else if (pid == PID_44_MAGNUM_JHP) then target_pid := PID_44_FMJ_MAGNUM;
+    else if (pid == PID_44_FMJ_MAGNUM) then target_pid := PID_44_MAGNUM_JHP;
+    else if (pid == PID_5MM_JHP) then target_pid := PID_5MM_AP;
+    else if (pid == PID_5MM_AP) then target_pid := PID_5MM_JHP;
+    else return;
+
+    result := repair_skill_check(30);
+
+    if (result == -1) then begin
+        display_msg("This is beyond your skill level. More Repair training needed.");
+        give_exp_points(XP_FAIL);
+        display_msg("[Repair] +" + XP_FAIL + " XP");
+        return;
+    end
+
+    destroy_object(ammo_obj);
+    call remove_junk(1);
+
+    if (result == 0) then begin
+        display_msg("Didn't work. Steady hands next time.");
+        give_exp_points(XP_FAIL);
+        display_msg("[Repair] +" + XP_FAIL + " XP");
+        return;
+    end
+
+    item := create_object(target_pid, 0, 0);
+    add_obj_to_inven(dude_obj, item);
+    display_msg("You carefully rework the round. One converted.");
+    give_exp_points(XP_AMMO);
+    display_msg("[Repair] +" + XP_AMMO + " XP");
+end
+
+// ============================================================
+// DISASSEMBLE ITEM -- Repair skill on item on ground
+// ============================================================
+procedure try_disassemble_item(variable item_obj) begin
+    variable pid;
+    variable cell;
+    variable junk_count;
+
+    pid := obj_pid(item_obj);
+
+    if (pid == PID_GEIGER_COUNTER) then junk_count := 2;
+    else if (pid == PID_MOTION_SENSOR) then junk_count := 2;
+    else if (pid == PID_STEALTH_BOY) then junk_count := 3;
+    else return;
+
+    destroy_object(item_obj);
+
+    cell := create_object(PID_SMALL_ENERGY_CELL, 0, 0);
+    add_obj_to_inven(dude_obj, cell);
+    call add_junk(junk_count);
+
+    display_msg("You take it apart piece by piece. Small Energy Cell and " + junk_count + " Junk salvaged.");
+    give_exp_points(XP_DISASSEMBLE);
+    display_msg("[Repair] +" + XP_DISASSEMBLE + " XP");
+end
+
+// ============================================================
+// WEAPON UPGRADE -- Repair skill on weapon on ground
+// ============================================================
+procedure try_weapon_upgrade(variable weapon_obj) begin
+    variable pid;
+    variable junk_needed;
+    variable result;
+    variable name;
+    variable inven_weapon;
+
+    pid := obj_pid(weapon_obj);
+    name := obj_name(weapon_obj);
+
+    inven_weapon := obj_carrying_pid_obj(dude_obj, pid);
+    if (inven_weapon == 0) then begin
+        display_msg("You need a " + name + " in your inventory to upgrade.");
+        return;
+    end
+
+    junk_needed := 3;
+
+    if not(has_junk_count(junk_needed)) then begin
+        display_msg("You don't have the needed junk. Need " + junk_needed + ".");
+        return;
+    end
+
+    result := repair_skill_check(60);
+
+    if (result == -1) then begin
+        display_msg("This modification is beyond your current Repair skill.");
+        give_exp_points(XP_FAIL);
+        display_msg("[Repair] +" + XP_FAIL + " XP");
+        return;
+    end
+
+    destroy_object(weapon_obj);
+    call remove_junk(junk_needed);
+
+    if (result == 0) then begin
+        display_msg("The modification failed. You lost the spare " + name + " and " + junk_needed + " junk.");
+        give_exp_points(XP_FAIL);
+        display_msg("[Repair] +" + XP_FAIL + " XP");
+        return;
+    end
+
+    // TODO: Actually modify weapon stats via sfall
+    if (pid == PID_10MM_PISTOL) then
+        display_msg("You jury-rig a burst mechanism from the spare parts. " + name + " now has burst mode.");
+    else if (pid == PID_SHOTGUN or pid == PID_COMBAT_SHOTGUN) then
+        display_msg("You weld the barrels together. Double barrel -- twice the punch.");
+    else if (pid == PID_10MM_SMG) then
+        display_msg("You file down the trigger mechanism. Hair trigger -- faster now.");
+    else if (pid == PID_HUNTING_RIFLE or pid == PID_SNIPER_RIFLE) then
+        display_msg("You calibrate the sights from the spare. Precision mode unlocked.");
+    else if (pid == PID_LASER_PISTOL) then
+        display_msg("You swap in the capacitor from the spare. Reloads almost instantly.");
+    else if (pid == PID_DESERT_EAGLE) then
+        display_msg("You lighten the action with parts from the spare. Faster to fire.");
+    else
+        display_msg("You modify " + name + " using parts from the spare.");
+
+    give_exp_points(XP_UPGRADE_L1);
+    display_msg("[Repair] +" + XP_UPGRADE_L1 + " XP");
+end
+
