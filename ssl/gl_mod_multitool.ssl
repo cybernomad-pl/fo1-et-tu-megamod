@@ -1,0 +1,175 @@
+/*
+    Multi-tool mod -- USE = search nearest scenery for parts
+    No dialog (crashes engine). Simple auto-search.
+    Parts stored as counters in persistent array.
+*/
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/lib.arrays.h"
+
+#define LOG(s, k, v) set_ini_setting("megamod.ini|" + s + "|" + k, v)
+#define PID_JUNK 98
+
+variable parts_array;
+variable dismantled;
+
+procedure start;
+procedure useobj_handler;
+procedure add_part(variable name, variable amount);
+procedure show_parts;
+
+procedure start begin
+    if game_loaded then begin
+        parts_array := load_array("megamod_parts");
+        if (parts_array == 0) then begin
+            parts_array := create_array_map;
+            save_array("megamod_parts", parts_array);
+        end
+        dismantled := load_array("megamod_repair_scen");
+        if (dismantled == 0) then begin
+            dismantled := create_array_map;
+            save_array("megamod_repair_scen", dismantled);
+        end
+        set_proto_data(PID_MULTI_TOOL, PROTO_IT_FLAGS,
+            get_proto_data(PID_MULTI_TOOL, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+        set_proto_data(PID_SUPER_TOOL_KIT, PROTO_IT_FLAGS,
+            get_proto_data(PID_SUPER_TOOL_KIT, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+        register_hook_proc(HOOK_USEOBJ, useobj_handler);
+        LOG("multitool_mod", "loaded", 1);
+    end
+end
+
+procedure add_part(variable name, variable amount) begin
+    variable cur;
+    cur := parts_array[name];
+    parts_array[name] := cur + amount;
+    save_array("megamod_parts", parts_array);
+    display_msg("  +" + amount + " " + name);
+end
+
+procedure show_parts begin
+    display_msg("=== Parts Inventory ===");
+    if (parts_array["electronic"] > 0) then display_msg("  Electronic: " + parts_array["electronic"]);
+    if (parts_array["metal"] > 0) then display_msg("  Metal: " + parts_array["metal"]);
+    if (parts_array["wiring"] > 0) then display_msg("  Wiring: " + parts_array["wiring"]);
+    if (parts_array["casings"] > 0) then display_msg("  Casings: " + parts_array["casings"]);
+    if (parts_array["powder"] > 0) then display_msg("  Powder: " + parts_array["powder"]);
+    if (parts_array["bullets_10mm_jhp"] > 0) then display_msg("  10mm JHP: " + parts_array["bullets_10mm_jhp"]);
+    if (parts_array["bullets_10mm_ap"] > 0) then display_msg("  10mm AP: " + parts_array["bullets_10mm_ap"]);
+    if (parts_array["spring"] > 0) then display_msg("  Springs: " + parts_array["spring"]);
+    if (parts_array["firing_pin"] > 0) then display_msg("  Firing Pins: " + parts_array["firing_pin"]);
+    display_msg("=======================");
+end
+
+procedure useobj_handler begin
+    variable user;
+    variable item;
+    variable item_pid;
+
+    user := get_sfall_arg;
+    item := get_sfall_arg;
+    if (user != dude_obj) then return;
+    if (item == 0) then return;
+
+    item_pid := obj_pid(item);
+    if (item_pid != PID_MULTI_TOOL and item_pid != PID_SUPER_TOOL_KIT) then return;
+
+    LOG("multitool", "used", 1);
+
+    // Scan for nearest scenery within 3 tiles
+    variable scan_lst;
+    variable scan_obj;
+    variable best_obj;
+    variable best_dist;
+    variable cur_dist;
+    variable obj_id;
+    best_obj := 0;
+    best_dist := 999;
+
+    scan_lst := list_begin(LIST_SCENERY);
+    scan_obj := list_next(scan_lst);
+    while (scan_obj) do begin
+        if (scan_obj != 0 and elevation(scan_obj) == dude_elevation) then begin
+            cur_dist := tile_distance(tile_num(dude_obj), tile_num(scan_obj));
+            if (cur_dist <= 3 and cur_dist < best_dist) then begin
+                obj_id := (tile_num(scan_obj) * 10000) + obj_pid(scan_obj);
+                if (dismantled[obj_id] == 0) then begin
+                    best_dist := cur_dist;
+                    best_obj := scan_obj;
+                end
+            end
+        end
+        scan_obj := list_next(scan_lst);
+    end
+    list_end(scan_lst);
+
+    if (best_obj != 0) then begin
+        variable pid;
+        variable proto;
+        pid := obj_pid(best_obj);
+        proto := pid - 33554432;
+        obj_id := (tile_num(best_obj) * 10000) + pid;
+
+        dismantled[obj_id] := 1;
+        save_array("megamod_repair_scen", dismantled);
+
+        display_msg("You search " + obj_name(best_obj) + "...");
+        LOG("multitool", "target", proto);
+
+        // Electronics
+        if (proto == 9 or proto == 11 or proto == 12 or (proto >= 13 and proto <= 17) or (proto >= 43 and proto <= 48) or proto == 25 or proto == 26 or proto == 158 or proto == 159) then begin
+            call add_part("electronic", random(1, 3));
+            call add_part("wiring", random(1, 2));
+        end
+        else if (proto == 55 or proto == 56 or proto == 656) then begin
+            call add_part("electronic", random(2, 4));
+            call add_part("wiring", random(1, 3));
+        end
+        else if (proto == 20 or proto == 21 or proto == 28 or proto == 29 or proto == 32 or proto == 33 or proto == 50) then begin
+            call add_part("metal", random(2, 4));
+        end
+        else begin
+            variable r;
+            r := random(0, 2);
+            if (r == 0) then call add_part("metal", random(1, 2));
+            else if (r == 1) then call add_part("wiring", 1);
+            else call add_part("electronic", 1);
+        end
+        give_exp_points(25);
+    end
+    else begin
+        // No scenery -- try break down inventory item
+        variable inv_item;
+
+        inv_item := obj_carrying_pid_obj(dude_obj, PID_10MM_JHP);
+        if (inv_item and inv_item != item) then begin
+            rm_obj_from_inven(dude_obj, inv_item);
+            destroy_object(inv_item);
+            display_msg("Breaking down 10mm JHP...");
+            call add_part("casings", random(5, 10));
+            call add_part("powder", random(3, 6));
+            call add_part("bullets_10mm_jhp", random(5, 10));
+            give_exp_points(10);
+        end
+        else begin
+            inv_item := obj_carrying_pid_obj(dude_obj, PID_10MM_AP);
+            if (inv_item and inv_item != item) then begin
+                rm_obj_from_inven(dude_obj, inv_item);
+                destroy_object(inv_item);
+                display_msg("Breaking down 10mm AP...");
+                call add_part("casings", random(5, 10));
+                call add_part("powder", random(3, 6));
+                call add_part("bullets_10mm_ap", random(5, 10));
+                give_exp_points(10);
+            end
+            else begin
+                // Nothing to break -- show parts
+                call show_parts;
+            end
+        end
+    end
+
+    set_sfall_return(-1);
+end
