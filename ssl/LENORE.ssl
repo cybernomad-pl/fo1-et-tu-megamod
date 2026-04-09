@@ -1,0 +1,224 @@
+/*
+
+   Junktown - Lenore, standing at the house near Dogmeat.
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/junktown.h"
+#include "maps/junkcsno.h"
+
+#define NAME                    SCRIPT_LENORE
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_JUNKTOWN)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure map_enter_p_proc;
+procedure pickup_p_proc;
+procedure look_at_p_proc;
+procedure critter_p_proc;
+procedure destroy_p_proc;
+procedure talk_p_proc;
+
+procedure Lenore00;
+procedure Lenore01;
+procedure Lenore02;
+procedure Lenore03;
+procedure Lenore04;
+procedure go_inside;
+procedure NodeGreet;
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+#define LVAR_Herebefore         (4)
+
+variable armed;
+variable tmp_hostile;
+variable home_tile := 29081;
+
+procedure start begin
+end
+
+procedure map_enter_p_proc begin
+   set_self_team(TEAM_JUNKTOWNER);
+end
+
+procedure pickup_p_proc begin
+   attack(dude_obj);
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   if (local_var(LVAR_Herebefore) == 1) then
+      display_msg(mstr(108));
+   else
+      display_msg(mstr(100));
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+   if REP_ENEMY_JUNKTOWN_CITIZENS then begin
+      if (self_can_see_dude) then begin
+         attack(dude_obj);
+      end
+   end
+   if (map_var(MVAR_growling) == 1) then begin
+      call Lenore00;
+   end
+   if (map_var(MVAR_dog_is_angry) == 0) then begin
+      self_walk_to_tile(home_tile);
+   end
+end
+
+procedure destroy_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_DUDE_ENEMY_JUNK_CITIZEN, 1);
+      set_global_var(GVAR_ENEMY_JUNKTOWN, 1);
+   end
+   inc_good_critter
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   set_tma_data_generic(TMA_MSG_JUNKCSNO);
+
+   set_local_var(LVAR_Herebefore, 1);
+   if (global_var(GVAR_DOGMEAT_HIRELING_STATUS)) then begin
+      call Lenore02;
+   end
+   else if (not(map_var(MVAR_dog_is_angry))) then begin
+      start_dialog_at_node(NodeGreet);
+   end
+   else if (dude_is_armed) then begin
+      call Lenore01;
+   end
+   else begin
+      start_dialog_at_node(NodeGreet);
+   end
+end
+
+procedure go_inside begin
+   self_walk_to_tile(home_tile);
+end
+
+procedure Lenore00 begin
+   variable LVar0 := 0;
+   variable LVar1 := 0;
+   LVar0 := random(1, 3);
+   if (LVar0 == 1) then begin
+      LVar1 := mstr(101);
+   end
+   else if (LVar0 == 2) then begin
+      LVar1 := mstr(102);
+   end
+   else if (LVar0 == 3) then begin
+      set_global_var(GVAR_DOGMEAT_SOMETHING_1, 1);
+      LVar1 := mstr(103);
+   end
+
+   if (dog_is_angry) then begin
+      float_msg(self_obj, LVar1, FLOAT_MSG_NORMAL);
+   end
+   // This will break Phil running away
+   //set_map_var(MVAR_growling, 0);
+end
+
+procedure Lenore01 begin
+   if dog_is_angry then begin
+      float_msg(self_obj, mstr(104), FLOAT_MSG_NORMAL);
+   end
+end
+
+procedure Lenore02 begin
+   if dog_is_killed then begin
+      call Lenore04;
+   end
+   else begin
+      float_msg(self_obj, mstr(105), FLOAT_MSG_NORMAL);
+   end
+end
+
+procedure Lenore03 begin
+   float_msg(self_obj, mstr(106), FLOAT_MSG_NORMAL);
+   set_map_var (MVAR_smartass_1, 1);
+end
+
+procedure Lenore04 begin
+   float_msg(self_obj, mstr(107), FLOAT_MSG_NORMAL);
+end
+
+procedure NodeGreet begin
+   Reply(mstr(106));
+   NOption(900, NodeRecruit, 4);
+end
+
+procedure NodeRecruit begin
+   if (party_member_count(0) >= 5) then begin
+      display_msg("Your party is full.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg("Lenore joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end
