@@ -1,0 +1,221 @@
+/*
+
+   Necropolis - Ghoul in Hotel map
+
+*/
+
+/* Include Files */
+#include "define.h"
+//#include "area/necropolis.h"
+#include "maps/hotel.h"
+
+#define NAME                    SCRIPT_HOTGHOUL
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_NECROPOLIS)
+
+#include "command.h"
+//#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure talk_p_proc;
+procedure critter_p_proc;
+procedure combat_p_proc;
+procedure destroy_p_proc;
+procedure combat_rads_inc;
+procedure NodeGreet;
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+procedure generic00;
+procedure generic02;
+procedure generic03;
+procedure genericcbt;
+
+variable tmp_hostile;
+variable init := 0;
+variable rndx;
+
+//////////////////////////////////////////////////
+// 66 - Generic
+// 792 - Valtglo
+// 908 - Hotghoul
+//////////////////////////////////////////////////
+
+procedure start begin
+   if (not(init)) then begin
+      set_self_team(TEAM_NECROPOLIS_GANGER);
+      set_self_ai(AI_GHOUL_NORMAL);
+      init := 1;
+   end
+end
+
+procedure pickup_p_proc begin
+   tmp_hostile := 1;
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   dude_look_at_self;
+
+   if (global_var(GVAR_ENEMY_NECROPOLIS)) then begin
+      attack(dude_obj);
+   end
+   else begin
+      start_dialog_at_node(NodeGreet);
+   end
+end
+
+procedure genericcbt begin
+end
+
+procedure generic00 begin
+   rndx := random(1, 7);
+   if (rndx == 1) then begin
+      float_msg(self_obj, mstr(100), FLOAT_MSG_LIGHT_RED);
+   end
+   else if (rndx == 2) then begin
+      float_msg(self_obj, mstr(101), FLOAT_MSG_LIGHT_RED);
+   end
+   else if (rndx == 3) then begin
+      float_msg(self_obj, mstr(102), FLOAT_MSG_LIGHT_RED);
+   end
+   else if (rndx == 4) then begin
+      float_msg(self_obj, mstr(103), FLOAT_MSG_LIGHT_RED);
+   end
+   else if (rndx == 5) then begin
+      float_msg(self_obj, mstr(104), FLOAT_MSG_LIGHT_RED);
+   end
+   else if (rndx == 6) then begin
+      call generic02;
+   end
+   else begin
+      call generic03;
+   end
+end
+
+procedure generic02 begin
+   if (global_var(GVAR_SET_DEAD)) then begin
+      rndx := random(1, 2);
+      if (rndx == 1) then begin
+         float_msg(self_obj, mstr(109), FLOAT_MSG_LIGHT_RED);
+      end
+      if (rndx == 2) then begin
+         float_msg(self_obj, mstr(110), FLOAT_MSG_LIGHT_RED);
+      end
+   end
+   else begin
+      float_msg(self_obj, mstr(111), FLOAT_MSG_LIGHT_RED);
+   end
+end
+
+procedure generic03 begin
+   if (global_var(GVAR_NECROP_MUTANTS_KILLED) == 2) then begin
+      rndx := random(1, 2);
+      if (rndx == 1) then begin
+         float_msg(self_obj, mstr(112), FLOAT_MSG_LIGHT_RED);
+      end
+      if (rndx == 2) then begin
+         float_msg(self_obj, mstr(113), FLOAT_MSG_LIGHT_RED);
+      end
+   end
+   else begin
+      float_msg(self_obj, mstr(114), FLOAT_MSG_LIGHT_RED);
+   end
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+   if (self_can_see_dude) then begin
+      if (global_var(GVAR_ENEMY_NECROPOLIS)) then begin
+         set_local_var(0, 1);
+         attack(dude_obj);
+      end
+      else if (map_var(MVAR_TOUCHING)) then begin
+         float_msg(self_obj, mstr(103), FLOAT_MSG_LIGHT_RED);
+         set_local_var(0, 1);
+         attack(dude_obj);
+      end
+      else if (local_var(0) > 0) then begin
+         attack(dude_obj);
+      end
+   end
+end
+
+procedure combat_p_proc begin
+end
+
+procedure destroy_p_proc begin
+   inc_inv_evil_crit
+end
+
+procedure NodeGreet begin
+   Reply(mstr(100 + random(0, 4)));
+   NOption(900, NodeRecruit, 4);
+end
+
+procedure NodeRecruit begin
+   if (party_member_count(0) >= 5) then begin
+      display_msg("Your party is full.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg("Slappy joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end
