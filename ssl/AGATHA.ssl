@@ -1,0 +1,316 @@
+/*
+
+   Shady Sands - Agatha, the old story teller
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/shadysands.h"
+
+#define NAME                    SCRIPT_AGATHA
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_SHADYSANDS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure critter_p_proc;
+procedure description_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+procedure talk_p_proc;
+
+procedure Agatha00;
+procedure Agatha01;
+procedure Agatha02;
+procedure Agatha03;
+procedure Agatha04;
+procedure Agatha05;
+procedure Agatha06;
+procedure Agatha07;
+procedure Agatha08;
+procedure Agatha09;
+procedure Agatha10;
+procedure Agatha11;
+procedure Agatha12;
+procedure Agatha13;
+procedure Agatha14;
+procedure Agatha15;
+procedure Agatha16;
+procedure Agatha17;
+procedure Agatha18;
+procedure Agatha19;
+procedure Agatha20;
+procedure AgathaEnd;
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+variable initial := 0;
+variable tmp_hostile;
+
+procedure start begin
+   if not(fo1in2_cut_characters_enabled) then destroy_object(self_obj);
+
+   if not(initial) then begin
+      initial := 1;
+      set_self_team(TEAM_SHADY_SANDS);
+   end
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   else begin
+      if REP_ENEMY_SHADY_SANDS then begin
+         if (self_can_see_dude) then begin
+            tmp_hostile := 1;
+            attack(dude_obj);
+         end
+      end
+   end
+end
+
+procedure map_enter_p_proc begin
+   if shady_invaded then begin
+      invasion_kill_critter;
+   end
+end
+
+procedure description_p_proc begin
+   if (dude_stat_success(STAT_pe, dude_perk(PERK_bonus_awareness))) then begin
+      script_overrides;
+      display_msg(mstr(102));
+   end
+end
+
+procedure destroy_p_proc begin
+   inc_good_critter
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   if (global_var(GVAR_AGATHA_4_ONCE)) then begin
+      display_msg(mstr(101));
+   end
+   else begin
+      display_msg(mstr(100));
+   end
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   dude_look_at_self;
+   start_gdialog(663, self_obj, 4, -1, -1);
+   gsay_start;
+   if (global_var(GVAR_AGATHA_4_ONCE)) then begin
+      if night then begin
+         call Agatha14;
+      end
+      else begin
+         call Agatha16;
+      end
+   end
+   else begin
+      set_global_var(GVAR_AGATHA_4_ONCE, 1);
+      call Agatha08;
+   end
+   gsay_end;
+   end_dialogue;
+end
+
+procedure Agatha00 begin
+   float_msg(self_obj, mstr(103), FLOAT_MSG_NORMAL);
+end
+
+procedure Agatha01 begin
+   Reply(104);
+   GLowOption(105, Agatha02);
+   NOption(106, AgathaEnd, 4);
+   NOption(107, Agatha03, 5);
+   NOption(108, Agatha04, 4);
+end
+
+procedure Agatha02 begin
+   GMessage(109);
+end
+
+procedure Agatha03 begin
+   Reply(110);
+   GOption(111, AgathaEnd, 5);
+   NOption(112, Agatha04, 6);
+   NOption(113, AgathaEnd, 5);
+end
+
+procedure Agatha04 begin
+   Reply(114);
+   GOption(115, AgathaEnd, 5);
+end
+
+procedure Agatha05 begin
+   NMessage(116);
+end
+
+procedure Agatha06 begin
+   UpReact
+   GMessage(117);
+end
+
+procedure Agatha07 begin
+   NMessage(118);
+end
+
+procedure Agatha08 begin
+   Reply(119);
+   NOption(900, NodeRecruit, 4);
+   NLowOption(120, Agatha09);
+   NOption(121, Agatha10, 4);
+   if (dude_is_female) then begin
+      NOption(122, Agatha13, 5);
+   end
+   else begin
+      NOption(123, Agatha13, 7);
+   end
+   BOption(124, Agatha09, 4);
+end
+
+procedure Agatha09 begin
+   NMessage(125);
+end
+
+procedure Agatha10 begin
+   Reply(126);
+   NOption(127, Agatha11, 4);
+   NOption(128, AgathaEnd, 4);
+   GOption(129, Agatha12, 6);
+end
+
+procedure Agatha11 begin
+   NMessage(130);
+end
+
+procedure Agatha12 begin
+   UpReact
+   NMessage(131);
+end
+
+procedure Agatha13 begin
+   NMessage(132);
+end
+
+procedure Agatha14 begin
+   Reply(133);
+   NLowOption(134, AgathaEnd);
+   NOption(135, AgathaEnd, 4);
+   NOption(136, Agatha15, 6);
+end
+
+procedure Agatha15 begin
+   NMessage(137);
+end
+
+procedure Agatha16 begin
+   Reply(138);
+   NLowOption(139, Agatha17);
+   NOption(140, Agatha20, 4);
+   NOption(141, Agatha18, 6);
+   NOption(142, AgathaEnd, 4);
+end
+
+procedure Agatha17 begin
+   NMessage(143);
+end
+
+procedure Agatha18 begin
+   Reply(144);
+   NOption(145, Agatha20, 5);
+   BOption(146, Agatha19, 5);
+end
+
+procedure Agatha19 begin
+   DownReactLevel
+   DownReactLevel
+   BMessage(147);
+end
+
+procedure Agatha20 begin
+   NMessage(200);
+   gfade_out(1);
+      game_time_advance(600);
+   gfade_in(1);
+end
+
+procedure AgathaEnd begin
+end
+
+procedure NodeRecruit begin
+   if (party_member_count(0) >= 5) then begin
+      display_msg("Your party is full.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg("Agatha joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end
