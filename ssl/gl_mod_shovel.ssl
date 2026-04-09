@@ -1,0 +1,151 @@
+/*
+    Shovel mod -- USE shovel = dig hole, USE ON corpse = bury
+*/
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/lib.arrays.h"
+
+#define LOG(s, k, v) set_ini_setting("megamod.ini|" + s + "|" + k, v)
+#define PID_GRAVESITE 345
+#define XP_DIG_HOLE 10
+#define XP_BURY_CORPSE 15
+
+variable holes_array;
+variable hole_count_map;
+
+procedure start;
+procedure useobj_handler;
+procedure useobjon_handler;
+procedure is_valid_dig_terrain;
+
+procedure start begin
+    if game_loaded then begin
+        holes_array := load_array("megamod_shovel_holes");
+        if (holes_array == 0) then begin
+            holes_array := create_array_map;
+            save_array("megamod_shovel_holes", holes_array);
+        end
+        hole_count_map := load_array("megamod_shovel_hcount");
+        if (hole_count_map == 0) then begin
+            hole_count_map := create_array_map;
+            save_array("megamod_shovel_hcount", hole_count_map);
+        end
+        set_proto_data(PID_SHOVEL, PROTO_IT_FLAGS,
+            get_proto_data(PID_SHOVEL, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+        register_hook_proc(HOOK_USEOBJ, useobj_handler);
+        register_hook_proc(HOOK_USEOBJON, useobjon_handler);
+        LOG("shovel_mod", "loaded", 1);
+    end
+end
+
+procedure is_valid_dig_terrain begin
+    variable tile;
+    variable roof_fid;
+    if (dude_elevation > 0) then return 0;
+    tile := tile_num(dude_obj);
+    roof_fid := get_tile_roof_fid(tile, 0);
+    if (roof_fid != 1) then return 0;
+    return 1;
+end
+
+procedure useobj_handler begin
+    variable user;
+    variable item;
+    user := get_sfall_arg;
+    item := get_sfall_arg;
+    if (user != dude_obj) then return;
+    if (item == 0) then return;
+    if (obj_pid(item) != PID_SHOVEL) then return;
+
+    LOG("shovel", "use", 1);
+
+    if (combat_is_initialized) then begin
+        display_msg("No time for digging right now.");
+        set_sfall_return(-1);
+        return;
+    end
+    if not(is_valid_dig_terrain) then begin
+        display_msg("The ground here is too hard to dig.");
+        LOG("shovel", "terrain", "bad");
+        set_sfall_return(-1);
+        return;
+    end
+
+    variable my_tile;
+    variable map_idx;
+    variable hole_key;
+    variable count;
+    variable hole;
+
+    my_tile := tile_num(dude_obj);
+    map_idx := cur_map_index;
+    hole_key := "" + map_idx + "_" + my_tile;
+
+    if (holes_array[hole_key] == 1) then begin
+        display_msg("There's already a hole here.");
+        set_sfall_return(-1);
+        return;
+    end
+    count := hole_count_map["" + map_idx];
+    if (count >= 5) then begin
+        display_msg("You've dug enough holes on this map.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    gfade_out(1);
+    game_time_advance(300);
+    hole := create_object(PID_GRAVESITE, my_tile, dude_elevation);
+    holes_array[hole_key] := 1;
+    save_array("megamod_shovel_holes", holes_array);
+    hole_count_map["" + map_idx] := count + 1;
+    save_array("megamod_shovel_hcount", hole_count_map);
+    gfade_in(1);
+
+    display_msg("You dig a hole. Use it to stash your gear.");
+    give_exp_points(XP_DIG_HOLE);
+    LOG("shovel", "dug", 1);
+    set_sfall_return(-1);
+end
+
+procedure useobjon_handler begin
+    variable user;
+    variable used_obj;
+    variable target;
+    user := get_sfall_arg;
+    used_obj := get_sfall_arg;
+    target := get_sfall_arg;
+    if (user != dude_obj) then return;
+    if (used_obj == 0 or target == 0) then return;
+    if (obj_pid(used_obj) != PID_SHOVEL) then return;
+    if (obj_type(target) != OBJ_TYPE_CRITTER) then return;
+
+    LOG("shovel", "bury", 1);
+
+    if not(is_critter_dead(target)) then begin
+        display_msg("They're not dead. You can't bury the living.");
+        set_sfall_return(-1);
+        return;
+    end
+    if (combat_is_initialized) then begin
+        display_msg("No time for burial right now.");
+        set_sfall_return(-1);
+        return;
+    end
+    if not(is_valid_dig_terrain) then begin
+        display_msg("The ground here is too hard to bury anything.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    gfade_out(1);
+    game_time_advance(600);
+    destroy_object(target);
+    gfade_in(1);
+    display_msg("You bury the remains. No one will find them.");
+    give_exp_points(XP_BURY_CORPSE);
+    LOG("shovel", "buried", 1);
+    set_sfall_return(-1);
+end
