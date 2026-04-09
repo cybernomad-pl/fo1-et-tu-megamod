@@ -1,0 +1,226 @@
+/*
+
+   V13 - Water thief
+
+*/
+
+#include "define.h"
+#include "area/vault13.h"
+
+#define NAME                    SCRIPT_LYLE
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_V13)
+
+#include "command.h"
+#include "modreact.h"
+
+procedure start;
+procedure critter_p_proc;
+procedure damage_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+procedure map_enter_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+
+procedure LyleHello;       // Lyle01
+procedure LyleHowsItGoing; // Lyle02
+procedure LyleIHopeSo;     // Lyle03
+procedure LyleWaterThiefQuest; // Lyle04
+procedure LyleEnd;
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+variable night_person;
+variable wake_time;
+variable sleep_time;
+variable home_tile;
+variable sleep_tile;
+
+variable tmp_hostile;
+variable DeathType := 57; // Can be removed?
+
+#define LVAR_Sleeping        (4)
+#define LVAR_HostileBehavior (5)  // Has attacked or stolen
+
+procedure start begin
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   else begin
+      if (local_var(LVAR_HostileBehavior)) then begin
+         if (tile_distance_objs(self_obj, dude_obj) < 8) then begin
+            call flee_dude;
+         end
+         else if (tile_distance(dude_tile, home_tile) > 4) then begin
+            if (local_var(LVAR_Sleeping) == 0) then begin
+               self_walk_to_tile(home_tile);
+            end
+         end
+      end
+   end
+   sleeping
+end
+
+procedure damage_p_proc begin
+   if source_is_dude then begin
+      set_local_var(LVAR_HostileBehavior, 1);
+   end
+end
+
+procedure destroy_p_proc begin
+   if source_is_dude then
+      set_global_var(GVAR_VAULT_13_HOSTILE, 1);
+
+   inc_good_critter
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure map_enter_p_proc begin
+   if (v13_invaded) then begin
+      invasion_kill_critter_V13;
+   end
+
+   set_self_team(TEAM_VAULT13);
+   sleep_time := 1920;
+   wake_time := 710;
+   home_tile := 24911;
+   sleep_tile := home_tile;
+end
+
+procedure pickup_p_proc begin
+   if ((GAME_TIME_IN_DAYS) >= 30) then begin
+      float_msg(self_obj, mstr(101), FLOAT_MSG_NORMAL);
+   end
+   set_global_var(GVAR_VAULT_13_HOSTILE, 1);
+   tmp_hostile := 1;
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   set_tma_data_generic(TMA_MSG_VAULT13);
+
+   dude_look_at_self;
+   if (local_var(LVAR_Sleeping) == 1) then begin
+      float_msg(self_obj, message_str(SCRIPT_GENVAULT, 166), FLOAT_MSG_NORMAL);
+   end
+   else if (REP_ENEMY_VAULT13 or local_var(5)) then begin
+      float_msg(self_obj, mstr(114), FLOAT_MSG_NORMAL);
+   end
+   else if waterchip_returned then begin
+      float_msg(self_obj, mstr(102), FLOAT_MSG_NORMAL);
+   end
+   else if waterthief_captured then begin
+      float_msg(self_obj, mstr(113), FLOAT_MSG_NORMAL);
+   end
+   else begin
+      start_dialog_at_node(LyleHello);
+   end
+end
+
+procedure LyleHello begin // Lyle01
+   Reply(mstr(103) + dude_name + mstr(104));
+   NOption(900, NodeRecruit, 4);
+   NOption(105, LyleHowsItGoing, 4);
+   NLowOption(107, LyleEnd);
+end
+
+procedure LyleHowsItGoing begin // Lyle02
+   if ((GAME_TIME_IN_DAYS) < 30) then begin
+      NMessage(106);
+   end
+   else begin
+      Reply(108);
+      NOption(109, LyleIHopeSo, 4);
+      GOption(110, LyleWaterThiefQuest, 4);
+   end
+end
+
+procedure LyleIHopeSo begin // Lyle03
+   NMessage(111);
+end
+
+procedure LyleWaterThiefQuest begin // Lyle04
+   set_waterthief_started;
+   GMessage(112);
+end
+
+
+procedure LyleEnd begin
+end
+
+procedure NodeRecruit begin
+   if (party_member_count(0) >= 5) then begin
+      display_msg("Your party is full.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg("Lyle joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end
