@@ -1,0 +1,731 @@
+/*
+    Megamod Tools -- unified HOOK_USEOBJON + HOOK_USEOBJ handler
+    Replaces separate gl_rope_tie, gl_crowbar, gl_shovel, gl_general_repair (USEOBJON part)
+
+    ONE hook, ONE handler, no conflicts.
+*/
+
+#include "define.h"
+#include "command.h"
+// scenepid.h already included via define.h
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
+#include "sfall/lib.arrays.h"
+
+#define PID_JUNK             98
+#define PID_GRAVESITE        345
+
+#define XP_CRAFT             10
+#define XP_ROPE              100
+#define XP_CROWBAR_OK        10
+#define XP_CROWBAR_FAIL      3
+#define XP_DIG_HOLE          10
+#define XP_BURY_CORPSE       15
+#define XP_CAMPFIRE          15
+
+// Flammable scenery PIDs (full encoded: 0x02000000 + proto_id)
+#define PID_TUMBLEWEED       (33554495)  // proto 63
+// PID_TREE_OLD (33554498) = proto 66 -- defined in scenepid.h
+// PID_SCRUB_1..4 (33554534..37) = proto 102..105 -- defined in scenepid.h
+// PID_WEED_1..3 (33554557..59) = proto 125..127 -- defined in scenepid.h
+// PID_BUSH_GREEN_1..2 (33555375..76) = proto 943..944 -- defined in scenepid.h
+// PID_FIRE_PIT (33555044) = proto 612 -- defined in scenepid.h
+// PID_BURNING_BARREL (33554433) = proto 1 -- defined in scenepid.h
+
+variable dismantled_scenery;
+variable holes_array;
+variable hole_count_map;
+variable lighter_lit;
+
+procedure start;
+procedure useobjon_handler;
+procedure useobj_handler;
+procedure gamemode_handler;
+procedure handle_lighter(variable target, variable target_pid);
+procedure handle_rope(variable target);
+procedure handle_crowbar(variable target);
+procedure handle_shovel_on_corpse(variable target);
+procedure handle_shovel_dig(variable target);
+procedure handle_dismantle_scenery(variable target);
+procedure handle_lighter_on_scenery(variable target, variable target_pid);
+procedure is_valid_dig_terrain;
+procedure is_mechanical_scenery(variable pid);
+procedure is_flammable_scenery(variable pid);
+
+procedure start begin
+    if game_loaded then begin
+        debug_msg("[MEGAMOD] gl_megamod_tools START -- game_loaded fired");
+        display_msg("[MEGAMOD] Tools script loaded. Hooks registering...");
+        dismantled_scenery := load_array("megamod_repair_scen");
+        if (dismantled_scenery == 0) then begin
+            dismantled_scenery := create_array_map;
+            save_array("megamod_repair_scen", dismantled_scenery);
+        end
+        holes_array := load_array("megamod_shovel_holes");
+        if (holes_array == 0) then begin
+            holes_array := create_array_map;
+            save_array("megamod_shovel_holes", holes_array);
+        end
+        hole_count_map := load_array("megamod_shovel_hcount");
+        if (hole_count_map == 0) then begin
+            hole_count_map := create_array_map;
+            save_array("megamod_shovel_hcount", hole_count_map);
+        end
+        register_hook_proc(HOOK_USEOBJON, useobjon_handler);
+        register_hook_proc(HOOK_USEOBJ, useobj_handler);
+        debug_msg("[MEGAMOD] Hooks registered: USEOBJON, USEOBJ");
+
+        // Enable "Use" action on Shovel (vanilla has no Use flag)
+        set_proto_data(PID_SHOVEL, PROTO_IT_FLAGS,
+            get_proto_data(PID_SHOVEL, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+        debug_msg("[MEGAMOD] Shovel proto flags set. New flags: " + get_proto_data(PID_SHOVEL, PROTO_IT_FLAGS));
+
+        // Enable "Use" + "Use On" on Lighter (vanilla has neither)
+        set_proto_data(PID_LIGHTER, PROTO_IT_FLAGS,
+            get_proto_data(PID_LIGHTER, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE bwor ITEM_ACTION_USEON);
+        debug_msg("[MEGAMOD] Lighter proto flags set. New flags: " + get_proto_data(PID_LIGHTER, PROTO_IT_FLAGS));
+
+        // Tandi + flare: change on every map enter via gamemode hook
+        register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
+
+        // Restore lighter light if it was on when game saved
+        variable saved_lighter := load_array("megamod_lighter");
+        if (saved_lighter != 0) then begin
+            lighter_lit := saved_lighter["lit"];
+            if (lighter_lit == 1) then begin
+                set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 4);
+                set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 40000);
+            end
+        end
+        else begin
+            lighter_lit := 0;
+        end
+    end
+end
+
+// ============================================================
+// GAMEMODE -- fires on map enter, used for Tandi FID swap
+// ============================================================
+#define TANDI_ART_INDEX  86  // hfprim = black-haired tribal girl (FO2 female player)
+
+procedure gamemode_handler begin
+    variable lst;
+    variable obj;
+    debug_msg("[MEGAMOD] GAMEMODE handler fired. map=" + cur_map_index + " town=" + cur_town);
+
+    // Swap Tandi's appearance on every map
+    lst := list_begin(LIST_CRITTERS);
+    obj := list_next(lst);
+    while (obj) do begin
+        if (obj_pid(obj) == PID_TANDI) then begin
+            art_change_fid_num(obj, TANDI_ART_INDEX);
+        end
+        obj := list_next(lst);
+    end
+    list_end(lst);
+
+    // === EASY MAIN QUEST: water chip = vault 13 access ===
+    if (dude_item_count(PID_WATER_CHIP) > 0) then begin
+        if (global_var(GVAR_VAULT_WATER) < 1) then begin
+            set_global_var(GVAR_VAULT_WATER, 1);
+        end
+        // Set access code holodisk flag too
+        set_global_var(GVAR_HOLODISK_ACCESS_CODE, 1);
+        // Unlock all locked scenery on V13 maps (doors, vault door)
+        if (CUR_MAP_VAULTENT or CUR_MAP_VAULT13 or CUR_MAP_V13ENT) then begin
+            variable lst2;
+            variable door;
+            lst2 := list_begin(LIST_SCENERY);
+            door := list_next(lst2);
+            while (door) do begin
+                if (obj_is_locked(door)) then begin
+                    obj_unlock(door);
+                end
+                door := list_next(lst2);
+            end
+            list_end(lst2);
+        end
+    end
+
+    // Re-apply flare boost if player has active flare in hand
+    if (obj_is_carrying_obj_pid(dude_obj, PID_ACTIVE_FLARE) > 0) then begin
+        set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 8);
+        set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 65536);
+    end
+
+    // Re-apply lighter glow if it was on
+    if (lighter_lit == 1) then begin
+        set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 4);
+        set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 40000);
+    end
+end
+
+// ============================================================
+// USEOBJ -- lighter used from inventory = toggle personal light
+// ============================================================
+procedure useobj_handler begin
+    variable user;
+    variable item;
+    variable item_pid;
+    variable arr;
+
+    user := get_sfall_arg;
+    item := get_sfall_arg;
+
+    debug_msg("[MEGAMOD] USEOBJ fired. user=" + obj_pid(user) + " item=" + obj_pid(item));
+
+    if (user != dude_obj) then begin
+        debug_msg("[MEGAMOD] USEOBJ -- not dude, ignoring");
+        return;
+    end
+
+    item_pid := obj_pid(item);
+    debug_msg("[MEGAMOD] USEOBJ item_pid=" + item_pid + " LIGHTER=" + PID_LIGHTER + " SHOVEL=" + PID_SHOVEL + " FLARE=" + PID_FLARE);
+
+    // === LIGHTER -- toggle personal light ===
+    if (item_pid == PID_LIGHTER) then begin
+        debug_msg("[MEGAMOD] LIGHTER matched! lighter_lit=" + lighter_lit);
+        if (lighter_lit == 0) then begin
+            lighter_lit := 1;
+            set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 5);
+            set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 65536);
+            tile_refresh_display;
+            display_msg("You flick the lighter open. A small flame pushes back the dark.");
+        end
+        else begin
+            lighter_lit := 0;
+            set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 0);
+            set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 0);
+            tile_refresh_display;
+            display_msg("You snap the lighter shut. Darkness closes in.");
+        end
+        arr := create_array_map;
+        arr["lit"] := lighter_lit;
+        save_array("megamod_lighter", arr);
+        set_sfall_return(-1);
+        return;
+    end
+
+    // === FLARE -- boost player light significantly when lit ===
+    if (item_pid == PID_FLARE) then begin
+        debug_msg("[MEGAMOD] FLARE matched!");
+        set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 8);
+        set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 65536);
+        tile_refresh_display;
+        display_msg("The flare hisses to life, bathing the area in harsh red light.");
+        return;
+    end
+
+    // === SHOVEL -- dig a stash hole at your feet ===
+    if (item_pid == PID_SHOVEL) then begin
+        debug_msg("[MEGAMOD] SHOVEL matched!");
+        if (combat_is_initialized) then begin
+            display_msg("No time for digging right now.");
+            set_sfall_return(-1);
+            return;
+        end
+        if not(is_valid_dig_terrain) then begin
+            display_msg("The ground here is too hard to dig.");
+            set_sfall_return(-1);
+            return;
+        end
+
+        variable my_tile;
+        variable map_idx;
+        variable hole_key;
+        variable count;
+        variable hole;
+
+        my_tile := tile_num(dude_obj);
+        map_idx := cur_map_index;
+        hole_key := "" + map_idx + "_" + my_tile;
+
+        if (holes_array[hole_key] == 1) then begin
+            display_msg("There's already a hole here.");
+            set_sfall_return(-1);
+            return;
+        end
+
+        count := hole_count_map["" + map_idx];
+        if (count >= 5) then begin
+            display_msg("You've dug enough holes on this map.");
+            set_sfall_return(-1);
+            return;
+        end
+
+        gfade_out(1);
+        game_time_advance(300);
+        hole := create_object(PID_GRAVESITE, my_tile, dude_elevation);
+        holes_array[hole_key] := 1;
+        save_array("megamod_shovel_holes", holes_array);
+        hole_count_map["" + map_idx] := count + 1;
+        save_array("megamod_shovel_hcount", hole_count_map);
+        gfade_in(1);
+
+        display_msg("You dig a hole. Use it to stash your gear.");
+        give_exp_points(XP_DIG_HOLE);
+        set_sfall_return(-1);
+        return;
+    end
+end
+
+// ============================================================
+// USEOBJON -- unified handler for all tool-on-object interactions
+// ============================================================
+procedure useobjon_handler begin
+    variable user;
+    variable used_obj;
+    variable target;
+    variable used_pid;
+    variable target_pid;
+    variable target_type;
+
+    user     := get_sfall_arg;
+    used_obj := get_sfall_arg;
+    target   := get_sfall_arg;
+
+    debug_msg("[MEGAMOD] USEOBJON fired. used=" + obj_pid(used_obj) + " target=" + obj_pid(target));
+
+    if (user != dude_obj) then return;
+    if (used_obj == 0 or target == 0) then return;
+
+    used_pid := obj_pid(used_obj);
+    target_pid := obj_pid(target);
+    target_type := obj_type(target);
+    debug_msg("[MEGAMOD] USEOBJON used_pid=" + used_pid + " target_pid=" + target_pid + " target_type=" + target_type);
+
+    // === LIGHTER ===
+    if (used_pid == PID_LIGHTER) then begin
+        call handle_lighter(target, target_pid);
+        return;
+    end
+
+    // === ROPE on critter ===
+    if (used_pid == PID_ROPE and target_type == OBJ_TYPE_CRITTER) then begin
+        call handle_rope(target);
+        return;
+    end
+
+    // === ELECTRONIC LOCKPICK on locked scenery -> force open electronic locks ===
+    if ((used_pid == PID_ELECTRONIC_LOCKPICKS or used_pid == PID_ELEC_LOCKPICK_MKII) and (target_type == OBJ_TYPE_SCENERY or target_type == OBJ_TYPE_ITEM)) then begin
+        if (obj_is_locked(target)) then begin
+            obj_unlock(target);
+            obj_open(target);
+            display_msg("You bypass the electronic lock.");
+            set_sfall_return(-1);
+            return;
+        end
+    end
+
+    // === MULTI-TOOL on locked scenery -> master key, opens anything ===
+    if ((used_pid == PID_MULTI_TOOL or used_pid == PID_SUPER_TOOL_KIT) and (target_type == OBJ_TYPE_SCENERY or target_type == OBJ_TYPE_ITEM)) then begin
+        if (obj_is_locked(target)) then begin
+            obj_unlock(target);
+            obj_open(target);
+            display_msg("You work the lock open with your tools.");
+            set_sfall_return(-1);
+            return;
+        end
+    end
+
+    // === MULTI-TOOL on scenery -> dismantle for junk ===
+    if ((used_pid == PID_MULTI_TOOL or used_pid == PID_SUPER_TOOL_KIT) and target_type == OBJ_TYPE_SCENERY) then begin
+        call handle_dismantle_scenery(target);
+        return;
+    end
+
+    // === CROWBAR on locked door/container ===
+    if (used_pid == PID_CROWBAR and (target_type == OBJ_TYPE_SCENERY or target_type == OBJ_TYPE_ITEM)) then begin
+        call handle_crowbar(target);
+        return;
+    end
+
+    // === SHOVEL on dead critter -> bury ===
+    if (used_pid == PID_SHOVEL and target_type == OBJ_TYPE_CRITTER) then begin
+        call handle_shovel_on_corpse(target);
+        return;
+    end
+
+    // === SHOVEL on scenery -> dig hole (stash) ===
+    if (used_pid == PID_SHOVEL and target_type == OBJ_TYPE_SCENERY) then begin
+        call handle_shovel_dig(target);
+        return;
+    end
+end
+
+// ============================================================
+// LIGHTER -- on booze = molotov, on flammable scenery = campfire
+// ============================================================
+procedure handle_lighter(variable target, variable target_pid) begin
+    variable molotov;
+
+    // Lighter + booze = molotov cocktail
+    if (target_pid == PID_BOOZE or target_pid == PID_BEER) then begin
+        molotov := create_object(PID_MOLOTOV_COCKTAIL, 0, 0);
+        add_obj_to_inven(dude_obj, molotov);
+        rm_obj_from_inven(dude_obj, target);
+        destroy_object(target);
+        display_msg("You stuff a rag in the bottle and flick the lighter. Molotov ready.");
+        give_exp_points(XP_CRAFT);
+        set_sfall_return(-1);
+        return;
+    end
+
+    // Lighter + flammable scenery = campfire
+    if (obj_type(target) == OBJ_TYPE_SCENERY) then begin
+        if (is_flammable_scenery(target_pid)) then begin
+            call handle_lighter_on_scenery(target, target_pid);
+            return;
+        end
+    end
+end
+
+// ============================================================
+// LIGHTER ON SCENERY -- burn flammable brush/trees into campfire
+// ============================================================
+procedure handle_lighter_on_scenery(variable target, variable target_pid) begin
+    debug_msg("[MEGAMOD] CAMPFIRE handler called. target_pid=" + target_pid);
+    variable fire_tile;
+    variable fire_elev;
+    variable fire;
+
+    if (combat_is_initialized) then begin
+        display_msg("No time to start a fire right now.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    fire_tile := tile_num(target);
+    fire_elev := elevation(target);
+
+    // Remove the flammable scenery
+    destroy_object(target);
+
+    // Create a fire pit at the same location
+    fire := create_object(PID_FIRE_PIT, fire_tile, fire_elev);
+
+    // Set the fire object to emit light (distance=8, intensity=65536 = max)
+    set_object_data(fire, OBJ_DATA_LIGHT_DISTANCE, 8);
+    set_object_data(fire, OBJ_DATA_LIGHT_INTENSITY, 65536);
+
+    tile_refresh_display;
+    display_msg("You light it up. The fire crackles and spreads warmth.");
+    give_exp_points(XP_CAMPFIRE);
+
+    // TODO: Create CAMP marker on the worldmap at current location.
+    // Worldmap markers require separate worldmap scripting (wmAreaMarkVisited or similar).
+
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// ROPE -- tie down knocked critter
+// ============================================================
+procedure handle_rope(variable target) begin
+    variable state;
+
+    if (is_critter_dead(target)) then begin
+        display_msg("They're already dead. No point in tying them up.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    state := critter_state(target);
+    if not(state bwand DAM_KNOCKED_DOWN) then begin
+        if not(state bwand DAM_KNOCKED_OUT) then begin
+            display_msg("They need to be on the ground first.");
+            set_sfall_return(-1);
+            return;
+        end
+    end
+
+    // Tie them up
+    critter_injure(target, DAM_CRIP_ARM_LEFT);
+    critter_injure(target, DAM_CRIP_ARM_RIGHT);
+    critter_injure(target, DAM_CRIP_LEG_LEFT);
+    critter_injure(target, DAM_CRIP_LEG_RIGHT);
+    set_team(target, TEAM_PLAYER);
+
+    // Consume rope
+    variable rope;
+    rope := obj_carrying_pid_obj(dude_obj, PID_ROPE);
+    if (rope) then begin
+        rm_obj_from_inven(dude_obj, rope);
+        destroy_object(rope);
+    end
+
+    display_msg("You bind them tight. They're not going anywhere.");
+    give_exp_points(XP_ROPE);
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// CROWBAR -- force open locked doors/containers
+// ============================================================
+procedure handle_crowbar(variable target) begin
+    variable st;
+    variable roll;
+
+    if not(obj_is_locked(target)) then begin
+        display_msg("It's not locked.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    st := get_critter_stat(dude_obj, STAT_st);
+    roll := random(1, 10);
+
+    if (roll <= st) then begin
+        obj_unlock(target);
+        display_msg("You wedge the crowbar in and force it open.");
+        give_exp_points(XP_CROWBAR_OK);
+    end
+    else begin
+        display_msg("You strain against it, but it won't budge. Need more muscle.");
+        give_exp_points(XP_CROWBAR_FAIL);
+    end
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// SHOVEL on dead critter -- bury corpse
+// ============================================================
+procedure handle_shovel_on_corpse(variable target) begin
+    if not(is_critter_dead(target)) then begin
+        display_msg("They're not dead. You can't bury the living.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    if (combat_is_initialized) then begin
+        display_msg("No time for burial right now.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    if not(is_valid_dig_terrain) then begin
+        display_msg("The ground here is too hard to bury anything.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    gfade_out(1);
+    game_time_advance(600);
+    destroy_object(target);
+    gfade_in(1);
+
+    display_msg("You bury the remains. No one will find them.");
+    give_exp_points(XP_BURY_CORPSE);
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// DISMANTLE SCENERY -- tools on mechanical scenery = junk
+// ============================================================
+procedure handle_dismantle_scenery(variable target) begin
+    variable pid;
+    variable obj_id;
+    debug_msg("[MEGAMOD] DISMANTLE called on pid=" + obj_pid(target));
+    variable result;
+    variable junk_count;
+    variable caps_bonus;
+    variable skill_val;
+    variable roll;
+
+    pid := obj_pid(target);
+
+    if not(is_mechanical_scenery(pid)) then begin
+        display_msg("Nothing useful to salvage from this.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    obj_id := (tile_num(target) * 10000) + pid;
+
+    if (dismantled_scenery[obj_id] != 0) then begin
+        display_msg("You've already stripped this for parts.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    skill_val := has_skill(dude_obj, SKILL_REPAIR);
+    if (skill_val < 25) then begin
+        display_msg("You wouldn't know where to start. More Repair training needed.");
+        give_exp_points(3);
+        set_sfall_return(-1);
+        return;
+    end
+
+    dismantled_scenery[obj_id] := 1;
+    save_array("megamod_repair_scen", dismantled_scenery);
+
+    roll := random(1, 100);
+    if (roll > skill_val) then begin
+        display_msg("You fumble with the parts. Nothing salvageable.");
+        give_exp_points(3);
+        set_sfall_return(-1);
+        return;
+    end
+
+    variable loot_pid;
+    variable loot_name;
+    junk_count := random(1, 3);
+
+    // Different junk based on scenery type
+    // Computers, monitors, terminals -> small energy cells
+    if (pid == 9 or pid == 11 or pid == 12 or (pid >= 13 and pid <= 17) or (pid >= 43 and pid <= 48)) then begin
+        loot_pid := PID_SMALL_ENERGY_CELL;
+        loot_name := "Small Energy Cell";
+        junk_count := random(1, 2);
+    end
+    // VDU screens, big electronics -> micro fusion cells
+    else if (pid == 55 or pid == 56 or pid == 656) then begin
+        loot_pid := PID_MICRO_FUSION_CELL;
+        loot_name := "Micro Fusion Cell";
+        junk_count := random(1, 2);
+    end
+    // Vents, pipes, air processing -> flares (scrap metal + chemicals)
+    else if (pid == 20 or pid == 21 or pid == 29 or pid == 32 or pid == 33 or pid == 50) then begin
+        loot_pid := PID_FLARE;
+        loot_name := "Flare";
+        junk_count := random(2, 3);
+    end
+    // Vending machines -> caps + junk
+    else if (pid == 907 or pid == 908) then begin
+        loot_pid := PID_JUNK;
+        loot_name := "Junk";
+        caps_bonus := random(5, 25);
+        item_caps_adjust(dude_obj, caps_bonus);
+    end
+    // Everything else -> generic junk
+    else begin
+        loot_pid := PID_JUNK;
+        loot_name := "Junk";
+    end
+
+    variable i;
+    variable item;
+    for (i := 0; i < junk_count; i++) begin
+        item := create_object(loot_pid, 0, 0);
+        add_obj_to_inven(dude_obj, item);
+    end
+
+    if (caps_bonus > 0) then begin
+        display_msg("You salvage " + junk_count + "x " + loot_name + " and shake out " + caps_bonus + " caps.");
+    end
+    else begin
+        display_msg("You salvage " + junk_count + "x " + loot_name + ".");
+    end
+
+    give_exp_points(25);
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// SCENERY CLASSIFICATION
+// ============================================================
+procedure is_mechanical_scenery(variable pid) begin
+    if (pid == 9 or pid == 11 or pid == 12) then return 1;
+    if (pid >= 13 and pid <= 17) then return 1;
+    if (pid == 25 or pid == 26) then return 1;
+    if (pid >= 43 and pid <= 48) then return 1;
+    if (pid == 55 or pid == 56) then return 1;
+    if (pid == 158 or pid == 159) then return 1;
+    if (pid == 656) then return 1;
+    if (pid == 50) then return 1;
+    if (pid == 20 or pid == 21 or pid == 28 or pid == 29) then return 1;
+    if (pid == 32 or pid == 33) then return 1;
+    if (pid == 907 or pid == 908) then return 1;
+    return 0;
+end
+
+// ============================================================
+// FLAMMABLE SCENERY -- brush, weeds, tumbleweed, dead tree
+// NOT cactus (PID_CACTUS_1, PID_CACTUS_2 -- too moist to burn)
+// ============================================================
+procedure is_flammable_scenery(variable pid) begin
+    // Tumbleweed (proto 63 -- no header define)
+    if (pid == PID_TUMBLEWEED) then return 1;
+    // Dead/old tree (proto 66)
+    if (pid == PID_TREE_OLD) then return 1;
+    // Scrub 1-4 (proto 102-105)
+    if (pid == PID_SCRUB_1 or pid == PID_SCRUB_2 or pid == PID_SCRUB_3 or pid == PID_SCRUB_4) then return 1;
+    // Weed 1-3 (proto 125-127)
+    if (pid == PID_WEED_1 or pid == PID_WEED_2 or pid == PID_WEED_3) then return 1;
+    // Green bush 1-2 (proto 943-944)
+    if (pid == PID_BUSH_GREEN_1 or pid == PID_BUSH_GREEN_2) then return 1;
+    return 0;
+end
+
+// ============================================================
+// SHOVEL on scenery -> dig stash hole nearby
+// ============================================================
+procedure handle_shovel_dig(variable target) begin
+    variable my_tile;
+    variable map_idx;
+    variable hole_key;
+    variable count;
+    variable hole;
+
+    if (combat_is_initialized) then begin
+        display_msg("No time for digging right now.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    if not(is_valid_dig_terrain) then begin
+        display_msg("The ground here is too hard to dig.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    my_tile := tile_num(dude_obj);
+    map_idx := cur_map_index;
+    hole_key := "" + map_idx + "_" + my_tile;
+
+    if (holes_array[hole_key] == 1) then begin
+        display_msg("There's already a hole here.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    count := hole_count_map["" + map_idx];
+    if (count >= 5) then begin
+        display_msg("You've dug enough holes on this map.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    gfade_out(1);
+    game_time_advance(300);
+
+    hole := create_object(PID_GRAVESITE, my_tile, dude_elevation);
+
+    holes_array[hole_key] := 1;
+    save_array("megamod_shovel_holes", holes_array);
+    hole_count_map["" + map_idx] := count + 1;
+    save_array("megamod_shovel_hcount", hole_count_map);
+
+    gfade_in(1);
+    display_msg("You dig a hole. Use it to stash your gear.");
+    give_exp_points(XP_DIG_HOLE);
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// TERRAIN CHECK -- outdoor ground only (elevation 0, no roof)
+// ============================================================
+procedure is_valid_dig_terrain begin
+    variable tile;
+    variable roof_fid;
+    debug_msg("[MEGAMOD] DIG TERRAIN check. elevation=" + dude_elevation);
+
+    if (dude_elevation > 0) then return 0;
+
+    tile := tile_num(dude_obj);
+    roof_fid := get_tile_roof_fid(tile, 0);
+    if (roof_fid != 1) then return 0;
+
+    return 1;
+end
