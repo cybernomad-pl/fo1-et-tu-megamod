@@ -1,0 +1,372 @@
+/*
+
+   Necropolis - Refugee
+
+*/
+
+/* Include Files */
+#include "define.h"
+//#include "area/necropolis.h"
+
+#define NAME                    SCRIPT_GHREFUGE
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_NECROPOLIS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure combat_p_proc;
+procedure talk_p_proc;
+procedure critter_p_proc;
+procedure pickup_p_proc;
+procedure destroy_p_proc;
+
+procedure ghoul00;
+procedure ghoul00a;
+procedure ghoul01;
+procedure ghoul02;
+procedure ghoul03;
+procedure ghoul04;
+procedure ghoul05;
+procedure ghoul05a;
+procedure ghoul06;
+procedure ghoul07;
+procedure ghoul07a;
+procedure ghoul08;
+procedure ghoul09;
+procedure ghoul09a;
+procedure ghoul10;
+procedure ghoul11;
+procedure ghoul12;
+procedure ghoul13;
+procedure ghoul14;
+procedure ghoul15;
+procedure ghoul16;
+
+procedure ghoulend;
+procedure ghoulcbt;
+procedure timetomove;
+
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+#define LVAR_Herebefore          (4)
+
+#define LVAR_NextTile            (6)
+#define LVAR_HomeTile            (7)
+
+variable tmp_hostile;
+variable init := 0;
+variable maxleash := 20;
+variable noevent;
+variable loopcount;
+variable new_tile;
+
+procedure start begin
+   if (not(init)) then begin
+      init := 1;
+      if (local_var(LVAR_HomeTile) == 0) then begin
+         set_local_var(LVAR_HomeTile, self_tile);
+         set_local_var(5, 0);
+      end
+      set_self_team(TEAM_NECROPOLIS_GANGER);
+      set_self_ai(AI_GHOUL_COWARD);
+   end
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure description_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure combat_p_proc begin
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   dude_look_at_self;
+   get_reaction
+   start_gdialog(NAME, self_obj, 4, -1, -1);
+   gsay_start;
+   if (local_var(LVAR_Herebefore)) then begin
+      if (local_var(LVAR_reaction_level) >= NEUTRAL) then begin
+         call ghoul14;
+      end
+      else begin
+         call ghoul03;
+      end
+   end
+   else if (local_var(LVAR_reaction_level) >= NEUTRAL) then begin
+      set_local_var(LVAR_Herebefore, 1);
+      call ghoul00;
+   end
+   else begin
+      set_local_var(LVAR_Herebefore, 1);
+      call ghoul03;
+   end
+   gsay_end;
+   end_dialogue;
+end
+
+procedure ghoulend begin
+end
+
+procedure ghoulcbt begin
+   tmp_hostile := 1;
+end
+
+procedure ghoul00 begin
+   Reply(101);
+   NOption(900, NodeRecruit, 4);
+   NOption(102, ghoul00a, 4);
+   NOption(103, ghoulend, 4);
+   NOption(104, ghoul05, 5);
+   NLowOption(105, ghoul01);
+end
+
+procedure ghoul00a begin
+   if (dude_skill_success(SKILL_SPEECH, 0)) then begin
+      call ghoul02;
+   end
+   else begin
+      call ghoul01;
+   end
+end
+
+procedure ghoul01 begin
+   NMessage(106);
+   call ghoulcbt;
+end
+
+procedure ghoul02 begin
+   Reply(107);
+   NOption(108, ghoulend, 4);
+   NOption(109, ghoul04, 4);
+end
+
+procedure ghoul03 begin
+   NMessage(110);
+   call ghoulcbt;
+end
+
+procedure ghoul04 begin
+   Reply(111);
+   NOption(112, ghoulcbt, 4);
+   NOption(113, ghoul05, 4);
+end
+
+procedure ghoul05 begin
+   if bad_critter_reaction then begin
+      Reply(114);
+   end
+   else begin
+      Reply(115);
+   end
+   NOption(116, ghoul12, 4);
+   NOption(117, ghoul11, 4);
+   NOption(118, ghoul05a, 6);
+end
+
+procedure ghoul05a begin
+   if (global_var(GVAR_NECROP_MUTANTS_KILLED) == 2) then begin
+      call ghoul07;
+   end
+   else begin
+      call ghoul06;
+   end
+end
+
+procedure ghoul06 begin
+   Reply(119);
+   NOption(120, ghoulend, 4);
+   NOption(121, ghoul03, 4);
+end
+
+procedure ghoul07 begin
+   Reply(122);
+   NOption(123, ghoul07a, 4);
+   NOption(124, ghoulend, 4);
+end
+
+procedure ghoul07a begin
+   if bad_critter_reaction then begin
+      call ghoul08;
+   end
+   else begin
+      call ghoul09;
+   end
+end
+
+procedure ghoul08 begin
+   Reply(125);
+   NOption(126, ghoulend, 4);
+   NOption(127, ghoul03, 4);
+end
+
+procedure ghoul09 begin
+   Reply(128);
+   NOption(129, ghoulend, 4);
+   NOption(130, ghoul09a, 4);
+end
+
+procedure ghoul09a begin
+   DownReact
+   if bad_critter_reaction then begin
+      call ghoul03;
+   end
+   else begin
+      call ghoul10;
+   end
+end
+
+procedure ghoul10 begin
+   Reply(131);
+   NOption(132, ghoulend, 4);
+end
+
+procedure ghoul11 begin
+   Reply(133);
+   NOption(134, ghoul05a, 4);
+end
+
+procedure ghoul12 begin
+   Reply(135);
+   NOption(136, ghoul05a, 4);
+   NOption(137, ghoul13, 4);
+end
+
+procedure ghoul13 begin
+   Reply(138);
+   NOption(139, ghoulcbt, 4);
+   NOption(140, ghoulend, 4);
+end
+
+procedure ghoul14 begin
+   Reply(141);
+   NOption(900, NodeRecruit, 4);
+   NOption(142, ghoul15, 4);
+   NOption(143, ghoul16, 4);
+   NLowOption(105, ghoul01);
+end
+
+procedure ghoul15 begin
+   Reply(144);
+   NOption(145, ghoulend, 4);
+end
+
+procedure ghoul16 begin
+   NMessage(146);
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+
+   if (tmp_hostile > 0) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   else begin
+      if (local_var(5)) then begin
+         loopcount := loopcount + 1;
+         if (loopcount > 40) then begin
+            loopcount := 0;
+            if (noevent == 0) then begin
+               noevent := 1;
+               add_timer_event(self_obj, game_ticks(random(5, 13)), 0);
+            end
+         end
+      end
+   end
+end
+
+procedure timetomove begin
+   noevent := 0;
+   set_local_var(LVAR_NextTile, self_tile);
+   new_tile := tile_num_in_direction(local_var(LVAR_NextTile), random(0, 5), 2);
+   if (tile_distance(local_var(LVAR_HomeTile), new_tile) < maxleash) then begin
+      self_walk_to_tile(new_tile);
+   end
+end
+
+procedure pickup_p_proc begin
+   if source_is_dude then begin
+      tmp_hostile := 1;
+   end
+end
+
+procedure destroy_p_proc begin
+   inc_good_critter
+end
+
+procedure NodeRecruit begin
+   if (party_member_count(0) >= 5) then begin
+      display_msg("Your party is full.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg("The ghoul refugee joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end
