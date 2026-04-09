@@ -1,0 +1,613 @@
+/*
+
+   Junktown - Trish, the Scum Pitt waitress
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/junktown.h"
+#include "maps/junkcsno.h"
+
+#define NAME                    SCRIPT_TRISH
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_JUNKTOWN)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure critter_p_proc;
+procedure damage_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+procedure map_enter_p_proc;
+procedure map_update_p_proc;
+procedure talk_p_proc;
+
+procedure Trish0;
+procedure Trish1;
+procedure Trish2;
+procedure Trish3;
+procedure Trish4;
+procedure Trish5;
+procedure Trish6;
+procedure Trish6a;
+procedure Trish7;
+procedure Trish8;
+procedure Trish9;
+procedure Trish10;
+procedure Trish11;
+procedure Trish12;
+procedure Trish13;
+procedure Trish14;
+procedure Trish15;
+procedure Trish16;
+procedure Trish17;
+procedure Trish18;
+procedure Trish19;
+procedure Trish20;
+procedure Trish21;
+procedure Trish22;
+procedure Trish23;
+procedure Trish24;
+procedure Trish25;
+procedure Trish26;
+procedure Trish27;
+procedure Trish28;
+procedure Trish29;
+
+procedure TrishSaul1;
+
+procedure TrishEnd;
+procedure TrishCola;
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+procedure TrishBeer;
+procedure TrishBooze;
+procedure TrishSleeping;
+
+variable night_person;
+variable wake_time;
+variable sleep_time;
+variable home_tile;
+variable sleep_tile;
+variable initial := 0;
+
+import variable Trish_ptr;
+
+variable item;
+
+#define LVAR_Sleeping                     (4)
+#define LVAR_Asked_WhoIsSaul              (13)
+
+procedure start begin
+end
+
+procedure timed_event_p_proc begin
+   dialogue_system_enter;
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+   if get_trish_state(TRISH_IS_DEAD) then begin
+      destroy_object(self_obj);
+   end
+   else begin
+      call TrishSleeping;
+   end
+
+   if CUR_MAP_JUNKCSNO then begin
+      if (self_can_see_dude) then begin
+         if ((map_var(MVAR_Skulz_left) == 1) and (map_var(MVAR_guards_left) == 1) and (tile_distance_objs(self_obj, dude_obj) < 12)) then begin
+            dialogue_system_enter;
+         end
+      end
+      if (self_tile != home_tile) then begin
+         if ((global_var(GVAR_JOIN_SKULLZ) == 0) or (global_var(GVAR_BUST_SKULZ) == 2)) then begin
+            self_walk_to_tile(home_tile);
+         end
+      end
+   end
+   else begin
+      if (self_tile != home_tile) then begin
+         self_walk_to_tile(home_tile);
+      end
+   end
+
+   if REP_ENEMY_JUNKTOWN_CITIZENS then begin
+      if (self_can_see_dude) then begin
+         attack(dude_obj);
+      end
+   end
+end
+
+procedure damage_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_ENEMY_JUNKTOWN, 1);
+   end
+end
+
+procedure destroy_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_DUDE_ENEMY_JUNK_CITIZEN, 1);
+      set_global_var(GVAR_ENEMY_JUNKTOWN, 1);
+   end
+   inc_good_critter
+   set_trish_state(TRISH_IS_DEAD);
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   if (get_trish_state(DUDE_KNOWS_TRISH) or get_trish_state(DUDE_TALKED_WITH_TRISH)) then begin
+      display_msg(mstr(100));
+   end
+   else begin
+      display_msg(mstr(167));
+   end
+end
+
+procedure map_enter_p_proc begin
+   Trish_ptr := self_obj;
+   set_self_team(TEAM_JUNKTOWNER);
+   if CUR_MAP_JUNKCSNO then begin
+      home_tile := 20083;
+      sleep_time := 330;
+      wake_time := 1300;
+      if not(is_loading_game) then begin
+         if (self_tile != home_tile) then begin
+            critter_attempt_placement(self_obj, home_tile, self_elevation);
+            self_rotate(2);
+         end
+      end
+   end
+   else begin
+      home_tile := 16297;
+      sleep_time := 1300;
+      wake_time := 330;
+   end
+end
+
+procedure map_update_p_proc begin
+   if get_trish_state(TRISH_IS_DEAD) then begin
+      destroy_object(self_obj);
+   end
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   set_tma_data_generic(TMA_MSG_JUNKCSNO);
+
+   dude_look_at_self;
+   get_reaction
+   if (local_var(LVAR_Sleeping)) then begin
+      float_msg(self_obj, mstr(151), FLOAT_MSG_NORMAL);
+   end
+   else begin
+      if CUR_MAP_JUNKKILL then begin
+         if (saul_is_dead and not(local_var(7))) then begin
+            call Trish17;
+         end
+         else if (saul_mentioned_trish and not(local_var(5)) and not(get_trish_state(TRISH_UNDERSTANDS_SAUL))) then begin
+            call Trish3;
+         end
+         else if ((get_trish_state(RELATIONSHIP_SAVED)) and not(local_var(6))) then begin
+            call Trish16;
+         end
+         else if (not(get_trish_state(DUDE_KNOWS_TRISH) or get_trish_state(DUDE_TALKED_WITH_TRISH))) then begin
+            call Trish0;
+         end
+         else if (get_trish_state(DUDE_TALKED_WITH_TRISH) and not(get_trish_state(DUDE_KNOWS_TRISH))) then begin
+            call Trish11;
+         end
+         else begin
+            call Trish15;
+         end
+      end
+      else begin
+         if ((game_time_hour >= 1300) and (game_time_hour < 1600)) then begin
+            float_msg(self_obj, mstr(152), FLOAT_MSG_NORMAL);
+         end
+         else begin
+            call Trish25;
+         end
+      end
+   end
+   check_relationship_saved;
+end
+
+procedure Trish0 begin
+   start_gdialog(342, self_obj, 4, -1, -1);
+   gsay_start;
+   set_trish_state(DUDE_KNOWS_TRISH);
+   Reply(101);
+   NOption(900, NodeRecruit, 4);
+   NLowOption(102, Trish1);
+   NOption(103, Trish2, 4);
+   NOption(104, TrishEnd, 4);
+   gsay_end;
+   end_dialogue;
+end
+
+procedure Trish1 begin
+   NMessage(105);
+end
+
+procedure Trish2 begin
+   NMessage(106);
+end
+
+procedure Trish3 begin
+   start_gdialog(342, self_obj, 4, -1, -1);
+   gsay_start;
+   set_trish_state(DUDE_KNOWS_TRISH);
+   set_local_var(5, 1);
+   Reply(107);
+   NLowOption(108, Trish1);
+   NOption(109, Trish2, 4);
+   if (saul_mentioned_trish and not(local_var(5)) and not(get_trish_state(TRISH_UNDERSTANDS_SAUL))) then begin
+      if get_trish_state(TRISH_TALKED_ABOUT_SAUL) then
+         NOption(200, Trish4, 5);
+      else
+         NOption(110, Trish4, 5);
+   end
+   gsay_end;
+   end_dialogue;
+end
+
+procedure Trish4 begin
+   if (local_var(5) == 0) then begin
+      set_local_var(5, 1);
+   end
+
+   if get_trish_state(TRISH_TALKED_ABOUT_SAUL) then begin
+      Reply(201);
+   end
+   else begin
+      Reply(111);
+      NOption(115, Trish9, 5);
+   end
+
+   if get_trish_state(SAUL_CARES) then begin
+      NOption(202, TrishSaul1, 5);
+      NOption(112, Trish5, 7);
+   end
+   NOption(113, Trish6, 5);
+end
+
+procedure Trish5 begin
+   Reply(114);
+   NOption(115, Trish9, 5);
+   NOption(116, Trish10, 7);
+end
+
+procedure Trish6 begin
+   Reply(117);
+   BOption(118, Trish6a, 5);
+   NOption(119, Trish7, 5);
+   NOption(169, Trish8, 6);
+end
+
+procedure Trish6a begin
+   DownReact
+   call Trish7;
+end
+
+procedure Trish7 begin
+   NMessage(120);
+end
+
+procedure Trish8 begin
+   variable LVar0 := 0;
+   LVar0 := mstr(121);
+   if is_gizmo_alive then begin
+      LVar0 := LVar0 + " " + mstr(168);
+   end
+   GMessage(LVar0);
+   set_trish_state(TRISH_CONCERNED);
+   set_trish_state(TRISH_UNDERSTANDS_SAUL);
+end
+
+procedure Trish9 begin
+   Reply(122);
+   NOption(123, Trish8, 5);
+   NOption(124, Trish7, 4);
+end
+
+procedure Trish10 begin
+   Reply(125);
+   NOption(126, Trish8, 5);
+end
+
+procedure Trish11 begin
+   set_trish_state(DUDE_KNOWS_TRISH);
+   start_gdialog(342, self_obj, 4, -1, -1);
+   gsay_start;
+   Reply(127);
+   NLowOption(128, Trish7);
+   BOption(129, Trish12, 4);
+   NOption(130, Trish13, 5);
+   gsay_end;
+   end_dialogue;
+end
+
+procedure Trish12 begin
+   DownReact
+   NMessage(131);
+end
+
+procedure Trish13 begin
+   Reply(132);
+   NOption(133, TrishEnd, 5);
+end
+
+procedure Trish14 begin
+   float_msg(self_obj, mstr(random(134, 136)), FLOAT_MSG_NORMAL);
+end
+
+procedure Trish15 begin
+   float_msg(self_obj, mstr(137), FLOAT_MSG_NORMAL);
+end
+
+procedure Trish16 begin
+   set_trish_state(DUDE_KNOWS_TRISH);
+   set_local_var(6, 1);
+   float_msg(self_obj, mstr(138), FLOAT_MSG_NORMAL);
+end
+
+procedure Trish17 begin
+   set_trish_state(DUDE_KNOWS_TRISH);
+   set_local_var(7, 1);
+   float_msg(self_obj, mstr(139), FLOAT_MSG_NORMAL);
+end
+
+procedure Trish18 begin
+   set_local_var(8, 1);
+   Reply(140);
+   NLowOption(141, TrishEnd);
+   NOption(142, TrishEnd, 4);
+   NOption(143, Trish19, 6);
+end
+
+procedure Trish19 begin
+   Reply(144);
+   NOption(145, Trish20, 6);
+   if (not(global_var(GVAR_GIZMO_STATUS) == 3)) then begin
+      NOption(146, Trish21, 6);
+   end
+   if ((local_var(LVAR_Asked_WhoIsSaul) == 0) and get_trish_state(TRISH_SCREAMED_SAUL) and not(get_trish_state(RELATIONSHIP_SAVED)) and not(saul_is_dead)) then begin
+      NOption(147, Trish22, 6);
+   end
+   NOption(148, TrishEnd, 6);
+end
+
+procedure Trish20 begin
+   set_local_var(10, 1);
+   Reply(149);
+   call Trish24;
+end
+
+procedure Trish21 begin
+   variable LVar0 := 0;
+   set_local_var(11, 1);
+   LVar0 := mstr(154);
+   if (not(global_var(GVAR_KILLIAN_DEAD))) then begin
+      LVar0 := LVar0 + mstr(155);
+   end
+   Reply(LVar0);
+   call Trish24;
+end
+
+procedure Trish22 begin
+   set_local_var(LVAR_Asked_WhoIsSaul, 1);
+   set_trish_state(TRISH_TALKED_ABOUT_SAUL);
+   Reply(158);
+   call Trish24;
+end
+
+procedure Trish23 begin
+   if (global_var(GVAR_GIZMO_STATUS) == 3) then begin
+      Reply(162);
+   end
+   else begin
+      Reply(163);
+   end
+   call Trish24;
+end
+
+procedure Trish24 begin
+   if (not(local_var(10))) then begin
+      NOption(145, Trish20, 6);
+   end
+   if (not(local_var(11))) then begin
+      if is_gizmo_alive then begin
+         NOption(146, Trish21, 6);
+      end
+   end
+   if ((local_var(LVAR_Asked_WhoIsSaul) == 0) and get_trish_state(TRISH_SCREAMED_SAUL) and not(get_trish_state(RELATIONSHIP_SAVED)) and not(saul_is_dead)) then begin
+      NOption(147, Trish22, 6);
+   end
+   NOption(148, TrishEnd, 6);
+end
+
+procedure Trish25 begin
+   start_gdialog(342, self_obj, 4, -1, -1);
+   gsay_start;
+   set_trish_state(DUDE_TALKED_WITH_TRISH);
+   Reply(156);
+   NOption(157, Trish26, 4);
+   NOption(159, Trish27, 6);
+   if (saul_mentioned_trish and not(local_var(5)) and not(get_trish_state(TRISH_UNDERSTANDS_SAUL))) then begin
+      if get_trish_state(TRISH_TALKED_ABOUT_SAUL) then
+         NOption(200, Trish4, 5);
+      else
+         NOption(110, Trish4, 5);
+   end
+   NOption(153, TrishEnd, 4);
+   NLowOption(170, Trish28);
+   gsay_end;
+   end_dialogue;
+end
+
+procedure Trish26 begin
+   Reply(161);
+   NOption(164, TrishCola, 4);
+   NOption(165, TrishBeer, 4);
+   NOption(166, TrishBooze, 4);
+   NOption(153, TrishEnd, 4);
+end
+
+procedure Trish27 begin
+   if bad_critter_reaction then begin
+      BMessage(160);
+   end
+   else begin
+      call Trish19;
+   end
+end
+
+procedure Trish28 begin
+   NMessage(171);
+end
+
+procedure Trish29 begin
+   float_msg(self_obj, mstr(140), FLOAT_MSG_NORMAL);
+   give_xp_msg(EXP_DEFEAT_SKULZ_BARFIGHT, mstr(172));
+
+   BigUpReact
+   set_map_var(MVAR_guards_left, 0);
+   set_map_var(MVAR_Skulz_left, 0);
+end
+
+procedure TrishSaul1 begin
+   set_trish_state(TRISH_CONCERNED);
+
+   Reply(203);
+
+   if get_trish_state(SAUL_CARES) then
+      NOption(112, Trish5, 5);
+
+   NOption(126, Trish8, 6);
+   NOption(113, Trish6, 5);
+   //call Trish24;
+end
+
+procedure TrishEnd begin
+end
+
+procedure TrishCola begin
+   if (dude_caps >= 3) then begin
+      dude_caps_adjust(-3);
+      item := create_object(PID_NUKA_COLA, 0, 0);
+      add_obj_to_inven(dude_obj, item);
+      NMessage(174);
+   end
+end
+
+procedure TrishBeer begin
+   if (dude_caps >= 5) then begin
+      dude_caps_adjust(-5);
+      item := create_object(PID_BEER, 0, 0);
+      add_obj_to_inven(dude_obj, item);
+      NMessage(174);
+   end
+end
+
+procedure TrishBooze begin
+   if (dude_caps >= 20) then begin
+      dude_caps_adjust(-20);
+      item := create_object(PID_BOOZE, 0, 0);
+      add_obj_to_inven(dude_obj, item);
+      NMessage(174);
+   end
+end
+
+procedure NodeRecruit begin
+   if (party_member_count(0) >= 5) then begin
+      display_msg("Your party is full.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg("Trish joins your party.");
+end
+
+procedure TrishSleeping begin
+   if (sleep_time > wake_time) then begin
+      if ((game_time_hour >= wake_time) and (game_time_hour < sleep_time)) then begin
+         if not(is_loading_game) then set_self_visible;
+         set_local_var(LVAR_Sleeping, 0);
+      end
+      else begin
+         if not(is_loading_game) then set_self_invisible;
+         set_local_var(LVAR_Sleeping, 1);
+      end
+   end
+   else begin
+      if ((game_time_hour >= sleep_time) and (game_time_hour < wake_time)) then begin
+         if not(is_loading_game) then set_self_invisible;
+         set_local_var(LVAR_Sleeping, 1);
+      end
+      else begin
+         if not(is_loading_game) then set_self_visible;
+         set_local_var(LVAR_Sleeping, 0);
+      end
+   end
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end
