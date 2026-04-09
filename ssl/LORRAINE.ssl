@@ -1,0 +1,393 @@
+/*
+
+   Boneyard - Lorraine
+   GREEN-HAIR PUNK CHICK WITH SMG IN MIDDLE OF ADYTUM ENTRANCE MAP
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "maps/laadytum.h"
+#include "area/boneyard.h"
+
+#define NAME                    SCRIPT_LORRAINE
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_BONEYARD)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure map_enter_p_proc;
+procedure map_update_p_proc;
+procedure damage_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+procedure critter_p_proc;
+
+procedure Lorraine01;
+procedure Lorraine01a;
+procedure Lorraine02;
+procedure Lorraine03;
+procedure Lorraine04;
+procedure Lorraine05;
+procedure Lorraine06;
+procedure Lorraine07;
+procedure Lorraine08;
+procedure Lorraine09;
+procedure Lorraine10;
+procedure Lorraine11;
+procedure Lorraine12;
+procedure Lorraine13;
+procedure Lorraine14;
+procedure Lorraine15;
+procedure Lorraine16;
+procedure Lorraine17;
+procedure Lorraine18;
+procedure Lorraine19;
+procedure Lorraine20;
+procedure Lorraine21;
+procedure Lorraine22;
+procedure Lorraine23;
+procedure Lorraine24;
+procedure Lorraine25;
+procedure Lorraine26;
+procedure Lorraine27;
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+variable tmp_hostile;
+variable initial := 0;
+
+#define LVAR_Home_Tile              (5)
+#define LVAR_Home_Rotation          (6)
+
+procedure start begin
+   if not(initial) then begin
+      /*if (get_blades_attacking or get_blades_attacking_wait) then begin
+         set_self_team(TEAM_PLAYER);
+      end
+      else begin*/
+         set_self_team(TEAM_LA_ADYTOWNER);
+      //end
+      initial := 1;
+   end
+end
+
+procedure map_enter_p_proc begin
+   if map_first_run then begin
+      set_local_var(LVAR_Home_Tile, self_tile);
+      set_local_var(LVAR_Home_Rotation, self_cur_rot);
+   end
+   else if (is_loading_game == false) then begin
+      critter_attempt_placement(self_obj, local_var(LVAR_Home_Tile), self_elevation);
+      self_rotate(local_var(LVAR_Home_Rotation));
+   end
+end
+
+procedure map_update_p_proc begin
+   set_fight_regulators;
+end
+
+procedure damage_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_ENEMY_ADYTUM, 1);
+      set_self_team(TEAM_LA_ADYTOWNER);
+   end
+end
+
+procedure destroy_p_proc begin
+   inc_good_critter
+   if source_is_dude then begin
+      set_global_var(GVAR_ENEMY_ADYTUM, 1);
+   end
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   if (local_var(0)) then begin
+      display_msg(mstr(100));
+   end
+   else begin
+      display_msg(mstr(101));
+   end
+end
+
+procedure pickup_p_proc begin
+   set_global_var(GVAR_ENEMY_ADYTUM, 1);
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   set_tma_data_generic(TMA_MSG_ADYTUM_LVL3);
+
+   dude_look_at_self;
+   start_gdialog(174, self_obj, 4, -1, -1);
+   gsay_start;
+   if (local_var(0)) then begin
+      //call Lorraine04;
+      call Lorraine01a;
+   end
+   else begin
+      call Lorraine01;
+   end
+   gsay_end;
+   end_dialogue;
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+   if (self_can_see_dude) then begin
+      if REP_ENEMY_LA_ADYTUM then begin
+         attack(dude_obj);
+      end
+   end
+end
+
+procedure Lorraine01 begin
+   Reply(102);
+   NOption(900, NodeRecruit, 4);
+   NOption(103, Lorraine02, 4);
+   NOption(mstr(104) + dude_name + mstr(105), Lorraine03, 4);
+   NLowOption(106, Lorraine15);
+end
+
+procedure Lorraine01a begin
+   Reply(200);
+   if (not(local_var(0))) then begin
+      NOption(108, Lorraine03, 4);
+   end
+   NOption(109, Lorraine16, 4);
+   NOption(110, Lorraine20, 4);
+   NOption(111, Lorraine04, 4);
+   NOption(112, Lorraine05, 4);
+end
+
+procedure Lorraine02 begin
+   Reply(107);
+   if (not(local_var(0))) then begin
+      NOption(108, Lorraine03, 4);
+   end
+   NOption(109, Lorraine16, 4);
+   NOption(110, Lorraine20, 4);
+   NOption(111, Lorraine04, 4);
+   NOption(112, Lorraine05, 4);
+end
+
+procedure Lorraine03 begin
+   set_local_var(0, 1);
+   Reply(113);
+   NOption(114, Lorraine02, 4);
+end
+
+procedure Lorraine04 begin
+   Reply(115);
+   NOption(116, Lorraine06, 4);
+   NOption(117, Lorraine07, 4);
+   NOption(118, Lorraine02, 4);
+end
+
+procedure Lorraine05 begin
+   NMessage(119);
+end
+
+procedure Lorraine06 begin
+   Reply(120);
+   NOption(121, Lorraine08, 4);
+   NOption(122, Lorraine10, 4);
+   NOption(123, Lorraine02, 4);
+   NOption(124, Lorraine05, 4);
+end
+
+procedure Lorraine07 begin
+   Reply(125);
+   NOption(126, Lorraine02, 4);
+   NOption(127, Lorraine05, 4);
+end
+
+procedure Lorraine08 begin
+   Reply(mstr(128));
+   NOption(131, Lorraine02, 4);
+   NOption(132, Lorraine05, 4);
+end
+
+procedure Lorraine09 begin
+   Reply(133);
+   NOption(134, Lorraine12, 4);
+   NOption(135, Lorraine02, 4);
+   NOption(136, Lorraine05, 4);
+end
+
+procedure Lorraine10 begin
+   Reply(137);
+   NOption(138, Lorraine11, 4);
+   NOption(139, Lorraine06, 4);
+   NOption(140, Lorraine02, 4);
+   NOption(141, Lorraine05, 4);
+end
+
+procedure Lorraine11 begin
+   Reply(142);
+   NOption(143, Lorraine13, 4);
+   NOption(144, Lorraine14, 4);
+   NOption(145, Lorraine02, 4);
+   NOption(146, Lorraine05, 4);
+end
+
+procedure Lorraine12 begin
+   NMessage(147);
+end
+
+procedure Lorraine13 begin
+   NMessage(148);
+end
+
+procedure Lorraine14 begin
+   Reply(149);
+   NOption(150, Lorraine02, 4);
+   NOption(151, Lorraine05, 4);
+end
+
+procedure Lorraine15 begin
+   NMessage(152);
+end
+
+procedure Lorraine16 begin
+   Reply(153);
+   NOption(154, Lorraine17, 4);
+   NOption(155, Lorraine05, 4);
+end
+
+procedure Lorraine17 begin
+   Reply(mstr(156) + mstr(157));
+   NOption(158, Lorraine18, 4);
+   NOption(159, Lorraine08, 4);
+   NOption(160, Lorraine19, 4);
+   NOption(162, Lorraine05, 4);
+end
+
+procedure Lorraine18 begin
+   Reply(163);
+   NOption(164, Lorraine02, 4);
+   NOption(165, Lorraine05, 4);
+end
+
+procedure Lorraine19 begin
+   Reply(166);
+   NOption(167, Lorraine08, 4);
+   NOption(168, Lorraine02, 4);
+   NOption(169, Lorraine05, 4);
+end
+
+procedure Lorraine20 begin
+   Reply(170);
+   NOption(171, Lorraine21, 4);
+   NOption(172, Lorraine22, 4);
+   NOption(173, Lorraine23, 4);
+   NOption(174, Lorraine24, 4);
+   NOption(175, Lorraine25, 4);
+   NOption(176, Lorraine05, 4);
+end
+
+procedure Lorraine21 begin
+   Reply(177);
+   call Lorraine26;
+end
+
+procedure Lorraine22 begin
+   Reply(178);
+   call Lorraine26;
+end
+
+procedure Lorraine23 begin
+   Reply(179);
+   call Lorraine26;
+end
+
+procedure Lorraine24 begin
+   Reply(180);
+   call Lorraine26;
+end
+
+procedure Lorraine25 begin
+   Reply(181);
+   call Lorraine26;
+end
+
+procedure Lorraine26 begin
+   NOption(182, Lorraine20, 4);
+   NOption(183, Lorraine02, 4);
+end
+
+procedure Lorraine27 begin
+   NMessage(184);
+end
+
+procedure NodeRecruit begin
+   if (party_member_count(0) >= 5) then begin
+      display_msg("Your party is full.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg("Lorraine joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end
