@@ -1,0 +1,706 @@
+/*
+
+   Hub - Harold
+
+*/
+
+/* Include Files */
+#include "define.h"
+//#include "maps/v13ent.h"
+
+#define NAME                    SCRIPT_HAROLD
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_HUB)
+
+#include "command.h"
+#include "modreact.h"
+
+procedure start;
+procedure combat_p_proc;
+procedure critter_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+
+procedure Harold00;
+procedure Harold00a;
+procedure Harold00b;
+procedure Harold01;
+procedure Harold02;
+procedure Harold03;
+procedure Harold04;
+procedure Harold05;
+procedure Harold06;
+procedure Harold07;
+procedure Harold08;
+procedure Harold09;
+procedure Harold09a;
+procedure Harold10;
+procedure Harold10a;
+procedure Harold11;
+procedure Harold12;
+procedure Harold13;
+procedure Harold14;
+procedure Harold15;
+procedure Harold15a;
+procedure Harold16;
+procedure Harold17;
+procedure Harold17a;
+procedure Harold18;
+procedure Harold19;
+procedure Harold20;
+procedure Harold21;
+procedure Harold22;
+procedure Harold23;
+procedure Harold24;
+procedure Harold25;
+procedure Harold25a;
+procedure Harold26;
+procedure Harold26a;
+procedure Harold26b;
+procedure Harold27;
+procedure Harold28;
+procedure Harold29;
+procedure Harold30;
+procedure Harold31;
+procedure Harold32;
+procedure Harold33;
+procedure Harold34;
+procedure Harold36;
+procedure Harold37;
+procedure Harold38;
+procedure Harold39;
+procedure Harold39a;
+procedure Harold39b;
+procedure Harold40;
+procedure Harold41;
+procedure Harold41a;
+procedure Harold42;
+procedure Harold43;
+procedure Harold43a;
+procedure Harold43b;
+procedure Harold44;
+procedure Harold45;
+procedure Harold47;
+procedure Harold49;
+procedure Harold50;
+procedure Harold51;
+procedure Harold52;
+procedure Harold53;
+procedure Harold54;
+procedure Harold55;
+procedure Harold56;
+procedure Harold57;
+procedure HaroldEnd;
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+#define LVAR_Herebefore       (4)
+#define LVAR_AskStory         (5)
+#define LVAR_TellShortStory   (6)
+
+variable tmp_hostile;
+variable Only_Once := 1;
+
+procedure start begin
+   if Only_Once then begin
+      Only_Once := 0;
+      set_self_team(TEAM_HUB_SKAG);
+      set_self_ai(AI_HUB_MUTANTS);
+   end
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+end
+
+procedure pickup_p_proc begin
+   if source_is_dude then begin
+      tmp_hostile := 1;
+   end
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   set_tma_data(NAME, 1000, -1, -1, 980, 982);
+
+   dude_look_at_self;
+   get_reaction
+
+   start_gdialog(NAME, self_obj, 4, HEAD_HAROLD, BACKGROUND_HUB);
+   gsay_start;
+   if (local_var(LVAR_Herebefore) == 0) then begin
+      if (local_var(LVAR_reaction_level) > BAD) then begin
+         set_local_var(LVAR_Herebefore, 1);
+         call Harold00;
+      end
+      else begin
+         call Harold39;
+      end
+   end
+   else begin
+      if (local_var(LVAR_reaction_level) > BAD) then begin
+         set_local_var(LVAR_Herebefore, 1);
+         call Harold41;
+      end
+      else begin
+         call Harold55;
+      end
+   end
+   gsay_end;
+   end_dialogue;
+end
+
+procedure destroy_p_proc begin
+   set_global_var(GVAR_IS_HAROLD_ALIVE, 0);
+   inc_good_critter
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure Harold00 begin
+   if (dude_is_male) then begin
+      Reply(266);
+   end
+   else begin
+      Reply(267);
+   end
+   NOption(900, NodeRecruit, 4);
+   NOption(102, Harold00a, 4);
+   NOption(103, Harold00b, 4);
+   NOption(104, Harold38, 4);
+   if (global_var(GVAR_MISSING_CARAVANS_STATUS) == 2) then begin
+      NOption(225, Harold45, 4);
+   end
+   BOption(105, Harold37, 4);
+   NLowOption(106, Harold01);
+end
+
+procedure Harold00a begin
+   variable LVar0 := 0;
+   if (dude_caps >= 25) then begin
+      dude_caps_adjust(-25);
+      call Harold02;
+   end
+   else begin
+      call Harold01;
+   end
+end
+
+procedure Harold00b begin
+   variable LVar0 := 0;
+   if (dude_caps >= 5) then begin
+      dude_caps_adjust(-5);
+      call Harold02;
+   end
+   else begin
+      call Harold01;
+   end
+end
+
+procedure Harold01 begin
+   NMessage(107);
+end
+
+procedure Harold02 begin
+   if (dude_is_male) then begin
+      Reply(268);
+   end
+   else begin
+      Reply(269);
+   end
+   NOption(109, Harold03, 4);
+   if (global_var(GVAR_MISSING_CARAVANS_STATUS) == 2) then begin
+      NOption(225, Harold45, 4);
+   end
+   NOption(110, HaroldEnd, 4);
+end
+
+procedure Harold03 begin
+   Reply(111);
+   NOption(112, Harold04, 4);
+   NOption(113, Harold36, 4);
+   NOption(114, HaroldEnd, 4);
+end
+
+procedure Harold04 begin
+   Reply(115);
+   NOption(116, Harold05, 4);
+   NOption(117, Harold32, 4);
+end
+
+procedure Harold05 begin
+   Reply(118);
+   NOption(119, Harold07, 4);
+   NOption(120, Harold06, 4);
+   NOption(121, Harold30, 4);
+end
+
+procedure Harold06 begin
+   Reply(122);
+   NOption(123, Harold07, 4);
+end
+
+procedure Harold07 begin
+   Reply(124);
+   NOption(125, Harold08, 4);
+end
+
+procedure Harold08 begin
+   Reply(126);
+   NOption(127, Harold09, 4);
+   NOption(128, Harold10, 4);
+end
+
+procedure Harold09 begin
+   Reply(129);
+   NOption(130, Harold09a, 4);
+end
+
+procedure Harold09a begin
+   Reply(131);
+   NOption(132, Harold11, 4);
+end
+
+procedure Harold10 begin
+   Reply(133);
+   NOption(134, Harold11, 4);
+   NOption(135, Harold12, 4);
+   NOption(136, Harold10a, 4);
+end
+
+procedure Harold10a begin
+   NMessage(137);
+   call Harold11;
+end
+
+procedure Harold11 begin
+   Reply(138);
+   NOption(139, Harold14, 4);
+   NOption(140, Harold13, 4);
+end
+
+procedure Harold12 begin
+   Reply(141);
+   NOption(142, Harold11, 4);
+end
+
+procedure Harold13 begin
+   Reply(143);
+   NOption(144, Harold15, 4);
+   NOption(145, Harold14, 4);
+end
+
+procedure Harold14 begin
+   Reply(146);
+   NOption(147, Harold18, 4);
+end
+
+procedure Harold15 begin
+   Reply(148);
+   NOption(149, Harold14, 4);
+   NOption(150, Harold15a, 4);
+   NOption(152, HaroldEnd, 4);
+end
+
+procedure Harold15a begin
+   variable LVar0 := 0;
+   if (dude_caps >= 25) then begin
+      dude_caps_adjust(-25);
+      set_local_var(LVAR_TellShortStory, 1);
+      call Harold14;
+   end
+   else begin
+      call Harold17;
+   end
+end
+
+procedure Harold16 begin
+   NMessage(153);
+   NOption(154, Harold14, 4);
+end
+
+procedure Harold17 begin
+   NMessage(156);
+   if good_critter_reaction then begin
+      call Harold16;
+   end
+   else begin
+      call Harold17a;
+   end
+end
+
+procedure Harold17a begin
+   Reply(157);
+   NOption(158, HaroldEnd, 4);
+   NOption(159, Harold14, 4);
+end
+
+procedure Harold18 begin
+   Reply(160);
+   NOption(161, Harold20, 4);
+   NOption(162, Harold19, 4);
+end
+
+procedure Harold19 begin
+   Reply(163);
+   NOption(164, Harold21, 4);
+end
+
+procedure Harold20 begin
+   Reply(165);
+   NOption(166, Harold21, 4);
+end
+
+procedure Harold21 begin
+   Reply(167);
+   NOption(168, Harold22, 4);
+end
+
+procedure Harold22 begin
+   Reply(169);
+   NOption(170, Harold23, 4);
+   NOption(171, Harold24, 4);
+end
+
+procedure Harold23 begin
+   Reply(172);
+   NOption(173, Harold24, 4);
+end
+
+procedure Harold24 begin
+   Reply(174);
+   NOption(175, Harold25, 4);
+end
+
+procedure Harold25 begin
+   Reply(176);
+   NOption(177, Harold25a, 4);
+   NOption(178, Harold27, 4);
+end
+
+procedure Harold25a begin
+   Reply(179);
+   NOption(180, Harold26, 4);
+end
+
+procedure Harold26 begin
+   Reply(181);
+   NOption(182, Harold28, 4);
+   NOption(183, Harold26a, 4);
+end
+
+procedure Harold26a begin
+   set_local_var(LVAR_AskStory, 1);
+   if (local_var(LVAR_TellShortStory) == 1) then begin
+      Reply(184);
+      NOption(185, Harold26b, 4);
+   end
+   else begin
+      if (global_var(GVAR_SLIDE_KIND_TO_HAROLD) == 0) then begin
+         set_global_var(GVAR_SLIDE_KIND_TO_HAROLD, 1); // TODO : Check if this is correct here!
+         inc_hub_rep(REP_BONUS_KIND_TO_HAROLD);
+      end
+      NMessage(184);
+   end
+end
+
+procedure Harold26b begin
+   NMessage(187);
+end
+
+procedure Harold27 begin
+   Reply(188);
+   NOption(189, Harold26, 4);
+end
+
+procedure Harold28 begin
+   Reply(190);
+   NOption(191, Harold29, 4);
+   NOption(192, Harold26a, 4);
+end
+
+procedure Harold29 begin
+   Reply(193);
+   NOption(194, Harold26a, 4);
+end
+
+procedure Harold30 begin
+   Reply(195);
+   NOption(196, Harold31, 4);
+end
+
+procedure Harold31 begin
+   Reply(197);
+   NOption(198, Harold07, 4);
+end
+
+procedure Harold32 begin
+   Reply(199);
+   NOption(200, Harold11, 4);
+end
+
+procedure Harold33 begin
+   Reply(201);
+   NOption(202, Harold34, 4);
+   NOption(203, HaroldEnd, 4);
+end
+
+procedure Harold34 begin
+   Reply(204);
+   NOption(205, Harold05, 4);
+end
+
+procedure Harold36 begin
+   NMessage(207);
+end
+
+procedure Harold37 begin
+   BigDownReact
+   BMessage(208);
+end
+
+procedure Harold38 begin
+   NMessage(209);
+end
+
+procedure Harold39 begin
+   if (dude_is_male) then begin
+      Reply(272);
+   end
+   else begin
+      Reply(273);
+   end
+   NOption(211, Harold39a, 4);
+   NOption(212, Harold39b, 4);
+   if (global_var(GVAR_MISSING_CARAVANS_STATUS) == 2) then begin
+      NOption(225, Harold45, 4);
+   end
+   NOption(213, Harold38, 4);
+   NLowOption(214, Harold01);
+end
+
+procedure Harold39a begin
+   variable LVar0 := 0;
+   if (dude_caps >= 25) then begin
+      dude_caps_adjust(-25);
+      call Harold40;
+   end
+   else begin
+      call Harold01;
+   end
+end
+
+procedure Harold39b begin
+   variable LVar0 := 0;
+   if (dude_caps >= 5) then begin
+      dude_caps_adjust(-5);
+      call Harold40;
+   end
+   else begin
+      call Harold01;
+   end
+end
+
+procedure Harold40 begin
+   Reply(215);
+   NOption(216, Harold03, 4);
+   NOption(217, HaroldEnd, 4);
+end
+
+procedure Harold41 begin
+   Reply(218);
+   NOption(219, Harold41a, 4);
+   NOption(220, Harold43, 4);
+   NLowOption(221, HaroldEnd);
+end
+
+procedure Harold41a begin
+   variable LVar0 := 0;
+   if (dude_caps >= 20) then begin
+      dude_caps_adjust(-20);
+      call Harold43;
+   end
+   else begin
+      call Harold01;
+   end
+end
+
+procedure Harold42 begin
+   DownReact
+   BMessage(222);
+end
+
+procedure Harold43 begin
+   Reply(223);
+   if (global_var(GVAR_MISSING_CARAVANS_STATUS) == 2) then begin
+      NOption(225, Harold45, 4);
+   end
+   if (((global_var(GVAR_THE_HUB_INVASION_DAYS) - (GAME_TIME_IN_DAYS)) < 10) or (global_var(GVAR_QUEST_BROHOOD_2_FIND_LOST) == 1)) then begin
+      NOption(224, Harold43b, 4);
+   end
+   if (local_var(LVAR_AskStory) == 0) then begin
+      NOption(226, Harold43a, 4);
+   end
+   NOption(265, HaroldEnd, 4);
+end
+
+procedure Harold43a begin
+   NMessage(228);
+   call Harold04;
+end
+
+procedure Harold43b begin
+   if (global_var(GVAR_QUEST_BROHOOD_2_FIND_LOST) == 1) then begin
+      call Harold53;
+   end
+   else begin
+      if ((global_var(GVAR_THE_HUB_INVASION_DAYS) - (GAME_TIME_IN_DAYS)) < 10) then begin
+         call Harold54;
+      end
+   end
+end
+
+procedure Harold44 begin
+   NMessage(229);
+end
+
+procedure Harold45 begin
+   set_global_var(GVAR_MISSING_CARAVANS_STATUS, 3);
+   Reply(230);
+   NOption(231, Harold47, 4);
+   NOption(232, Harold47, 4);
+end
+
+procedure Harold47 begin
+   // Only set to 1 if the deathclaw wasn't killed yet
+   if (global_var(GVAR_KILL_DEATHCLAW) < 2) then begin
+      set_global_var(GVAR_KILL_DEATHCLAW, 1);
+   end
+   Reply(233);
+   NOption(234, Harold49, 4);
+end
+
+procedure Harold49 begin
+   Reply(235);
+   NOption(236, Harold50, 4);
+end
+
+procedure Harold50 begin
+   Reply(237);
+   NOption(238, Harold51, 4);
+end
+
+procedure Harold51 begin
+   Reply(239);
+   NOption(240, HaroldEnd, 4);
+end
+
+procedure Harold52 begin
+   NMessage(241);
+end
+
+procedure Harold53 begin
+   set_global_var(GVAR_DECKER_KNOWN, 1);
+   Reply(242);
+   NOption(243, HaroldEnd, 4);
+end
+
+procedure Harold54 begin
+   Reply(244);
+   NOption(245, HaroldEnd, 4);
+end
+
+procedure Harold55 begin
+   Reply(246);
+   NOption(247, Harold56, 4);
+   NOption(248, Harold57, 4);
+end
+
+procedure Harold56 begin
+   BMessage(249);
+end
+
+procedure Harold57 begin
+   BMessage(250);
+end
+
+procedure HaroldEnd begin
+end
+
+procedure NodeRecruit begin
+   if (party_member_count(0) >= 5) then begin
+      display_msg("Your party is full.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg("Harold joins your party.");
+end
+
+procedure combat_p_proc begin
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end
