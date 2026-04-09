@@ -62,6 +62,15 @@ procedure OfficerCombat;
 procedure OfficerEnd;
 procedure OfficerJoin;
 procedure OfficerJoinAccept;
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
 
 variable tmp_hostile;
 
@@ -78,6 +87,11 @@ procedure start begin
 end
 
 procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+
    if (tmp_hostile) then begin
       tmp_hostile := 0;
       attack(dude_obj);
@@ -122,6 +136,11 @@ procedure destroy_p_proc begin
 end
 
 procedure map_enter_p_proc begin
+   // If in party, don't reset team or teleport home
+   if (self_team == TEAM_PLAYER) then begin
+      return;
+   end
+
    if (local_var(LVAR_Home_Tile) == 0) then begin
       set_local_var(LVAR_Home_Tile, self_tile);
       set_local_var(LVAR_Home_Rotation, self_cur_rot);
@@ -146,6 +165,14 @@ procedure pickup_p_proc begin
 end
 
 procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
    set_tma_data_generic(TMA_MSG_VAULT13);
 
    dude_look_at_self;
@@ -187,7 +214,7 @@ end
 
 procedure Officer02 begin
    Reply(102);
-   NOption(200, OfficerJoin, 4);
+   NOption(900, NodeRecruit, 4);
    NOption(103, Officer04, 4);
    NOption(104, Officer08, 5);
    NOption(105, Officer11, 6);
@@ -282,7 +309,7 @@ end
 
 procedure Officer18 begin
    Reply(mstr(134) + dude_name + mstr(135));
-   NOption(200, OfficerJoin, 4);
+   NOption(900, NodeRecruit, 4);
    NOption(136, Officer20, 4);
    NOption(137, Officer21, 5);
    NLowOption(138, Officer19);
@@ -374,4 +401,54 @@ procedure OfficerJoinAccept begin
    party_add(self_obj);
    set_team(self_obj, TEAM_PLAYER);
    display_msg(mstr(204));
+end
+
+procedure NodeRecruit begin
+   if (party_member_count(0) >= 5) then begin
+      display_msg("Your party is full.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg("Marcus joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
 end
