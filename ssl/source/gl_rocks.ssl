@@ -1,0 +1,180 @@
+/*
+    gl_rocks.ssl -- Collect Rocks from Rock Scenery
+    fo1-et-tu-megamod
+
+    SURVIVAL IMMERSIVE: You're on a desert, rocks are everywhere.
+    Click/use rock scenery on the wasteland to pick up Rock items.
+
+    Hook: HOOK_USEANIMOBJ (fires when player clicks scenery on map)
+    Gives 1-3 PID_ROCK (19) items per rock pile, one-time harvest.
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/lib.arrays.h"
+
+/* ---- Config ---- */
+#define XP_ROCKS           3
+#define ROCKS_MIN          1
+#define ROCKS_MAX          3
+
+/* Scenery PID base (type 2 << 24) */
+#define SCEN_BASE          (33554432)
+
+/* Rock scenery PIDs from PRO_SCEN.MSG
+   72 = Rock Column, 73 = Rock Column, 74-75 = rocks,
+   78 = rocks, 79 = Rocks, 80 = Rocks, 93 = rocks       */
+#define PID_SCEN_ROCK_72   (SCEN_BASE + 72)
+#define PID_SCEN_ROCK_73   (SCEN_BASE + 73)
+#define PID_SCEN_ROCK_74   (SCEN_BASE + 74)
+#define PID_SCEN_ROCK_75   (SCEN_BASE + 75)
+#define PID_SCEN_ROCK_78   (SCEN_BASE + 78)
+/* 79 = PID_BLUE_ROCK_PILE_SMALL_1  (33554511) */
+/* 80 = PID_BLUE_ROCK_PILE_SMALL_2  (33554512) */
+/* 81 = PID_LARGE_BLUE_ROCK_PILE    (33554513) */
+/* 90-93 = PID_ROCKS_1 thru PID_ROCKS_4       */
+
+/* ---- Persistent data ---- */
+variable harvested;    /* map: "mapIdx_tile_pid" -> 1 */
+
+/* ---- Forward declarations ---- */
+procedure start;
+procedure useanimobj_handler;
+procedure is_rock_scenery(variable pid);
+procedure do_harvest_rocks(variable target);
+
+/* ==================================================================
+   ENTRY POINT
+   ================================================================== */
+procedure start begin
+    if game_loaded then begin
+        harvested := load_array("megamod_rocks");
+        if (harvested == 0) then begin
+            harvested := create_array_map;
+            save_array("megamod_rocks", harvested);
+        end
+
+        register_hook_proc(HOOK_USEANIMOBJ, useanimobj_handler);
+    end
+end
+
+/* ==================================================================
+   CHECK: Is this scenery PID a harvestable rock?
+   ================================================================== */
+procedure is_rock_scenery(variable pid) begin
+    /* PRO_SCEN proto 72-75 (Rock Column, rocks) */
+    if (pid == PID_SCEN_ROCK_72) then return 1;
+    if (pid == PID_SCEN_ROCK_73) then return 1;
+    if (pid == PID_SCEN_ROCK_74) then return 1;
+    if (pid == PID_SCEN_ROCK_75) then return 1;
+
+    /* PRO_SCEN proto 78 */
+    if (pid == PID_SCEN_ROCK_78) then return 1;
+
+    /* Blue rock piles (protos 79-81) */
+    if (pid == PID_BLUE_ROCK_PILE_SMALL_1) then return 1;
+    if (pid == PID_BLUE_ROCK_PILE_SMALL_2) then return 1;
+    if (pid == PID_LARGE_BLUE_ROCK_PILE)   then return 1;
+
+    /* Generic rocks (protos 90-93) */
+    if (pid == PID_ROCKS_1) then return 1;
+    if (pid == PID_ROCKS_2) then return 1;
+    if (pid == PID_ROCKS_3) then return 1;
+    if (pid == PID_ROCKS_4) then return 1;
+
+    /* Larger rock formations (protos 278-280, 428-435) */
+    if (pid == PID_ROCKS_6)  then return 1;
+    if (pid == PID_ROCKS_7)  then return 1;
+    if (pid == PID_ROCKS_8)  then return 1;
+    if (pid == PID_ROCKS_9)  then return 1;
+    if (pid == PID_ROCKS_10) then return 1;
+    if (pid == PID_ROCKS_11) then return 1;
+    if (pid == PID_ROCKS_12) then return 1;
+    if (pid == PID_ROCKS_13) then return 1;
+    if (pid == PID_ROCKS_14) then return 1;
+    if (pid == PID_ROCKS_15) then return 1;
+    if (pid == PID_ROCKS_16) then return 1;
+
+    return 0;
+end
+
+/* ==================================================================
+   HARVEST: Give rocks to player, mark as harvested
+   ================================================================== */
+procedure do_harvest_rocks(variable target) begin
+    variable tile;
+    variable pid;
+    variable mapIdx;
+    variable key;
+    variable count;
+    variable i;
+    variable rock;
+
+    tile   := tile_num(target);
+    pid    := obj_pid(target);
+    mapIdx := cur_map_index;
+
+    /* Unique key: map + tile + pid */
+    key := "" + mapIdx + "_" + tile + "_" + pid;
+
+    /* Already harvested? */
+    if (harvested[key] != 0) then begin
+        display_msg("Nothing but pebbles left here.");
+        return;
+    end
+
+    /* Determine how many rocks (1-3) */
+    count := random(ROCKS_MIN, ROCKS_MAX);
+
+    /* Give rocks to player */
+    i := 0;
+    while (i < count) do begin
+        rock := create_object(PID_ROCK, 0, 0);
+        add_obj_to_inven(dude_obj, rock);
+        i := i + 1;
+    end
+
+    /* Mark harvested */
+    harvested[key] := 1;
+    save_array("megamod_rocks", harvested);
+
+    /* Feedback */
+    display_msg("You pick through the rocks and find a few useful ones.");
+    give_exp_points(XP_ROCKS);
+    display_msg("[Rocks] +" + XP_ROCKS + " XP");
+end
+
+/* ==================================================================
+   HOOK: USEANIMOBJ -- Player clicks scenery on the map
+   arg0 = the critter, arg1 = the target scenery object
+   ================================================================== */
+procedure useanimobj_handler begin
+    variable user;
+    variable target;
+    variable target_pid;
+
+    user   := get_sfall_arg;
+    target := get_sfall_arg;
+
+    /* Only player */
+    if (user != dude_obj) then return;
+    if (target == 0) then return;
+
+    /* Must be scenery */
+    if (obj_type(target) != OBJ_TYPE_SCENERY) then return;
+
+    target_pid := obj_pid(target);
+
+    /* Check if it's rock scenery */
+    if not(is_rock_scenery(target_pid)) then return;
+
+    /* No rock collecting during combat */
+    if (combat_is_initialized) then begin
+        display_msg("No time to gather rocks during combat!");
+        return;
+    end
+
+    call do_harvest_rocks(target);
+end
