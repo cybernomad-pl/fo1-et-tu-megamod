@@ -1,0 +1,89 @@
+/*
+    Radio Faction Summon -- MVP debug
+    USE radio outside towns = spawn guards + recall waiting party
+    Cooldown 3 days between summons.
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/lib.arrays.h"
+
+#define SUMMON_COOLDOWN_HOURS  (24 * 3)
+#define SQUAD_SIZE             3
+
+#define is_in_town  (cur_town == AREA_VAULT_13 or cur_town == AREA_SHADY_SANDS or cur_town == AREA_JUNKTOWN or cur_town == AREA_NECROPOLIS or cur_town == AREA_HUB or cur_town == AREA_BROTHERHOOD or cur_town == AREA_BONEYARD or cur_town == AREA_CATHEDRAL)
+
+variable summon_cd;
+
+procedure start;
+procedure radio_handler;
+
+procedure start begin
+    if game_loaded then begin
+        summon_cd := load_array("megamod_radio_cd");
+        if (summon_cd == 0) then begin
+            summon_cd := create_array_map;
+            save_array("megamod_radio_cd", summon_cd);
+        end
+        // Enable Use flag on Radio
+        set_proto_data(PID_RADIO, PROTO_IT_FLAGS,
+            get_proto_data(PID_RADIO, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+        register_hook_proc(HOOK_USEOBJ, radio_handler);
+    end
+end
+
+procedure radio_handler begin
+    variable user;
+    variable item;
+    variable last_summon;
+    variable hours_passed;
+    variable i;
+    variable npc;
+    variable tile;
+    variable dir;
+
+    user := get_sfall_arg;
+    item := get_sfall_arg;
+
+    if (user != dude_obj) then return;
+    if (obj_pid(item) != PID_RADIO) then return;
+
+    set_sfall_return(-1);
+
+    // Block in towns
+    if is_in_town then begin
+        display_msg("Radio static. Too close to town. Move to the wasteland.");
+        return;
+    end
+
+    // Check cooldown
+    last_summon := summon_cd["last"];
+    if (last_summon > 0) then begin
+        hours_passed := (game_time - last_summon) / 600;
+        if (hours_passed < SUMMON_COOLDOWN_HOURS) then begin
+            display_msg("No response. Forces en route. " + (SUMMON_COOLDOWN_HOURS - hours_passed) + " hours until available.");
+            return;
+        end
+    end
+
+    // Spawn squad around player
+    tile := tile_num(dude_obj);
+
+    for (i := 0; i < SQUAD_SIZE; i++) begin
+        dir := random(0, 5);
+        npc := create_object(PID_GUARD, tile_num_in_direction(tile, dir, random(2, 4)), dude_elevation);
+        set_team(npc, TEAM_PLAYER);
+        // Give them decent starting gear
+        add_obj_to_inven(npc, create_object(PID_ASSAULT_RIFLE, 0, 0));
+        add_obj_to_inven(npc, create_object(PID_STIMPAK, 0, 0));
+        add_obj_to_inven(npc, create_object(PID_STIMPAK, 0, 0));
+    end
+
+    // Set cooldown
+    summon_cd["last"] := game_time;
+    save_array("megamod_radio_cd", summon_cd);
+
+    display_msg("Reinforcements arrive. " + SQUAD_SIZE + " guards reporting for duty.");
+end
