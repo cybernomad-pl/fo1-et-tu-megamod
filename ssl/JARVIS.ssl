@@ -1,0 +1,228 @@
+/*
+
+   Shady Sands - Jarvis
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/shadysands.h"
+
+#define NAME                    SCRIPT_JARVIS
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_SHADYSANDS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure look_at_p_proc;
+procedure map_enter_p_proc;
+procedure talk_p_proc;
+procedure use_skill_on_p_proc;
+procedure use_obj_on_p_proc;
+procedure destroy_p_proc;
+procedure combat_p_proc;
+procedure description_p_proc;
+procedure critter_p_proc;
+procedure pickup_p_proc;
+procedure timed_event_p_proc;
+procedure map_exit_p_proc;
+
+procedure Jarvis01;
+procedure Jarvis02;
+procedure Jarvis03;
+procedure Jarvis04;
+procedure Jarvis05;
+procedure Jarvis06;
+procedure Jarvisend;
+
+variable use_skill;
+variable tmp_hostile;
+
+#define LVAR_Here_Before      (4)
+#define LVAR_PoisonHealed     (5)
+#define LVAR_Invasion         (6)
+
+procedure start begin
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   if (local_var(LVAR_Here_Before) == 0) then
+      display_msg(mstr(102));
+   else
+      display_msg(mstr(103));
+end
+
+procedure map_enter_p_proc begin
+   if shady_invaded then begin
+      invasion_kill_critter;
+   end
+
+   if (local_var(LVAR_PoisonHealed) == 0) then begin
+      anim(self_obj, ANIM_fall_back_sf, 0);
+      add_timer_event(self_obj, game_ticks(3600), 1);
+   end
+   set_self_team(TEAM_SHADY_SANDS);
+   set_self_ai(AI_PEASANT);
+end
+
+procedure talk_p_proc begin
+   set_tma_data_generic(TMA_MSG_SHADYW);
+
+   dude_look_at_self;
+   if (local_var(LVAR_PoisonHealed) == 0) then begin
+      call Jarvis01;
+   end
+   else if (local_var(LVAR_Here_Before) == 0) then begin
+      start_dialog_at_node(Jarvis02);
+   end
+   else begin
+      start_dialog_at_node(Jarvis03);
+   end
+end
+
+procedure use_skill_on_p_proc begin
+   variable Skill := 0;
+   Skill := roll_vs_skill(dude_obj, action_being_used, 0);
+   if (local_var(LVAR_PoisonHealed) == 0) then begin
+      script_overrides;
+      if (action_being_used == SKILL_FIRST_AID) then begin
+         if (is_success(Skill)) then begin
+            display_msg(mstr(112));
+         end
+         else begin
+            display_msg(mstr(113));
+         end
+      end
+      else if (action_being_used == SKILL_DOCTOR) then begin
+         if (is_success(Skill)) then begin
+            display_msg(mstr(114));
+         end
+         else begin
+            display_msg(mstr(115));
+         end
+      end
+      else begin
+         display_msg(mstr(116));
+      end
+   end
+end
+
+procedure use_obj_on_p_proc begin
+   if ((obj_pid(obj_being_used_with) == PID_ANTIDOTE) and (local_var(LVAR_PoisonHealed) == 0)) then begin
+      script_overrides;
+
+      rm_timer_event(self_obj);
+      set_local_var(LVAR_PoisonHealed, 1);
+      rm_obj_from_inven(dude_obj, obj_being_used_with);
+      destroy_object(obj_being_used_with);
+
+      display_msg(mstr(117));
+      set_jarvis_healed;
+
+      give_xp_msg(EXP_JARVIS_ANTIDOTE, mstr(200));
+
+      inc_general_rep(1);
+      inc_shady_rep(REP_BONUS_HELPING_JARVIS);
+   end
+end
+
+procedure destroy_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+   end
+   inc_good_critter
+end
+
+procedure combat_p_proc begin
+   if ((fixed_param == COMBAT_SUBTYPE_TURN) and (local_var(LVAR_PoisonHealed) == 0)) then begin
+      script_overrides;
+   end
+end
+
+procedure Jarvis01 begin
+   set_heal_jarvis;
+   float_msg(self_obj, mstr(104), FLOAT_MSG_NORMAL);
+end
+
+procedure Jarvis02 begin
+   Reply(105);
+   set_local_var(LVAR_Here_Before, 1);
+   call Jarvis04;
+end
+
+procedure Jarvis03 begin
+   Reply(106);
+   call Jarvis04;
+end
+
+procedure Jarvis04 begin
+   NOption(107, Jarvis05, 4);
+   NOption(108, Jarvis06, 4);
+   NOption(109, Jarvisend, 4);
+   NLowOption(118, Jarvis05);
+   NLowOption(119, Jarvis06);
+   NLowOption(120, Jarvisend);
+end
+
+procedure Jarvis05 begin
+   Reply(110);
+   call Jarvis04;
+end
+
+procedure Jarvis06 begin
+   Reply(111);
+   call Jarvis04;
+end
+
+procedure Jarvisend begin
+end
+
+procedure description_p_proc begin
+   script_overrides;
+   if (local_var(LVAR_Here_Before) == 0) then begin
+      display_msg(mstr(102));
+   end
+   else begin
+      display_msg(mstr(103));
+   end
+end
+
+procedure critter_p_proc begin
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   if ((local_var(LVAR_PoisonHealed) == 1) and (anim_busy(self_obj) == 0)) then begin
+      if (critter_state(self_obj) == CRITTER_IS_PRONE) then begin
+         reg_anim_clear(self_obj);
+         reg_anim_begin();
+         reg_anim_animate(self_obj, ANIM_back_to_standing, -1);
+         reg_anim_end();
+      end
+      else if (critter_state(self_obj) == CRITTER_IS_NORMAL) then begin
+         set_local_var(LVAR_PoisonHealed, 2);
+         self_rotate(2);
+      end
+   end
+end
+
+procedure pickup_p_proc begin
+   tmp_hostile := 1;
+end
+
+procedure timed_event_p_proc begin
+   if (local_var(LVAR_PoisonHealed) == 0) then begin
+      add_timer_event(self_obj, game_ticks(7200), 1);
+   end
+   if (tile_distance_objs(dude_obj, self_obj) < dude_perception) then begin
+      display_msg(mstr(100));
+      float_msg(self_obj, mstr(101), FLOAT_MSG_NORMAL);
+   end
+end
+
+procedure map_exit_p_proc begin
+   rm_timer_event(self_obj);
+end
