@@ -1,0 +1,764 @@
+/*
+
+   Raiders - Garl, leader of the Khans
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/shadysands.h"
+#include "maps/raiders.h"
+
+#define NAME                    SCRIPT_GARL
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_RAIDERS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure map_enter_p_proc;
+procedure destroy_p_proc;
+procedure talk_p_proc;
+procedure timed_event_p_proc;
+procedure critter_p_proc;
+procedure damage_p_proc;
+
+procedure garl00;
+procedure garl01;
+procedure garl01a;
+procedure garl01b;
+procedure garl01c;
+procedure garl01d;
+procedure garl02;
+procedure garl03;
+procedure garl03a;
+procedure garl04;
+procedure garl04a;
+procedure garl04b;
+procedure garl04c;
+procedure garl05;
+procedure garl06;
+procedure garl06a;
+procedure garl07;
+procedure garl08;
+procedure garl09;
+procedure garl10;
+procedure garl11;
+procedure garl12;
+procedure garl12a;
+procedure garl12b;
+procedure garl15;
+procedure garl15a;
+procedure garl16;
+procedure garl17;
+procedure garl17a;
+procedure garl18;
+procedure garl19;
+procedure garl20;
+procedure garl21;
+procedure garl22;
+procedure garl23;
+procedure garl24;
+procedure garl25;
+procedure garl26;
+procedure garl27;
+procedure garl28;
+procedure garl29;
+procedure garl30;
+procedure garl31;
+procedure garl32;
+procedure garl33;
+procedure garl34;
+procedure garl35;
+procedure garl36;
+procedure garl37;
+procedure garl37a;
+procedure garl38;
+procedure garl38a;
+procedure garl39;
+procedure garl39a;
+procedure garl40;
+procedure garl41;
+procedure garl42;
+procedure garl43;
+procedure garlx;
+procedure garlend;
+procedure first;
+procedure notfirst;
+procedure freetandi;
+procedure garlcbt;
+procedure honorcbt;
+procedure honorarea;
+procedure garlbarter;
+procedure return_to_map;
+
+import variable women_killed;
+import variable signal_women;
+import variable killing_women;
+import variable Garls_Inven_Ptr;
+import variable Cell_Door_Ptr;
+
+#define LVAR_Herebefore          (4)
+#define LVAR_HonorHex            (6)
+#define LVAR_HonorFight          (7)
+#define LVAR_HonorWon            (8)
+#define LVAR_OnlyOnce            (9)
+#define LVAR_BeginHonorFight     (18)
+
+variable tmp_hostile;
+variable Only_Once := 1;
+variable tandi_pid_ptr;
+
+procedure start begin
+   if Only_Once then begin
+      Only_Once := 0;
+      set_self_team(TEAM_RAIDERS);
+      set_self_ai(AI_RAIDER_LEADER);
+   end
+end
+
+procedure map_enter_p_proc begin
+   if shady_invaded and CUR_MAP_RAIDERS then begin
+      invasion_kill_critter;
+   end
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure pickup_p_proc begin
+   tmp_hostile := 1;
+end
+
+procedure timed_event_p_proc begin
+   if (fixed_param == 1) then begin
+      if (global_var(GVAR_GARLS_FRIEND) != 1) then begin
+         dialogue_system_enter;
+      end
+   end
+   else if (fixed_param == 2) then begin
+      call freetandi;
+   end
+   else if (fixed_param == 3) then begin
+      call honorarea;
+      float_msg(self_obj, mstr(209), FLOAT_MSG_NORMAL);
+   end
+   else if (fixed_param == 4) then begin
+      if (local_var(LVAR_BeginHonorFight) > 0) then begin
+         if not(local_var(LVAR_HonorWon)) then begin
+            call talk_p_proc;
+         end
+         call return_to_map;
+         call freetandi;
+      end
+      else begin
+         add_timer_event(self_obj, 1, 4);
+         tmp_hostile := 1;
+      end
+   end
+end
+
+procedure talk_p_proc begin
+   set_tma_data(NAME, 1000, 1001, 1001, TMA_MSG_DONTKNOW_START, TMA_MSG_DONTKNOW_END);
+
+   dude_look_at_self;
+   if (self_elevation == 1) then begin
+      self_look_at_dude;
+
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gsay_start;
+      NMessage(208);
+      gsay_end;
+      end_dialogue;
+
+      add_timer_event(self_obj, 1, 4);
+      set_local_var(LVAR_HonorWon, 1);
+   end
+   else begin
+      if (killing_women) then begin
+         call garl39a;
+      end
+      else begin
+         set_local_var(LVAR_base_reaction, BAD);
+         get_reaction
+         start_gdialog(NAME, self_obj, 4, -1, -1);
+         gsay_start;
+         if (women_killed > 1) then begin
+            call garl11;
+         end
+         else begin
+            if (global_var(GVAR_MISTAKEN_ID)) then begin//Raiders think you are Garl's father
+               call garl01;
+            end
+            else if (local_var(LVAR_Herebefore) < 1) then begin
+               call first;
+               set_local_var(LVAR_Herebefore, 1);
+            end
+            else begin
+               call notfirst;
+            end
+         end
+         gsay_end;
+         end_dialogue;
+      end
+   end
+
+   if (dude_item(PID_BARTER_TANDI)) then begin
+      rm_obj_from_inven(dude_obj, tandi_pid_ptr);
+      destroy_object(tandi_pid_ptr);
+      set_global_var(GVAR_TANDI_HIRELING_STATUS, 5);
+      set_map_var(MVAR_OPENING_DOOR, 2);
+      obj_unlock(Cell_Door_Ptr);
+      add_timer_event(self_obj, 1, 2);
+   end
+   else if (self_item(PID_BARTER_TANDI)) then begin
+      rm_obj_from_inven(self_obj, tandi_pid_ptr);
+      destroy_object(tandi_pid_ptr);
+      call garl20;
+   end
+end
+
+procedure return_to_map begin
+   move_to(dude_obj, local_var(LVAR_HonorHex), 0);
+   move_obj_inven_to_obj(Garls_Inven_Ptr, dude_obj);
+   set_global_var(GVAR_TANDI_HIRELING_STATUS, 5);
+   set_map_var(MVAR_OPENING_DOOR, 2);
+   obj_unlock(Cell_Door_Ptr);
+end
+
+procedure critter_p_proc begin
+   if get_tandi_returned then begin
+      set_global_var(GVAR_ENEMY_RAIDERS, 1);
+   end
+   else begin
+      if (global_var(GVAR_MISTAKEN_ID)) then begin//Raiders think you are Garl's father
+         set_global_var(GVAR_ENEMY_RAIDERS, 0);
+      end
+      else if global_var(GVAR_TANDI_ESCAPE) then begin
+         set_global_var(GVAR_ENEMY_RAIDERS, 1);
+      end
+      if (self_can_see_dude) then begin
+         if (global_var(GVAR_RAID_LOOTING)) then begin//  "RAID_LOOTING" (are you stealing from them)
+            set_global_var(GVAR_ENEMY_RAIDERS, 1);
+         end
+      end
+   end
+   if (REP_ENEMY_RAIDERS and self_can_see_dude) then begin
+      tmp_hostile := 1;
+   end
+   if (tile_distance_objs(self_obj, dude_obj) > 12) then begin
+      tmp_hostile := 0;
+   end
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   if (local_var(LVAR_BeginHonorFight) > 0) and not(combat_is_initialized) and (self_elevation == 1) and not(local_var(LVAR_OnlyOnce)) then begin
+      set_local_var(LVAR_OnlyOnce, 1);
+      add_timer_event(self_obj, 1, 4);
+   end
+end
+
+procedure damage_p_proc begin
+   if source_is_dude then begin
+      if (local_var(LVAR_HonorFight) == 0) then begin
+         set_global_var(GVAR_ENEMY_RAIDERS, 1);
+      end
+      else begin
+         set_local_var(LVAR_BeginHonorFight, 1);
+      end
+   end
+end
+
+procedure destroy_p_proc begin
+   inc_raiders_rep(REP_BONUS_GARL_KILLED);
+
+   set_global_var(GVAR_GARL_DEAD, 1);// Is Garl dead?
+   dec_global_var(GVAR_TOTAL_RAIDERS);
+
+   if (local_var(LVAR_HonorFight) == 1) then begin
+      move_to(dude_obj, local_var(LVAR_HonorHex), 0);
+      move_obj_inven_to_obj(Garls_Inven_Ptr, dude_obj);
+      set_global_var(GVAR_TANDI_HIRELING_STATUS, 5);
+      set_map_var(MVAR_OPENING_DOOR, 2);
+      obj_unlock(Cell_Door_Ptr);
+   end
+   else if (local_var(LVAR_HonorFight) == 0) then begin
+      set_global_var(GVAR_ENEMY_RAIDERS, 1);
+      set_global_var(GVAR_GARLS_FRIEND, 0);//GARLS_FRIEND
+   end
+   inc_inv_evil_crit
+end
+
+procedure freetandi begin
+   set_global_var(GVAR_TANDI_HIRELING_STATUS, 5);
+   set_map_var(MVAR_OPENING_DOOR, 2);
+   obj_unlock(Cell_Door_Ptr);
+end
+
+procedure garlcbt begin
+   tmp_hostile := 1;
+end
+
+procedure honorcbt begin
+   add_timer_event(self_obj, 1, 3);
+end
+
+procedure honorarea begin
+   variable Item := 0;
+   set_local_var(LVAR_HonorHex, dude_tile);
+   set_local_var(LVAR_HonorFight, 1);
+
+   move_to(dude_obj, 20102, 1);
+   move_to(self_obj, 20301, 1);
+
+   if dude_armor then begin
+      Item := dude_armor;
+   end
+   rm_obj_from_inven(dude_obj, Item);
+
+   move_obj_inven_to_obj(dude_obj, Garls_Inven_Ptr);
+   move_obj_inven_to_obj(self_obj, Garls_Inven_Ptr);
+
+   if (Item > 0) then begin
+      add_obj_to_inven(dude_obj, Item);
+      wield_obj_critter(dude_obj, Item);
+   end
+   refresh_pc_art;
+
+   if Ian_In_Party then
+      move_to(Ian_ptr, tile_num_in_direction(dude_tile, 0, 10), 1);
+   if Katja_In_Party then
+      move_to(Katja_ptr, tile_num_in_direction(dude_tile, 1, 10), 1);
+   if Tycho_In_Party then
+      move_to(Tycho_ptr, tile_num_in_direction(dude_tile, 2, 10), 1);
+   if Dog_In_Party then
+      move_to(Dog_ptr, tile_num_in_direction(dude_tile, 4, 10), 1);
+   if Tandi_In_Party then
+      move_to(Tandi_ptr, tile_num_in_direction(dude_tile, 5, 10), 1);
+   if MrHandyC_In_Party then
+      move_to(Handy_ptr, tile_num_in_direction(dude_tile, 3, 10), 1);
+   if Eyebot_In_Party then
+      move_to(Handy_ptr, tile_num_in_direction(dude_tile, 3, 12), 1);
+
+   dude_look_at_self;
+   set_self_team(TEAM_RAIDERS_OTHER);
+   set_self_ai(AI_GARL_HONOR);
+   call garlcbt;
+end
+
+procedure first begin
+   if (global_var(GVAR_TANDI_HIRELING_STATUS) > 1) then begin
+      call garl43;
+   end
+   else if (global_var(GVAR_TANDI_HIRELING_STATUS) > 0) then begin
+      call garl12;
+   end
+   else begin
+      call garl32;
+   end
+end
+
+procedure notfirst begin
+   if (global_var(GVAR_TANDI_HIRELING_STATUS) > 1) then begin
+      call garl43;
+   end
+   else if (global_var(GVAR_TANDI_HIRELING_STATUS) > 0) then begin
+      call garl22;
+   end
+   else begin
+      call garl41;
+   end
+end
+
+procedure garl00 begin
+   NMessage(101);
+   call garlcbt;
+end
+
+procedure garl01 begin
+   Reply(102);
+   NLowOption(207, garl09);
+   NOption(103, garl01a, 4);
+   NOption(104, garl01b, 5);
+   NOption(105, garl01c, 6);
+end
+
+procedure garl01a begin
+   call garl02;
+end
+
+procedure garl01b begin
+   call garl03;
+end
+
+procedure garl01c begin
+   call garl04;
+end
+
+procedure garl01d begin
+   Reply(106);
+   NOption(107, garl02, 4);
+   NOption(108, garl03, 5);
+   NOption(109, garl04, 6);
+end
+
+procedure garl02 begin
+   NMessage(110);
+   set_global_var(GVAR_MISTAKEN_ID, 0);//Raiders no longer think you are Garl's father
+   call garlcbt;
+end
+
+procedure garl03 begin
+   Reply(111);
+   NOption(112, garl03a, 8);
+end
+
+procedure garl03a begin
+   set_global_var(GVAR_MISTAKEN_ID, 0);//Raiders no longer think you are Garl's father
+   call garlcbt;
+end
+
+procedure garl04 begin
+   Reply(113);
+   NOption(114, garl04a, 6);
+   NOption(115, garl04b, 6);
+end
+
+procedure garl04a begin
+   call garl06;
+end
+
+procedure garl04b begin
+   call garl05;
+end
+
+procedure garl04c begin
+   Reply(116);
+   NOption(117, garl06, 6);
+   NOption(118, garl05, 6);
+end
+
+procedure garl05 begin
+   NMessage(119);
+   set_global_var(GVAR_MISTAKEN_ID, 0);//Raiders no longer think you are Garl's father
+   call garlcbt;
+end
+
+procedure garl06 begin
+   Reply(120);
+   if tandi_is_kidnapped then begin
+      NOption(121, garl06a, 6);
+   end
+   NOption(122, garl10, 6);
+   NOption(123, garl10, 6);
+end
+
+procedure garl06a begin
+   if (dude_stat_success(STAT_ch, 0) or dude_skill_success(SKILL_SPEECH, 10)) then begin
+      call garl08;
+   end
+   else begin
+      call garl09;
+   end
+end
+
+procedure garl07 begin
+   NMessage(124);
+   NOption(125, garl08, 6);
+end
+
+procedure garl08 begin
+   NMessage(126);
+   set_global_var(GVAR_MISTAKEN_ID, 0);//Raiders no longer think you are Garl's father
+   call freetandi;
+end
+
+procedure garl09 begin
+   NMessage(127);
+   call garlcbt;
+end
+
+procedure garl10 begin
+   NMessage(128);
+   set_global_var(GVAR_MISTAKEN_ID, 0);//Raiders no longer think you are Garl's father
+   call garlcbt;
+end
+
+procedure garl11 begin
+   if (women_killed > 1) then begin
+      women_killed := 0;
+      NMessage(129);
+      call garlcbt;
+   end
+end
+
+procedure garl12 begin
+   Reply(130);
+   if (global_var(GVAR_TANDI_TALKED_ABOUT) == 1) then begin
+      NOption(131, garl12b, 4);
+      NOption(133, garl15, 5);
+   end
+   else begin
+      NOption(200, garl12a, 5);
+   end
+   NOption(132, garlcbt, 4);
+   NLowOption(134, garl17);
+end
+
+procedure garl12a begin
+   NMessage(201);
+end
+
+procedure garl12b begin
+   if (dude_skill_success(SKILL_SPEECH, 10) or dude_stat_success(STAT_ch, 0)) then begin
+      call garl15;
+   end
+   else begin
+      call garl10;
+   end
+end
+
+procedure garl15 begin
+   Reply(140);
+   if (has_skill(dude_obj, SKILL_SPEECH) >= 45) then begin
+      NOption(141, garl15a, 6);
+   end
+   NOption(142, garl18, 6);
+   NOption(143, garl21, 6);
+   NOption(203, garl28, 5);
+end
+
+procedure garl15a begin
+   if (dude_skill_success(SKILL_SPEECH, 10) or dude_stat_success(STAT_ch, 0)) then begin
+      call garl16;
+   end
+   else begin
+      call garl17;
+   end
+end
+
+procedure garl16 begin
+   NMessage(145);
+   call freetandi;
+end
+
+procedure garl17 begin
+   NMessage(146);
+   call garlcbt;
+end
+
+procedure garl17a begin
+   NMessage(204);
+   call garlcbt;
+end
+
+procedure garl18 begin
+   tandi_pid_ptr := create_object(PID_BARTER_TANDI, 0, 0);
+   add_obj_to_inven(self_obj, tandi_pid_ptr);
+   NMessage(147);
+   call garlbarter;
+end
+
+procedure garl19 begin
+   float_msg(self_obj, mstr(148), FLOAT_MSG_RED);
+   call freetandi;
+end
+
+procedure garl20 begin
+   if (dude_is_male) then begin
+      float_msg(self_obj, mstr(149), FLOAT_MSG_RED);
+   end
+   else begin
+      float_msg(self_obj, mstr(205), FLOAT_MSG_RED);
+   end
+   call garlcbt;
+end
+
+procedure garl21 begin
+   NMessage(150);
+   call garlcbt;
+end
+
+procedure garl22 begin
+   Reply(151);
+   NOption(152, garl23, 4);
+   NOption(153, garl24, 4);
+   NLowOption(207, garl17);
+end
+
+procedure garl23 begin
+   NMessage(155);
+end
+
+procedure garl24 begin
+   Reply(156);
+   NOption(157, garl25, 4);
+   NOption(158, garl18, 6);
+   NOption(159, garl15a, 6);
+end
+
+procedure garl25 begin
+   Reply(160);
+   NOption(161, garl26, 4);
+   NOption(162, garl27, 4);
+end
+
+procedure garl26 begin
+   NMessage(163);
+   call garlcbt;
+end
+
+procedure garl27 begin
+   Reply(164);
+   NOption(165, garl26, 4);
+   NOption(166, garl28, 4);
+   NOption(167, garl29, 6);
+end
+
+procedure garl28 begin
+   Reply(168);
+   NOption(169, honorcbt, 4);
+end
+
+procedure garl29 begin
+   Reply(170);
+   NOption(171, garlcbt, 4);
+end
+
+procedure garl30 begin
+   NMessage(172);
+   call freetandi;
+end
+
+procedure garl31 begin
+   NMessage(173);
+end
+
+procedure garl32 begin
+   Reply(174);
+   NOption(175, garl33, 4);
+   NOption(176, garl34, 6);
+   NLowOption(154, garl23);
+end
+
+procedure garl33 begin
+   if (dude_is_male) then begin
+      NMessage(177);
+   end
+   else begin
+      NMessage(206);
+   end
+   call garlcbt;
+end
+
+procedure garl34 begin
+   Reply(178);
+   NOption(179, garl35, 6);
+   NOption(180, garl33, 6);
+end
+
+procedure garl35 begin
+   Reply(181);
+   NOption(182, garl37, 4);
+   NOption(183, garl36, 4);
+end
+
+procedure garl36 begin
+   NMessage(184);
+end
+
+procedure garl37 begin
+   Reply(185);
+   NOption(186, garl38, 4);
+   NOption(187, garl37a, 4);
+end
+
+procedure garl37a begin
+   signal_women := 2;
+   killing_women := 1;
+   add_timer_event(self_obj, game_ticks(15), 1);
+end
+
+procedure garl38 begin
+   women_killed := 0;
+   if (dude_is_male) then begin
+      NMessage(188);
+   end
+   else begin
+      NMessage(189);
+   end
+   call garlcbt;
+end
+
+procedure garl38a begin
+   women_killed := 0;
+   if (dude_is_male) then begin
+      float_msg(self_obj, mstr(188), FLOAT_MSG_RED);
+   end
+   else begin
+      float_msg(self_obj, mstr(189), FLOAT_MSG_RED);
+   end
+   call garlcbt;
+end
+
+procedure garl39 begin
+   NMessage(190);
+   call garlcbt;
+end
+
+procedure garl39a begin
+   killing_women := 0;
+   if (women_killed > 1) then begin
+      call garl40;
+   end
+   else begin
+      call garl38a;
+   end
+end
+
+procedure garl40 begin
+   women_killed := 0;
+   TopReact
+   float_msg(self_obj, mstr(191), FLOAT_MSG_GREY); // orig. FLOAT_MSG_BLACK
+
+   give_xp_msg(EXP_BEFRIEND_KHANS, message_str(SCRIPT_RAIDMAP, 102));
+
+   dec_general_rep(2);
+   set_global_var(GVAR_GARLS_FRIEND, 1);
+end
+
+procedure garl41 begin
+   Reply(192);
+   NOption(193, garl23, 4);
+   NOption(194, garl42, 6);
+   NLowOption(195, garl23);
+end
+
+procedure garl42 begin
+   NMessage(196);
+end
+
+procedure garl43 begin
+   if (dude_is_male) then begin
+      NMessage(197);
+   end
+   else begin
+      NMessage(198);
+   end
+   call garlcbt;
+end
+
+procedure garlx begin
+end
+
+procedure garlend begin
+end
+
+procedure garlbarter begin
+   gdialog_mod_barter(0);
+   NMessage("");
+end
