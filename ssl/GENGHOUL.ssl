@@ -1,0 +1,225 @@
+/*
+
+   Necropolis - Generic Ghoul
+
+*/
+
+/* Include Files */
+#include "define.h"
+//#include "area/necropolis.h"
+
+#define NAME                    SCRIPT_GENGHOUL
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_NECROPOLIS)
+
+#include "command.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure talk_p_proc;
+procedure critter_p_proc;
+procedure timetomove;
+procedure combat_p_proc;
+procedure destroy_p_proc;
+procedure description_p_proc;
+procedure look_at_p_proc;
+procedure NodeGreet;
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+variable tmp_hostile;
+variable init := 0;
+variable maxleash := 5;
+variable noevent;
+variable loopcount;
+variable dist;
+variable new_tile;
+variable SET;
+variable MUTANTS;
+
+variable rndx;
+
+#define LVAR_IsGlowingGhoul      (3)
+#define LVAR_Herebefore          (4)
+
+procedure start begin
+   if not(init) then begin
+      init := 1;
+      if (local_var(1) == 0) then begin
+         set_local_var(1, self_tile);
+         set_local_var(0, 1);
+         if CUR_MAP_VAULTNEC then begin
+            set_local_var(LVAR_IsGlowingGhoul, 1);
+         end
+      end
+      set_self_team(TEAM_GENERIC_GHOULS);
+      set_self_ai(AI_GHOUL_MINDLESS);
+      if random(0, 1) then begin
+         critter_injure(self_obj, DAM_CRIP_LEG_LEFT);
+      end
+      else begin
+         critter_injure(self_obj, DAM_CRIP_LEG_RIGHT);
+      end
+   end
+end
+
+procedure timed_event_p_proc begin
+   call timetomove;
+end
+
+procedure pickup_p_proc begin
+   tmp_hostile := 1;
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   dude_look_at_self;
+   start_dialog_at_node(NodeGreet);
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+   if (dude_elevation == self_elevation) then begin
+      if (self_can_see_dude and (tile_distance_objs(self_obj, dude_obj) <= 3)) or (tile_distance_objs(self_obj, dude_obj) <= 2) then begin
+         tmp_hostile := 1;
+      end
+      if (tmp_hostile > 0) then begin
+         tmp_hostile := 0;
+         attack(dude_obj);
+      end
+      else if (local_var(0)) then begin
+         loopcount := loopcount + 1;
+         if (loopcount > 40) then begin
+            loopcount := 0;
+            if (noevent == 0) then begin
+               noevent := 1;
+               add_timer_event(self_obj, game_ticks(random(10, 30)), 0);
+            end
+         end
+      end
+   end
+end
+
+procedure timetomove begin
+   if anim_busy(self_obj) == 0 then begin
+      noevent := 0;
+      set_local_var(2, self_tile);
+      new_tile := tile_num_in_direction(local_var(2), random(0, 5), random(1, 5));
+      if (tile_distance(local_var(1), new_tile) < maxleash) then begin
+         if (random(0, 1) == 0) then begin
+            float_msg(self_obj, mstr(102 + random(0, 12)), FLOAT_MSG_LIGHT_RED);
+         end
+         self_walk_to_tile(new_tile);
+      end
+   end
+end
+
+procedure description_p_proc begin
+   script_overrides;
+   if  dude_perk(PERK_bonus_awareness) or (dude_iq >= 7) or (has_skill(dude_obj, SKILL_SCIENCE) >= 50) then begin
+      display_msg(mstr(203));
+   end
+   else begin
+      display_msg(mstr(200));
+   end
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   if not(local_var(LVAR_Herebefore)) then begin
+      set_local_var(LVAR_Herebefore, 1);
+      display_msg(mstr(100));
+   end
+   else begin
+      display_msg(mstr(101));
+   end
+end
+
+procedure destroy_p_proc begin
+   inc_inv_evil_crit
+end
+
+procedure NodeGreet begin
+   Reply(mstr(102 + random(0, 12)));
+   NOption(900, NodeRecruit, 4);
+end
+
+procedure NodeRecruit begin
+   if (party_member_count(0) >= 5) then begin
+      display_msg("Your party is full.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg(obj_name(self_obj) + " joins your party.");
+end
+
+procedure combat_p_proc begin
+   if (local_var(LVAR_IsGlowingGhoul)) then begin
+      if (fixed_param == COMBAT_SUBTYPE_HIT_SUCCEEDED) then begin
+         rndx := random(1, 6) - 5;
+         if (rndx < 0) then begin
+            rndx := 0;
+         end
+         if (rndx > 0) then begin
+            radiation_inc(target_obj, rndx);
+         end
+      end
+   end
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end
