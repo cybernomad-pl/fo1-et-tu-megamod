@@ -1,0 +1,118 @@
+/*
+
+   Shady Sands - Razlo's wife (doctor building)
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "maps/shadyw.h"
+#include "area/shadysands.h"
+
+#define NAME                    SCRIPT_WIFE
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_SHADYSANDS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure critter_p_proc;
+procedure talk_p_proc;
+procedure pickup_p_proc;
+procedure destroy_p_proc;
+procedure damage_p_proc;
+
+procedure Wife01;
+procedure Wife02;
+procedure Wife03;
+procedure Wife00n;
+procedure WifeEnd;
+
+variable tmp_hostile;
+variable Only_Once := 1;
+
+procedure start begin
+   if Only_Once then begin
+      set_self_team(TEAM_SHADY_SANDS);
+      set_self_ai(AI_PEASANT);
+      Only_Once := 0;
+   end
+end
+
+procedure map_enter_p_proc begin
+   if shady_invaded then begin
+      invasion_kill_critter;
+   end
+end
+
+procedure talk_p_proc begin
+   set_tma_data_generic(TMA_MSG_SHADYW);
+
+   dude_look_at_self;
+   if night then
+      call Wife00n;
+   else
+      start_dialog_at_node(Wife01);
+end
+
+procedure Wife01 begin
+   Reply(100);
+   NOption(101, Wife02, 4);
+   NOption(107, WifeEnd, 4);
+   NLowOption(102, Wife03);
+end
+
+procedure Wife02 begin
+   NMessage(103);
+end
+
+procedure Wife03 begin
+   NMessage(104);
+end
+
+procedure Wife00n begin
+   float_msg(self_obj, mstr(105), FLOAT_MSG_YELLOW);
+end
+
+procedure WifeEnd begin
+end
+
+procedure critter_p_proc begin
+   if (map_var(MVAR_Caught_Stealing) == 1) then begin
+      inc_local_var(0);
+      set_map_var(MVAR_Caught_Stealing, 0);
+      if (local_var(0) < 3) then
+         float_msg(self_obj, message_str(SCRIPT_RAZLO, 308), FLOAT_MSG_RED);
+      else
+         tmp_hostile := 1;
+   end
+
+   if (self_can_see_dude) then begin
+      if REP_ENEMY_SHADY_SANDS then begin
+         tmp_hostile := 1;
+      end
+   end
+
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+end
+
+procedure pickup_p_proc begin
+   tmp_hostile := 1;
+end
+
+procedure destroy_p_proc begin
+   inc_good_critter
+   if source_is_dude then begin
+      set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+   end
+end
+
+procedure damage_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+   end
+end
