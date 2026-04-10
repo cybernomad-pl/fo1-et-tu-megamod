@@ -1,0 +1,357 @@
+/*
+
+   Vault 13 - Rebel
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/vault13.h"
+#include "maps/vault13.h"
+
+#define NAME                    SCRIPT_REBEL
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_V13)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure critter_p_proc;
+procedure damage_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+procedure map_enter_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+procedure timed_event_p_proc;
+
+procedure Rebel01;
+procedure Rebel02;
+procedure Rebel03;
+procedure Rebel04;
+procedure Rebel05;
+procedure Rebel06;
+procedure Rebel07;
+procedure Rebel08;
+procedure Rebel09;
+procedure RebelEnd;
+procedure RebelCombat;
+procedure rebel_meeting;
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+variable night_person;
+variable wake_time;
+variable sleep_time;
+variable home_tile;
+variable sleep_tile;
+
+variable tmp_hostile;
+variable gword1;
+variable gword2;
+variable not_at_meeting := 1;
+
+#define LVAR_Sleeping                     (4)
+
+procedure start begin
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   else begin
+      if map_var(5) != 0 then begin
+         if ((GAME_TIME_IN_DAYS) > map_var(5)) and (global_var(GVAR_QUEST_VAULT13_1_REBELS) != 2) then begin
+            destroy_object(self_obj);
+         end
+      end
+      if ((game_time_hour >= 1700) and (game_time_hour < 1710)) then begin
+         if (global_var(GVAR_QUEST_VAULT13_1_REBELS) != 2) then begin
+            if (not_at_meeting) then begin
+               call rebel_meeting;
+            end
+         end
+         else begin
+            self_walk_to_tile(home_tile);
+         end
+      end
+      else begin
+         if self_tile != home_tile then begin
+            self_walk_to_tile(home_tile);
+         end
+         else begin
+            sleeping
+         end
+      end
+   end
+end
+
+procedure damage_p_proc begin
+   if source_is_dude then begin
+      set_local_var(6, 1);
+   end
+end
+
+procedure destroy_p_proc begin
+   inc_good_critter
+end
+
+procedure look_at_p_proc begin
+   if (global_var(GVAR_QUEST_VAULT13_1_REBELS) != 2) then
+      display_msg(mstr(101));
+   else
+      display_msg(mstr(100));
+end
+
+procedure map_enter_p_proc begin
+   if (v13_invaded) then begin
+      invasion_kill_critter_V13;
+   end
+
+   if (local_var(5) == 0) then begin
+      set_local_var(5, self_tile);
+   end
+   home_tile := local_var(5);
+   sleep_tile := home_tile;
+   sleep_time := random(1900, 1930);
+   wake_time := random(700, 715);
+   set_self_team(TEAM_V13_REBELS);
+end
+
+procedure pickup_p_proc begin
+   tmp_hostile := 1;
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   set_tma_data_generic(TMA_MSG_VAULT13);
+
+   dude_look_at_self;
+   get_reaction
+
+   if (local_var(4) == 1) then begin
+      float_msg(self_obj, message_str(SCRIPT_GENVAULT, 166), FLOAT_MSG_NORMAL);
+   end
+   else if (local_var(6)) then begin
+      float_msg(self_obj, message_str(SCRIPT_ENEMY, random(100, 105)), FLOAT_MSG_RED);
+   end
+   else if REP_ENEMY_VAULT13 then begin
+      float_msg(self_obj, mstr(139), FLOAT_MSG_RED);
+   end
+   else if v13_water_delivered then begin
+      call Rebel01;
+   end
+   else begin
+      if dude_is_armed then begin
+         call Rebel02;
+      end
+      else begin
+         if (local_var(LVAR_reaction_level) >= NEUTRAL) then begin
+            start_dialog_at_node(Rebel03);
+         end
+         else begin
+            start_dialog_at_node(Rebel09);
+         end
+      end
+   end
+end
+
+procedure timed_event_p_proc begin
+   self_walk_to_tile(home_tile);
+   not_at_meeting := 1;
+end
+
+procedure Rebel01 begin
+   variable LVar0 := 0;
+   LVar0 := random(1, 5);
+   if (LVar0 == 1) then begin
+      LVar0 := mstr(105);
+   end
+   else if (LVar0 == 2) then begin
+      LVar0 := mstr(106);
+   end
+   else if (LVar0 == 3) then begin
+      LVar0 := mstr(107);
+   end
+   else if (LVar0 == 4) then begin
+      if (dude_is_male) then begin
+         LVar0 := mstr(108);
+      end
+      else begin
+         LVar0 := mstr(109);
+      end
+   end
+   else if (LVar0 == 5) then begin
+      if (dude_is_male) then begin
+         LVar0 := mstr(110);
+      end
+      else begin
+         LVar0 := mstr(111);
+      end
+   end
+   float_msg(self_obj, LVar0, FLOAT_MSG_NORMAL);
+end
+
+procedure Rebel02 begin
+   variable LVar0 := 0;
+   variable LVar1 := 0;
+   DownReact
+   LVar1 := mstr(random(112, 115));
+   float_msg(self_obj, LVar1, FLOAT_MSG_RED);
+end
+
+procedure Rebel03 begin
+   Reply(116);
+   NOption(900, NodeRecruit, 4);
+   NOption(117, Rebel04, 4);
+   NOption(118, Rebel05, 4);
+   NLowOption(119, Rebel08);
+end
+
+procedure Rebel04 begin
+   Reply(120);
+   NOption(121, RebelEnd, 4);
+end
+
+procedure Rebel05 begin
+   if (global_var(GVAR_QUEST_VAULT13_1_REBELS) != 2) then begin
+      if global_var(GVAR_QUEST_VAULT13_1_REBELS) == 0 then begin
+         set_global_var(GVAR_QUEST_VAULT13_1_REBELS, 1);
+      end
+      Reply(122);
+      NOption(123, Rebel06, 4);
+      NOption(124, Rebel07, 4);
+   end
+   else begin
+      Reply(125);
+   end
+   NOption(126, RebelEnd, 4);
+end
+
+procedure Rebel06 begin
+   Reply(127);
+   NOption(128, RebelEnd, 4);
+   NOption(129, RebelEnd, 4);
+end
+
+procedure Rebel07 begin
+   Reply(130);
+   NOption(131, RebelEnd, 4);
+   NOption(132, Rebel06, 4);
+end
+
+procedure Rebel08 begin
+   Reply(133);
+   NLowOption(134, RebelEnd);
+end
+
+procedure Rebel09 begin
+   Reply(135);
+   NOption(136, RebelCombat, 4);
+   NOption(137, RebelEnd, 4);
+   NLowOption(138, RebelEnd);
+end
+
+procedure RebelEnd begin
+end
+
+procedure RebelCombat begin
+   tmp_hostile := 1;
+end
+
+procedure NodeRecruit begin
+   if (party_member_count(0) >= 5) then begin
+      display_msg("Your party is full.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg(obj_name(self_obj) + " joins your party.");
+end
+
+procedure rebel_meeting begin
+   if (dest_tile == 0) then begin
+      if home_tile == 18089 then begin
+         dest_tile := tile_num_in_direction(18510, 5, 1);
+      end
+      else if home_tile == 18526 then begin
+         dest_tile := tile_num_in_direction(18112, 2, 1);
+      end
+      else if home_tile == 25325 then begin
+         dest_tile := tile_num_in_direction(18511, 2, 1);
+      end
+      else begin
+         dest_tile := tile_num_in_direction(18310, 2, 1);
+      end
+   end
+   if (self_tile != dest_tile) then begin
+      self_walk_to_tile(dest_tile);
+   end
+   add_timer_event(self_obj, game_ticks(240), 0);
+   if (self_tile == dest_tile) then begin
+      self_rotate(rotation_to_tile(self_tile, (self_tile - 200)));
+      not_at_meeting := 0;
+   end
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end
