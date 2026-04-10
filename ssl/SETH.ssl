@@ -1,0 +1,457 @@
+/*
+
+   Shady Sands - Seth, the entrance guard
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/shadysands.h"
+
+#define NAME                    SCRIPT_SETH
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_SHADYSANDS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure look_at_p_proc;
+procedure description_p_proc;
+procedure pickup_p_proc;
+procedure combat_p_proc;
+procedure map_update_p_proc;
+procedure talk_p_proc;
+procedure destroy_p_proc;
+
+procedure Seth01;
+procedure Seth02;
+procedure Seth03;
+procedure Seth04;
+procedure Seth05;
+procedure Seth06;
+procedure Seth07;
+procedure Seth08;
+procedure Seth08a;
+procedure Seth09;
+procedure Seth10;
+procedure Seth11;
+procedure Seth12;
+procedure Seth13;
+procedure Seth13a;
+procedure Seth14;
+procedure Sethend;
+procedure TanSeth00;
+procedure TanSeth01;
+procedure TanSeth02;
+procedure TanSeth03;
+procedure TanSeth04;
+procedure TanSeth05;
+procedure TanSeth06;
+procedure TanSeth07;
+
+procedure travel;
+procedure no_travel;
+procedure pick_start;
+
+variable night_person;
+variable wake_time;
+variable sleep_time;
+variable home_tile;
+variable sleep_tile;
+
+variable tmp_hostile;
+variable initial := 0;
+variable round_counter;
+
+#define LVAR_Here_Before                  (4)
+#define LVAR_Sleeping                     (5)
+#define LVAR_Welcome                      (6)
+#define LVAR_Invasion                     (10)
+
+procedure start begin
+end
+
+procedure look_at_p_proc begin
+end
+
+procedure description_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure critter_p_proc begin
+   if (local_var(LVAR_Welcome) == 0) then begin
+      set_local_var(LVAR_Welcome, 1);
+      if dude_is_armed then begin
+         float_msg(self_obj, mstr(204), FLOAT_MSG_YELLOW);
+      end
+      else begin
+         float_msg(self_obj, mstr(205), FLOAT_MSG_YELLOW);
+      end
+   end
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+end
+
+procedure combat_p_proc begin
+   if (fixed_param == COMBAT_SUBTYPE_TURN) then begin
+      round_counter := round_counter + 1;
+   end
+   if (round_counter > 3) then begin
+      if not(REP_ENEMY_SHADY_SANDS) then begin//Shady Sands is NOT tmp_hostile to player;  i.e. globalvar ENEMY_SHADY_SANDS is not enabled
+         set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+         dec_general_rep(5);
+      end
+   end
+end
+
+procedure map_enter_p_proc begin
+   if shady_invaded then begin
+      invasion_kill_critter;
+   end
+end
+
+procedure map_update_p_proc begin
+   if not(initial) then begin
+      set_self_team(TEAM_SHADY_SANDS);
+      set_self_ai(AI_GUARD);
+      home_tile := 14108;
+      sleep_tile := 15925;
+      wake_time := 600;
+      sleep_time := 2100;
+      initial := 1;
+   end
+end
+
+procedure talk_p_proc begin
+   set_tma_data(NAME, 1000, -1, -1, 1105, 1105);
+
+   dude_look_at_self;
+
+   get_reaction
+
+   if (local_var(9) == 1) then begin
+      float_msg(self_obj, mstr(320), FLOAT_MSG_RED);
+      tmp_hostile := 1;
+   end
+   else if (tandi_is_kidnapped and (dude_iq > 3)) then begin
+      set_global_var(GVAR_TANDI_TALKED_ABOUT, 1);
+      if (local_var(8) == 0) then begin
+         set_local_var(8, 1);
+         start_dialog_at_node(TanSeth00);
+      end
+      else begin
+         start_dialog_at_node(TanSeth01);
+      end
+   end
+   else if (local_var(5) == 1) then begin
+      float_msg(self_obj, message_str(SCRIPT_GENVAULT, 166), FLOAT_MSG_NORMAL);
+   end
+   else if REP_ENEMY_SHADY_SANDS then begin//   Is Shady Sands tmp_hostile to player?
+      float_msg(self_obj, mstr(101), FLOAT_MSG_RED);
+      tmp_hostile := 1;
+   end
+   else begin
+      start_dialog_at_node(pick_start);
+   end
+end
+
+procedure destroy_p_proc begin
+   if obj_in_party(source_obj) then begin
+      set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+      inc_good_critter
+   end
+   set_global_var(GVAR_SETH_STATUS, 3);
+end
+
+procedure travel begin
+   if (radscorp_quest_inactive and not(radscorp_quest_completed)) then begin
+      set_radscorp_quest_active;
+   end
+   game_time_advance(game_ticks(60 * 30));
+   load_map(MAP_CAVES, 1);
+end
+
+procedure no_travel begin
+   if radscorp_quest_completed then begin
+      NMessage(203);
+   end
+   else begin
+      NMessage(128);
+   end
+end
+
+procedure pick_start begin
+   if (global_var(GVAR_SETH_STATUS) == 0) then begin
+      if bad_critter_reaction then begin
+         call Seth04;
+      end
+      else begin
+         call Seth05;
+      end
+   end
+   else if radscorp_quest_completed then begin
+      BigUpReact
+      GMessage(200);
+      if (dude_iq > 3) then begin
+         call Seth07;
+      end
+   end
+   else if bad_critter_reaction then begin
+      call Seth09;
+   end
+   else begin
+      call Seth07;
+   end
+end
+
+procedure Seth01 begin
+   NMessage(101);
+   tmp_hostile := 1;
+end
+
+procedure Seth02 begin
+   NMessage(102);
+   tmp_hostile := 1;
+end
+
+procedure Seth03 begin
+   Reply(103);
+   set_local_var(LVAR_Here_Before, 1);
+   NOption(104, Seth13, 1);
+   NOption(105, Seth08a, 1);
+end
+
+procedure Seth04 begin
+   Reply(106);
+   set_global_var(GVAR_SETH_STATUS, 1);
+   NOption(107, Seth02, 4);
+   NOption(108, Seth06, 4);
+   NLowOption(109, Seth03);
+end
+
+procedure Seth05 begin
+   Reply(110);
+   set_global_var(GVAR_SETH_STATUS, 1);
+   NOption(111, Seth06, 4);
+   NLowOption(112, Seth03);
+end
+
+procedure Seth06 begin
+   Reply(113);
+   call Seth08;
+end
+
+procedure Seth07 begin
+   Reply(114);
+   call Seth08;
+end
+
+procedure Seth08 begin
+   if radscorp_quest_active then begin
+      NOption(115, Seth10, 4);
+   end
+   if tandi_is_kidnapped then begin
+      NOption(116, Seth11, 4);
+   end
+   NOption(117, Seth12, 4);
+   if ((local_var(LVAR_Here_Before) == 1) and not(radscorp_quest_completed) and not(shady_caves_visible_on_map)) then begin
+      NOption(118, Seth13, 4);
+      NLowOption(119, Seth13);
+   end
+   NOption(120, Seth08a, 4);
+end
+
+procedure Seth08a begin
+   if (local_var(7) == 0) then begin
+      set_local_var(7, 1);
+      call Seth14;
+   end
+   else begin
+      call Sethend;
+   end
+end
+
+procedure Seth09 begin
+   Reply(121);
+   if radscorp_quest_active then begin
+      NOption(115, Seth10, 4);
+   end
+   if tandi_is_kidnapped then begin
+      NOption(116, Seth11, 4);
+   end
+   NOption(117, Seth12, 4);
+   if (local_var(LVAR_Here_Before) == 1) and not(shady_caves_visible_on_map) then begin
+      NOption(118, Seth13, 4);
+      NLowOption(119, Seth13);
+   end
+   NOption(120, Seth08a, 4);
+end
+
+procedure Seth10 begin
+   if radscorp_quest_completed then begin
+      Reply(201);
+   end
+   else begin
+      Reply(122);
+   end
+   set_local_var(LVAR_Here_Before, 1);
+   if tandi_is_kidnapped then begin
+      NOption(116, Seth11, 4);
+   end
+   NOption(117, Seth12, 4);
+   if (local_var(LVAR_Here_Before) == 1) and not(shady_caves_visible_on_map) then begin
+      NOption(118, Seth13, 4);
+      NLowOption(119, Seth13);
+   end
+   NOption(120, Seth08a, 4);
+end
+
+procedure Seth11 begin
+   mark_on_map(AREA_RAIDERS)
+
+   Reply(123);
+   if radscorp_quest_active then begin
+      NOption(115, Seth10, 4);
+   end
+   NOption(117, Seth12, 4);
+   if (local_var(LVAR_Here_Before) == 1) and not(shady_caves_visible_on_map) then begin
+      NOption(118, Seth13, 4);
+      NLowOption(119, Seth13);
+   end
+   NOption(120, Seth08a, 4);
+end
+
+procedure Seth12 begin
+   Reply(124);
+   NOption(115, Seth10, 4);
+   NOption(116, Seth11, 4);
+   if (local_var(LVAR_Here_Before) == 1) and not(shady_caves_visible_on_map) then begin
+      NOption(118, Seth13, 4);
+      NLowOption(119, Seth13);
+   end
+   NOption(120, Seth08a, 4);
+end
+
+procedure Seth13 begin
+   // Vanilla Fo1, teleport the player:
+   if fo1in2_satellite_loc_disabled then begin
+      if radscorp_quest_completed then begin
+         Reply(202);
+      end
+      else begin
+         Reply(125);
+      end
+      NOption(126, travel, 4);
+      NOption(127, no_travel, 4);
+      NLowOption(130, travel);
+      NLowOption(131, no_travel);
+   end
+
+   // If the player enabled satellite quest locations, mark the location instead:
+   else begin
+      Reply(2000);
+      NOption(2020, Seth13a, 4);
+      NLowOption(2010, Seth13a);
+   end
+end
+
+procedure Seth13a begin
+   //gfade_out(60);
+   mark_shady_caves_on_map
+   //game_time_advance(ONE_GAME_MINUTE * random(5,10));
+   //gfade_in(60);
+   GMessage(2100);
+end
+
+procedure Seth14 begin
+   NMessage(206);
+end
+
+procedure Sethend begin
+end
+
+procedure TanSeth00 begin
+   Reply(300);
+   NOption(301, TanSeth03, 4);
+   BOption(302, TanSeth02, 4);
+   NOption(303, TanSeth02, 4);
+   if radscorp_quest_active then begin
+      NOption(304, TanSeth07, 4);
+   end
+end
+
+procedure TanSeth01 begin
+   Reply(305);
+   NOption(306, TanSeth06, 4);
+   BOption(307, TanSeth05, 4);
+   NOption(308, TanSeth06, 4);
+   if radscorp_quest_active then begin
+      NOption(309, TanSeth07, 4);
+   end
+end
+
+procedure TanSeth02 begin
+   NMessage(310);
+end
+
+procedure TanSeth03 begin
+   set_global_var(GVAR_TANDI_QUEST_PIPBOY_ENTRY, 1);
+   mark_on_map(AREA_RAIDERS)
+
+   Reply(311);
+   NOption(312, Sethend, 4);
+   BOption(313, TanSeth02, 4);
+   BOption(314, TanSeth04, 4);
+   BOption(315, TanSeth02, 4);
+end
+
+procedure TanSeth04 begin
+   Reply(316);
+   BOption(317, TanSeth05, 4);
+   NOption(318, Sethend, 4);
+   BOption(319, TanSeth02, 4);
+end
+
+procedure TanSeth05 begin
+   set_local_var(9, 1);
+   tmp_hostile := 1;
+   BMessage(320);
+end
+
+procedure TanSeth06 begin
+   NMessage(321);
+end
+
+procedure TanSeth07 begin
+   // Vanilla Fo1, teleport the player:
+   if fo1in2_satellite_loc_disabled then begin
+      Reply(322);
+      NOption(323, travel, 4);
+      BOption(324, TanSeth02, 4);
+      NOption(325, Sethend, 4);
+   end
+
+   // If the player enabled satellite quest locations, mark the location instead:
+   else begin
+      if shady_caves_visible_on_map then begin
+         Reply(2200);
+         NOption(2210, Sethend, 4);
+      end
+      else begin
+         Reply(322);
+         NOption(2020, Seth13a, 4);
+         BOption(324, TanSeth02, 4);
+         NOption(325, Sethend, 4);
+      end
+   end
+end
+
+procedure pickup_p_proc begin
+   if source_is_dude then begin
+      tmp_hostile := 1;
+   end
+end
