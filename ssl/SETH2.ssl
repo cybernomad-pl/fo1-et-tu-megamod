@@ -1,0 +1,90 @@
+/*
+
+   Shady Sands - Seth, the guide
+
+   in Radscorpion cave - UNUSED
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/shadysands.h"
+
+#define NAME                    SCRIPT_SETH2
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_SHADYSANDS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure destroy_p_proc;
+
+variable Only_Once := 1;
+variable tmp_hostile;
+
+procedure start begin
+   if (map_first_run) and (local_var(5) == 0) then begin
+      variable LVar0;
+      set_local_var(5, 1);
+      if (self_item(PID_LEATHER_ARMOR) > 0) then begin
+         LVar0 := self_item(PID_LEATHER_ARMOR);
+         rm_obj_from_inven(self_obj, LVar0);
+         destroy_object(LVar0);
+      end
+      if (self_item(PID_LEATHER_JACKET) > 0) then begin
+         LVar0 := self_item(PID_LEATHER_JACKET);
+         rm_obj_from_inven(self_obj, LVar0);
+         destroy_object(LVar0);
+      end
+   end
+   else begin
+      if Only_Once then begin
+         Only_Once := 0;
+         set_self_team(TEAM_PLAYER);
+         set_self_ai(AI_GUARD);
+         if (global_var(GVAR_SETH_STATUS) == 3) then begin
+            if not(is_loading_game) then set_self_invisible;
+         end
+      end
+   end
+end
+
+procedure map_enter_p_proc begin
+   if shady_invaded and CUR_AREA_SHADY_SANDS then begin
+      invasion_kill_critter;
+   end
+end
+
+procedure talk_p_proc begin
+   if radscorp_quest_completed then begin
+      float_msg(self_obj, mstr(102), FLOAT_MSG_YELLOW);
+   end
+   else begin
+      float_msg(self_obj, mstr(101), FLOAT_MSG_YELLOW);
+   end
+end
+
+procedure critter_p_proc begin
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   if (tile_distance_objs(self_obj, dude_obj) > 3) then begin
+      self_walk_to_tile(tile_num_in_direction(dude_tile, random(0, 5), 1));
+   end
+end
+
+procedure pickup_p_proc begin
+   tmp_hostile := 1;
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure destroy_p_proc begin
+   set_global_var(GVAR_SETH_STATUS, 3);
+   inc_good_critter
+end
