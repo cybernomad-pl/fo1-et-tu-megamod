@@ -1,0 +1,231 @@
+/*
+
+   Vault 13 - Cindy
+
+*/
+
+#include "define.h"
+#include "area/vault13.h"
+
+#define NAME                    SCRIPT_CINDY
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_V13)
+
+#include "command.h"
+#include "modreact.h"
+
+procedure start;
+procedure critter_p_proc;
+procedure timed_event_p_proc;
+procedure damage_p_proc;
+procedure description_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+procedure map_enter_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+
+procedure Cindy01;
+procedure Cindy02;
+procedure Cindy03;
+procedure Cindy04;
+procedure Cindy05;
+procedure Cindy06;
+procedure Cindy07;
+procedure CindyEnd;
+
+procedure get_rations;
+procedure do_sleep;
+
+variable crying;
+variable tmp_hostile;
+variable ration_tile := 7000;
+variable sleeping_disabled;
+
+import variable recipient;
+import variable WtrGrd_ptr;
+
+#define LVAR_Crying        (4)  // 1 = Cindy is crying and refuses to talk
+#define LVAR_Sleeping      (5)
+#define LVAR_Hostile       (6)
+#define LVAR_WaterRations  (7)
+
+variable night_person;
+variable sleep_tile;
+variable home_tile;
+variable sleep_time;
+variable wake_time;
+
+procedure start begin
+end
+
+procedure critter_p_proc begin
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   else begin
+      if (local_var(LVAR_Hostile) == 1) then begin
+         if (tile_distance_objs(self_obj, dude_obj) < 8) then begin
+            call flee_dude;
+         end
+         else begin
+            if (tile_distance(dude_tile, home_tile) > 3) then begin
+               self_walk_to_tile(home_tile);
+            end
+         end
+      end
+      else begin
+         if not(day) then begin
+            set_local_var(LVAR_WaterRations, 0);
+         end
+         if (sleeping_disabled == 0) then begin
+            call do_sleep;
+         end
+      end
+   end
+end
+
+procedure timed_event_p_proc begin
+   if (fixed_param == EVENT_WaterRation) then begin
+      water_rations;
+   end
+end
+
+procedure damage_p_proc begin
+   if  source_is_dude then begin
+      set_local_var(LVAR_Hostile, 1);
+   end
+end
+
+procedure description_p_proc begin
+   if (local_var(LVAR_Crying)) then begin
+      display_msg(mstr(101));
+   end
+end
+
+procedure destroy_p_proc begin
+   inc_good_critter
+   if source_is_dude then
+      set_global_var(GVAR_VAULT_13_HOSTILE, 1);
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure map_enter_p_proc begin
+   if (v13_invaded) then begin
+      invasion_kill_critter_V13;
+   end
+
+   flush_add_timer_event(self_obj, game_ticks(random(1, 5)), EVENT_WaterRation);
+
+   set_self_team(TEAM_VAULT13);
+   sleep_tile := 24683;
+   home_tile := 24687;
+   sleep_time := random(1900, 1930);
+   wake_time := random(600, 630);
+end
+
+procedure pickup_p_proc begin
+   if ((GAME_TIME_IN_DAYS) >= 30) then begin
+      float_msg(self_obj, mstr(122), FLOAT_MSG_RED);
+   end
+   tmp_hostile := 1;
+end
+
+procedure talk_p_proc begin
+   set_tma_data_generic(TMA_MSG_VAULT13);
+
+   dude_look_at_self;
+   if (local_var(LVAR_Crying) == 0) then begin
+      if (REP_ENEMY_VAULT13 or (local_var(LVAR_Hostile) == 1)) then begin
+         float_msg(self_obj, mstr(125), FLOAT_MSG_NORMAL);
+         set_local_var(LVAR_Crying, 1);
+      end
+      else if waterchip_returned then begin
+         float_msg(self_obj, mstr(123), FLOAT_MSG_NORMAL);
+      end
+      else if waterthief_captured then begin
+         float_msg(self_obj, mstr(124), FLOAT_MSG_NORMAL);
+      end
+      else begin
+         start_dialog_at_node(Cindy01);
+      end
+   end
+end
+
+procedure Cindy01 begin
+   Reply(mstr(102) + dude_name + mstr(103));
+   NOption(104, Cindy03, 4);
+   NOption(105, Cindy04, 4);
+   NLowOption(106, Cindy02);
+end
+
+procedure Cindy02 begin
+   set_local_var(4, 1);
+   Reply(107);
+   NLowOption(108, CindyEnd);
+end
+
+procedure Cindy03 begin
+   NMessage(random(109, 111));
+end
+
+procedure Cindy04 begin
+   if ((GAME_TIME_IN_DAYS) < 30) then begin
+      Reply(126);
+      GOption(127, CindyEnd, 4);
+      BOption(128, CindyEnd, 4);
+   end
+   else begin
+      Reply(113);
+      NOption(114, Cindy05, 4);
+      NOption(115, Cindy06, 4);
+   end
+end
+
+procedure Cindy05 begin
+   Reply(116);
+   NOption(117, CindyEnd, 4);
+end
+
+procedure Cindy06 begin
+   Reply(118);
+   NOption(119, Cindy07, 4);
+end
+
+procedure Cindy07 begin
+   set_waterthief_started;
+   Reply(120);
+   NOption(121, CindyEnd, 4);
+   NOption(112, Cindy05, 4);
+end
+
+procedure CindyEnd begin
+end
+
+procedure get_rations begin
+   if (self_tile != ration_tile) then begin
+      sleeping_disabled := 1;
+      if (random(0, 1)) then begin
+         self_walk_to_tile(ration_tile);
+      end
+      else begin
+         self_run_to_tile(ration_tile);
+      end
+   end
+   else begin
+      if (not(recipient)) then begin
+         recipient := self_obj;
+         add_timer_event(self_obj, game_ticks(3), 1);
+         set_local_var(LVAR_WaterRations, 1);
+         sleeping_disabled := 0;
+      end
+   end
+end
+
+procedure do_sleep begin
+   sleeping
+end
