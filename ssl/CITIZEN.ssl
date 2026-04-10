@@ -1,0 +1,245 @@
+/*
+
+   Shady Sands - Generic Citizen
+
+*/
+
+/* Include Files */
+#include "define.h"
+
+#define NAME                    SCRIPT_CITIZEN
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_SHADYSANDS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure combat_p_proc;
+procedure critter_p_proc;
+procedure damage_p_proc;
+procedure description_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+procedure timed_event_p_proc;
+procedure push_p_proc;
+
+procedure Citizen01;
+procedure Citizen02;
+procedure Citizen03;
+procedure Citizen04;
+procedure CitizenEnd;
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+variable tmp_hostile;
+variable initial := 0;
+variable round_counter;
+variable DisplayMessage := 100;
+variable PsstTime;
+
+procedure push_p_proc begin
+end
+
+procedure start begin
+   if not(initial) then begin
+      initial := 1;
+      set_self_team(TEAM_SHADY_SANDS);
+      set_self_ai(AI_PEASANT);
+      add_timer_event(self_obj, game_ticks(random(3, 5)), 1);
+   end
+end
+
+procedure map_enter_p_proc begin
+   if shady_invaded then begin
+      invasion_kill_critter;
+   end
+end
+
+procedure combat_p_proc begin
+   if (fixed_param == COMBAT_SUBTYPE_TURN) then begin
+      round_counter := round_counter + 1;
+      if (round_counter > 3) then begin
+         if not(REP_ENEMY_SHADY_SANDS) then begin
+            set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+            dec_general_rep(5);
+         end
+      end
+   end
+end
+
+procedure critter_p_proc begin
+   variable LVar0 := 0;
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   else begin
+      if (local_var(4) and (tile_distance_objs(dude_obj, self_obj) < 8)) then begin
+         call flee_dude;
+      end
+      LVar0 := global_var(GVAR_CITIZEN_LOSER_PLEASANT_0);
+      if ((((game_time / 10) - LVar0) >= 10) and (tile_distance_objs(self_obj, dude_obj) <= 4) and not(REP_ENEMY_SHADY_SANDS)) then begin
+         float_msg(self_obj, mstr(random(110, 114)), FLOAT_MSG_NORMAL);
+         LVar0 := game_time / 10;
+         set_global_var(GVAR_CITIZEN_LOSER_PLEASANT_0, LVar0);
+      end
+   end
+end
+
+procedure damage_p_proc begin
+   if source_is_dude then begin
+      set_local_var(4, 1);
+      if CUR_AREA_SHADY_SANDS then begin
+         set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+      end
+   end
+end
+
+procedure description_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure destroy_p_proc begin
+   if source_is_dude then begin
+      if CUR_AREA_SHADY_SANDS then begin
+         set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+      end
+   end
+   inc_good_critter
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure pickup_p_proc begin
+   tmp_hostile := 1;
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   if CUR_MAP_SHADYE then begin
+      set_tma_data_generic(TMA_MSG_SHADYE);
+   end
+   else begin
+      set_tma_data_generic(TMA_MSG_SHADYW);
+   end
+
+   dude_look_at_self;
+   if (local_var(4) or REP_ENEMY_SHADY_SANDS) then begin
+      float_msg(self_obj, message_str(SCRIPT_ENEMY, random(100, 105)), FLOAT_MSG_NORMAL);
+   end
+   else begin
+      start_dialog_at_node(Citizen01);
+   end
+end
+
+procedure timed_event_p_proc begin
+   if (obj_on_screen(self_obj)) then begin
+      self_walk_to_tile(tile_num_in_direction(self_tile, random(0, 5), random(1, 5)));
+   end
+   add_timer_event(self_obj, game_ticks(random(3, 5)), 1);
+end
+
+procedure Citizen01 begin
+   DisplayMessage := 105;
+   Reply(101);
+   NOption(900, NodeRecruit, 4);
+   NOption(103, Citizen02, 4);
+   NOption(102, CitizenEnd, 4);
+   NLowOption(104, CitizenEnd);
+end
+
+procedure Citizen02 begin
+   Reply(DisplayMessage);
+   NOption(106, Citizen03, 4);
+   NOption(107, Citizen04, 4);
+   NOption(g_bye, CitizenEnd, 1);
+end
+
+procedure Citizen03 begin
+   DisplayMessage := 108;
+   call Citizen02;
+end
+
+procedure Citizen04 begin
+   DisplayMessage := 109;
+   call Citizen02;
+end
+
+procedure CitizenEnd begin
+end
+
+procedure NodeRecruit begin
+   if (party_member_count(0) >= 5) then begin
+      display_msg("Your party is full.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg(obj_name(self_obj) + " joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end
