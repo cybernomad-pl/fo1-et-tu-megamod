@@ -1,0 +1,133 @@
+/*
+
+   Shady Sands - Cook
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/shadysands.h"
+
+#define NAME                    SCRIPT_COOK
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_SHADYSANDS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure combat_p_proc;
+procedure critter_p_proc;
+procedure damage_p_proc;
+procedure description_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+procedure talk_p_proc;
+procedure pickup_p_proc;
+
+procedure Cook01;
+
+#define LVAR_Herebefore    (4)
+
+variable tmp_hostile;
+variable initial := 0;
+variable round_counter;
+
+procedure start begin
+   if not(initial) then begin
+      initial := 1;
+      set_self_team(TEAM_SHADY_SANDS);
+      set_self_ai(AI_PEASANT);
+   end
+end
+
+procedure map_enter_p_proc begin
+   if shady_invaded then begin
+      invasion_kill_critter;
+   end
+end
+
+procedure combat_p_proc begin
+   if (fixed_param == COMBAT_SUBTYPE_TURN) then begin
+      round_counter := round_counter + 1;
+   end
+   if (round_counter > 3) then begin
+      if not(REP_ENEMY_SHADY_SANDS) then begin
+         set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+         dec_general_rep(5);
+      end
+   end
+end
+
+procedure critter_p_proc begin
+   if (self_can_see_dude) then begin
+      if REP_ENEMY_SHADY_SANDS then begin
+         tmp_hostile := 1;
+      end
+   end
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+end
+
+procedure damage_p_proc begin
+   if source_is_dude then begin
+      set_local_var(LVAR_reaction_level, BAD);
+      if CUR_AREA_SHADY_SANDS then begin
+         set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+      end
+   end
+end
+
+procedure description_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure destroy_p_proc begin
+   if source_is_dude then begin
+      if CUR_AREA_SHADY_SANDS then begin
+         set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+      end
+      inc_good_critter
+   end
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure talk_p_proc begin
+   set_tma_data_generic(TMA_MSG_SHADYW);
+
+   dude_look_at_self;
+   if (REP_ENEMY_SHADY_SANDS or (local_var(LVAR_reaction_level) == BAD)) then begin
+      float_msg(self_obj, message_str(SCRIPT_ENEMY, random(100, 105)), FLOAT_MSG_NORMAL);
+   end
+   else begin
+      if (dude_stat_success(STAT_lu, 0) and (local_var(LVAR_Herebefore) == 0) and (dude_iq >= 4)) then begin
+         start_gdialog(114, self_obj, 4, -1, -1);
+         gsay_start;
+         Reply(101);
+         NOption(102, Cook01, 1);
+         gsay_end;
+         end_dialogue;
+      end
+      else begin
+         float_msg(self_obj, mstr(103), FLOAT_MSG_YELLOW);
+      end
+      set_local_var(LVAR_Herebefore, 1);
+   end
+end
+
+procedure pickup_p_proc begin
+   set_local_var(LVAR_reaction_level, BAD);
+end
+
+procedure Cook01 begin
+   inc_general_rep(1);
+   inc_shady_rep(REP_BONUS_COMPLIMENT_FOOD);
+   NMessage(104);
+end
