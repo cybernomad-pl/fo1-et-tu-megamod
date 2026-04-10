@@ -1,13 +1,11 @@
 /*
     Megamod Tools -- unified HOOK_USEOBJON + HOOK_USEOBJ handler
-    Replaces separate gl_rope_tie, gl_crowbar, gl_shovel, gl_general_repair (USEOBJON part)
-
     ONE hook, ONE handler, no conflicts.
+    INI logging everywhere for debug.
 */
 
 #include "define.h"
 #include "command.h"
-// scenepid.h already included via define.h
 #include "sfall/sfall.h"
 #include "sfall/define_extra.h"
 #include "sfall/define_lite.h"
@@ -24,19 +22,17 @@
 #define XP_BURY_CORPSE       15
 #define XP_CAMPFIRE          15
 
-// Flammable scenery PIDs (full encoded: 0x02000000 + proto_id)
-#define PID_TUMBLEWEED       (33554495)  // proto 63
-// PID_TREE_OLD (33554498) = proto 66 -- defined in scenepid.h
-// PID_SCRUB_1..4 (33554534..37) = proto 102..105 -- defined in scenepid.h
-// PID_WEED_1..3 (33554557..59) = proto 125..127 -- defined in scenepid.h
-// PID_BUSH_GREEN_1..2 (33555375..76) = proto 943..944 -- defined in scenepid.h
-// PID_FIRE_PIT (33555044) = proto 612 -- defined in scenepid.h
-// PID_BURNING_BARREL (33554433) = proto 1 -- defined in scenepid.h
+#define PID_TUMBLEWEED       (33554495)
+
+#define LOG(section, key, val) set_ini_setting("megamod.ini|" + section + "|" + key, val)
 
 variable dismantled_scenery;
 variable holes_array;
 variable hole_count_map;
 variable lighter_lit;
+variable log_counter;
+variable parts_array;  // persistent counters: electronic_parts, metal_parts, wiring, casings, powder, etc.
+variable multitool_menu_active;  // 1 = waiting for keypress
 
 procedure start;
 procedure useobjon_handler;
@@ -48,13 +44,27 @@ procedure handle_crowbar(variable target);
 procedure handle_shovel_on_corpse(variable target);
 procedure handle_shovel_dig(variable target);
 procedure handle_dismantle_scenery(variable target);
+procedure handle_dismantle_scenery_auto;
+procedure handle_dismantle_inventory(variable tool);
 procedure handle_lighter_on_scenery(variable target, variable target_pid);
+procedure add_part(variable part_name, variable amount);
+procedure show_parts;
+procedure NodeCraftMain;
+procedure NodeCraftSearch;
+procedure NodeCraftBreakDown;
+procedure NodeCraftParts;
+procedure NodeCraftDone;
+procedure keypress_handler;
 procedure is_valid_dig_terrain;
 procedure is_mechanical_scenery(variable pid);
 procedure is_flammable_scenery(variable pid);
 
 procedure start begin
     if game_loaded then begin
+        log_counter := 0;
+        LOG("start", "game_loaded", 1);
+        display_msg("[MEGAMOD] Tools loaded.");
+
         dismantled_scenery := load_array("megamod_repair_scen");
         if (dismantled_scenery == 0) then begin
             dismantled_scenery := create_array_map;
@@ -70,63 +80,79 @@ procedure start begin
             hole_count_map := create_array_map;
             save_array("megamod_shovel_hcount", hole_count_map);
         end
+
+        parts_array := load_array("megamod_parts");
+        if (parts_array == 0) then begin
+            parts_array := create_array_map;
+            save_array("megamod_parts", parts_array);
+        end
+
         register_hook_proc(HOOK_USEOBJON, useobjon_handler);
         register_hook_proc(HOOK_USEOBJ, useobj_handler);
+        LOG("start", "hooks_registered", 1);
 
-        // Enable "Use" action on Shovel (vanilla has no Use flag)
         set_proto_data(PID_SHOVEL, PROTO_IT_FLAGS,
             get_proto_data(PID_SHOVEL, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+        LOG("start", "shovel_flags", get_proto_data(PID_SHOVEL, PROTO_IT_FLAGS));
 
-        // Enable "Use" + "Use On" on Lighter (vanilla has neither)
         set_proto_data(PID_LIGHTER, PROTO_IT_FLAGS,
             get_proto_data(PID_LIGHTER, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE bwor ITEM_ACTION_USEON);
+        LOG("start", "lighter_flags", get_proto_data(PID_LIGHTER, PROTO_IT_FLAGS));
 
-        // Tandi + flare: change on every map enter via gamemode hook
+        // Enable "Use" on Multi-Tool
+        set_proto_data(PID_MULTI_TOOL, PROTO_IT_FLAGS,
+            get_proto_data(PID_MULTI_TOOL, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+        set_proto_data(PID_SUPER_TOOL_KIT, PROTO_IT_FLAGS,
+            get_proto_data(PID_SUPER_TOOL_KIT, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+        LOG("start", "multitool_flags", get_proto_data(PID_MULTI_TOOL, PROTO_IT_FLAGS));
+
         register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
+        LOG("start", "gamemode_hook", 1);
 
-        // Restore lighter light if it was on when game saved
         variable saved_lighter := load_array("megamod_lighter");
         if (saved_lighter != 0) then begin
             lighter_lit := saved_lighter["lit"];
             if (lighter_lit == 1) then begin
-                set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 4);
-                set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 40000);
+                set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 5);
+                set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 65536);
             end
         end
         else begin
             lighter_lit := 0;
         end
+        LOG("start", "lighter_lit", lighter_lit);
+        LOG("start", "done", 1);
     end
 end
 
 // ============================================================
-// GAMEMODE -- fires on map enter, used for Tandi FID swap
+// GAMEMODE
 // ============================================================
-#define TANDI_ART_INDEX  86  // hfprim = black-haired tribal girl (FO2 female player)
+#define TANDI_ART_INDEX  86
 
 procedure gamemode_handler begin
     variable lst;
     variable obj;
+    LOG("gamemode", "fired", cur_map_index);
 
-    // Swap Tandi's appearance on every map
     lst := list_begin(LIST_CRITTERS);
     obj := list_next(lst);
     while (obj) do begin
-        if (obj_pid(obj) == PID_TANDI) then begin
-            art_change_fid_num(obj, TANDI_ART_INDEX);
+        if (obj != 0) then begin
+            if (obj_pid(obj) == PID_TANDI) then begin
+                art_change_fid_num(obj, TANDI_ART_INDEX);
+                LOG("gamemode", "tandi_swapped", 1);
+            end
         end
         obj := list_next(lst);
     end
     list_end(lst);
 
-    // === EASY MAIN QUEST: water chip = vault 13 access ===
     if (dude_item_count(PID_WATER_CHIP) > 0) then begin
         if (global_var(GVAR_VAULT_WATER) < 1) then begin
             set_global_var(GVAR_VAULT_WATER, 1);
         end
-        // Set access code holodisk flag too
         set_global_var(GVAR_HOLODISK_ACCESS_CODE, 1);
-        // Unlock all locked scenery on V13 maps (doors, vault door)
         if (CUR_MAP_VAULTENT or CUR_MAP_VAULT13 or CUR_MAP_V13ENT) then begin
             variable lst2;
             variable door;
@@ -139,24 +165,22 @@ procedure gamemode_handler begin
                 door := list_next(lst2);
             end
             list_end(lst2);
+            LOG("gamemode", "v13_unlocked", 1);
         end
     end
 
-    // Re-apply flare boost if player has active flare in hand
     if (obj_is_carrying_obj_pid(dude_obj, PID_ACTIVE_FLARE) > 0) then begin
         set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 8);
         set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 65536);
     end
-
-    // Re-apply lighter glow if it was on
     if (lighter_lit == 1) then begin
-        set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 4);
-        set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 40000);
+        set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 5);
+        set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 65536);
     end
 end
 
 // ============================================================
-// USEOBJ -- lighter used from inventory = toggle personal light
+// USEOBJ -- USE from inventory (lighter, flare, shovel)
 // ============================================================
 procedure useobj_handler begin
     variable user;
@@ -168,34 +192,45 @@ procedure useobj_handler begin
     item := get_sfall_arg;
 
     if (user != dude_obj) then return;
+    if (item == 0) then return;
 
     item_pid := obj_pid(item);
+    log_counter := log_counter + 1;
+    LOG("useobj", "item_pid", item_pid);
+    LOG("useobj", "count", log_counter);
 
-    // === LIGHTER -- toggle personal light ===
+    // === LIGHTER ===
     if (item_pid == PID_LIGHTER) then begin
+        LOG("useobj", "match", "lighter");
+        LOG("lighter", "item_obj", item);
         if (lighter_lit == 0) then begin
             lighter_lit := 1;
-            set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 5);
-            set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 65536);
+            // Set light on the LIGHTER ITEM itself (like flare does)
+            set_object_data(item, OBJ_DATA_LIGHT_DISTANCE, 5);
+            set_object_data(item, OBJ_DATA_LIGHT_INTENSITY, 65536);
+            LOG("lighter", "item_dist", get_object_data(item, OBJ_DATA_LIGHT_DISTANCE));
+            LOG("lighter", "item_int", get_object_data(item, OBJ_DATA_LIGHT_INTENSITY));
             tile_refresh_display;
             display_msg("You flick the lighter open. A small flame pushes back the dark.");
         end
         else begin
             lighter_lit := 0;
-            set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 0);
-            set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 0);
+            set_object_data(item, OBJ_DATA_LIGHT_DISTANCE, 0);
+            set_object_data(item, OBJ_DATA_LIGHT_INTENSITY, 0);
             tile_refresh_display;
             display_msg("You snap the lighter shut. Darkness closes in.");
         end
         arr := create_array_map;
         arr["lit"] := lighter_lit;
         save_array("megamod_lighter", arr);
+        LOG("lighter", "final_lit", lighter_lit);
         set_sfall_return(-1);
         return;
     end
 
-    // === FLARE -- boost player light significantly when lit ===
+    // === FLARE ===
     if (item_pid == PID_FLARE) then begin
+        LOG("useobj", "match", "flare");
         set_object_data(dude_obj, OBJ_DATA_LIGHT_DISTANCE, 8);
         set_object_data(dude_obj, OBJ_DATA_LIGHT_INTENSITY, 65536);
         tile_refresh_display;
@@ -203,14 +238,16 @@ procedure useobj_handler begin
         return;
     end
 
-    // === SHOVEL -- dig a stash hole at your feet ===
+    // === SHOVEL ===
     if (item_pid == PID_SHOVEL) then begin
+        LOG("useobj", "match", "shovel");
         if (combat_is_initialized) then begin
             display_msg("No time for digging right now.");
             set_sfall_return(-1);
             return;
         end
         if not(is_valid_dig_terrain) then begin
+            LOG("useobj", "shovel_terrain", "bad");
             display_msg("The ground here is too hard to dig.");
             set_sfall_return(-1);
             return;
@@ -250,13 +287,31 @@ procedure useobj_handler begin
 
         display_msg("You dig a hole. Use it to stash your gear.");
         give_exp_points(XP_DIG_HOLE);
+        LOG("useobj", "shovel_dug", 1);
         set_sfall_return(-1);
         return;
     end
+
+    // === MULTI-TOOL -- crafting dialog ===
+    if (item_pid == PID_MULTI_TOOL or item_pid == PID_SUPER_TOOL_KIT) then begin
+        LOG("useobj", "match", "multitool");
+
+        start_gdialog(1015, dude_obj, 4, -1, -1);
+        gSay_Start;
+        call NodeCraftMain;
+        gSay_End;
+        end_dialogue;
+
+        LOG("useobj", "dialog_done", 1);
+        set_sfall_return(-1);
+        return;
+    end
+
+    LOG("useobj", "no_match", item_pid);
 end
 
 // ============================================================
-// USEOBJON -- unified handler for all tool-on-object interactions
+// USEOBJON -- USE item ON object
 // ============================================================
 procedure useobjon_handler begin
     variable user;
@@ -270,27 +325,48 @@ procedure useobjon_handler begin
     used_obj := get_sfall_arg;
     target   := get_sfall_arg;
 
-    if (user != dude_obj) then return;
-    if (used_obj == 0 or target == 0) then return;
+    // LOG BEFORE ANY CHECK -- did hook fire at all?
+    LOG("useobjon", "RAW_fired", 1);
+    LOG("useobjon", "RAW_user", user);
+    LOG("useobjon", "RAW_used", used_obj);
+    LOG("useobjon", "RAW_target", target);
+
+    if (user == 0 or user != dude_obj) then begin
+        LOG("useobjon", "skip_user", 1);
+        return;
+    end
+    if (used_obj == 0 or target == 0) then begin
+        LOG("useobjon", "skip_null", 1);
+        return;
+    end
 
     used_pid := obj_pid(used_obj);
     target_pid := obj_pid(target);
     target_type := obj_type(target);
 
+    log_counter := log_counter + 1;
+    LOG("useobjon", "used_pid", used_pid);
+    LOG("useobjon", "target_pid", target_pid);
+    LOG("useobjon", "target_type", target_type);
+    LOG("useobjon", "count", log_counter);
+
     // === LIGHTER ===
     if (used_pid == PID_LIGHTER) then begin
+        LOG("useobjon", "match", "lighter");
         call handle_lighter(target, target_pid);
         return;
     end
 
     // === ROPE on critter ===
     if (used_pid == PID_ROPE and target_type == OBJ_TYPE_CRITTER) then begin
+        LOG("useobjon", "match", "rope");
         call handle_rope(target);
         return;
     end
 
-    // === ELECTRONIC LOCKPICK on locked scenery -> force open electronic locks ===
+    // === ELECTRONIC LOCKPICK ===
     if ((used_pid == PID_ELECTRONIC_LOCKPICKS or used_pid == PID_ELEC_LOCKPICK_MKII) and (target_type == OBJ_TYPE_SCENERY or target_type == OBJ_TYPE_ITEM)) then begin
+        LOG("useobjon", "match", "elockpick");
         if (obj_is_locked(target)) then begin
             obj_unlock(target);
             obj_open(target);
@@ -298,11 +374,13 @@ procedure useobjon_handler begin
             set_sfall_return(-1);
             return;
         end
+        LOG("useobjon", "elockpick", "not_locked");
     end
 
-    // === MULTI-TOOL on locked scenery -> master key, opens anything ===
+    // === MULTI-TOOL on locked -> unlock ===
     if ((used_pid == PID_MULTI_TOOL or used_pid == PID_SUPER_TOOL_KIT) and (target_type == OBJ_TYPE_SCENERY or target_type == OBJ_TYPE_ITEM)) then begin
         if (obj_is_locked(target)) then begin
+            LOG("useobjon", "match", "multitool_unlock");
             obj_unlock(target);
             obj_open(target);
             display_msg("You work the lock open with your tools.");
@@ -311,39 +389,46 @@ procedure useobjon_handler begin
         end
     end
 
-    // === MULTI-TOOL on scenery -> dismantle for junk ===
+    // === MULTI-TOOL on scenery -> dismantle ===
     if ((used_pid == PID_MULTI_TOOL or used_pid == PID_SUPER_TOOL_KIT) and target_type == OBJ_TYPE_SCENERY) then begin
+        LOG("useobjon", "match", "multitool_dismantle");
         call handle_dismantle_scenery(target);
         return;
     end
 
-    // === CROWBAR on locked door/container ===
+    // === CROWBAR ===
     if (used_pid == PID_CROWBAR and (target_type == OBJ_TYPE_SCENERY or target_type == OBJ_TYPE_ITEM)) then begin
+        LOG("useobjon", "match", "crowbar");
         call handle_crowbar(target);
         return;
     end
 
-    // === SHOVEL on dead critter -> bury ===
+    // === SHOVEL on dead critter ===
     if (used_pid == PID_SHOVEL and target_type == OBJ_TYPE_CRITTER) then begin
+        LOG("useobjon", "match", "shovel_bury");
         call handle_shovel_on_corpse(target);
         return;
     end
 
-    // === SHOVEL on scenery -> dig hole (stash) ===
+    // === SHOVEL on scenery ===
     if (used_pid == PID_SHOVEL and target_type == OBJ_TYPE_SCENERY) then begin
+        LOG("useobjon", "match", "shovel_dig");
         call handle_shovel_dig(target);
         return;
     end
+
+    LOG("useobjon", "no_match", used_pid);
 end
 
 // ============================================================
-// LIGHTER -- on booze = molotov, on flammable scenery = campfire
+// LIGHTER -- molotov + campfire
 // ============================================================
 procedure handle_lighter(variable target, variable target_pid) begin
     variable molotov;
+    LOG("lighter", "target_pid", target_pid);
 
-    // Lighter + booze = molotov cocktail
     if (target_pid == PID_BOOZE or target_pid == PID_BEER) then begin
+        LOG("lighter", "action", "molotov");
         molotov := create_object(PID_MOLOTOV_COCKTAIL, 0, 0);
         add_obj_to_inven(dude_obj, molotov);
         rm_obj_from_inven(dude_obj, target);
@@ -354,17 +439,20 @@ procedure handle_lighter(variable target, variable target_pid) begin
         return;
     end
 
-    // Lighter + flammable scenery = campfire
     if (obj_type(target) == OBJ_TYPE_SCENERY) then begin
+        LOG("lighter", "scenery_pid", target_pid);
         if (is_flammable_scenery(target_pid)) then begin
+            LOG("lighter", "action", "campfire");
             call handle_lighter_on_scenery(target, target_pid);
             return;
         end
+        LOG("lighter", "flammable", 0);
     end
+    LOG("lighter", "no_action", 1);
 end
 
 // ============================================================
-// LIGHTER ON SCENERY -- burn flammable brush/trees into campfire
+// CAMPFIRE
 // ============================================================
 procedure handle_lighter_on_scenery(variable target, variable target_pid) begin
     variable fire_tile;
@@ -379,32 +467,23 @@ procedure handle_lighter_on_scenery(variable target, variable target_pid) begin
 
     fire_tile := tile_num(target);
     fire_elev := elevation(target);
-
-    // Remove the flammable scenery
     destroy_object(target);
-
-    // Create a fire pit at the same location
     fire := create_object(PID_FIRE_PIT, fire_tile, fire_elev);
-
-    // Set the fire object to emit light (distance=8, intensity=65536 = max)
     set_object_data(fire, OBJ_DATA_LIGHT_DISTANCE, 8);
     set_object_data(fire, OBJ_DATA_LIGHT_INTENSITY, 65536);
-
     tile_refresh_display;
     display_msg("You light it up. The fire crackles and spreads warmth.");
     give_exp_points(XP_CAMPFIRE);
-
-    // TODO: Create CAMP marker on the worldmap at current location.
-    // Worldmap markers require separate worldmap scripting (wmAreaMarkVisited or similar).
-
+    LOG("campfire", "created", 1);
     set_sfall_return(-1);
 end
 
 // ============================================================
-// ROPE -- tie down knocked critter
+// ROPE
 // ============================================================
 procedure handle_rope(variable target) begin
     variable state;
+    LOG("rope", "called", 1);
 
     if (is_critter_dead(target)) then begin
         display_msg("They're already dead. No point in tying them up.");
@@ -421,14 +500,12 @@ procedure handle_rope(variable target) begin
         end
     end
 
-    // Tie them up
     critter_injure(target, DAM_CRIP_ARM_LEFT);
     critter_injure(target, DAM_CRIP_ARM_RIGHT);
     critter_injure(target, DAM_CRIP_LEG_LEFT);
     critter_injure(target, DAM_CRIP_LEG_RIGHT);
     set_team(target, TEAM_PLAYER);
 
-    // Consume rope
     variable rope;
     rope := obj_carrying_pid_obj(dude_obj, PID_ROPE);
     if (rope) then begin
@@ -438,15 +515,17 @@ procedure handle_rope(variable target) begin
 
     display_msg("You bind them tight. They're not going anywhere.");
     give_exp_points(XP_ROPE);
+    LOG("rope", "tied", 1);
     set_sfall_return(-1);
 end
 
 // ============================================================
-// CROWBAR -- force open locked doors/containers
+// CROWBAR
 // ============================================================
 procedure handle_crowbar(variable target) begin
     variable st;
     variable roll;
+    LOG("crowbar", "called", 1);
 
     if not(obj_is_locked(target)) then begin
         display_msg("It's not locked.");
@@ -461,18 +540,21 @@ procedure handle_crowbar(variable target) begin
         obj_unlock(target);
         display_msg("You wedge the crowbar in and force it open.");
         give_exp_points(XP_CROWBAR_OK);
+        LOG("crowbar", "result", "opened");
     end
     else begin
         display_msg("You strain against it, but it won't budge. Need more muscle.");
         give_exp_points(XP_CROWBAR_FAIL);
+        LOG("crowbar", "result", "failed");
     end
     set_sfall_return(-1);
 end
 
 // ============================================================
-// SHOVEL on dead critter -- bury corpse
+// SHOVEL -- bury corpse
 // ============================================================
 procedure handle_shovel_on_corpse(variable target) begin
+    LOG("shovel_bury", "called", 1);
     if not(is_critter_dead(target)) then begin
         display_msg("They're not dead. You can't bury the living.");
         set_sfall_return(-1);
@@ -498,41 +580,146 @@ procedure handle_shovel_on_corpse(variable target) begin
 
     display_msg("You bury the remains. No one will find them.");
     give_exp_points(XP_BURY_CORPSE);
+    LOG("shovel_bury", "done", 1);
     set_sfall_return(-1);
 end
 
+
 // ============================================================
-// DISMANTLE SCENERY -- tools on mechanical scenery = junk
+// CRAFTING DIALOG NODES
+// ============================================================
+#define WB 1015
+
+procedure NodeCraftMain begin
+    gSay_Reply(WB, 100);
+    giQ_Option(4, WB, message_str(WB, 101), NodeCraftSearch, 1);
+    giQ_Option(4, WB, message_str(WB, 102), NodeCraftBreakDown, 1);
+    giQ_Option(4, WB, message_str(WB, 103), NodeCraftParts, 1);
+    giQ_Option(4, WB, message_str(WB, 104), NodeCraftDone, 1);
+end
+
+procedure NodeCraftSearch begin
+    call handle_dismantle_scenery_auto;
+    gSay_Reply(WB, 110);
+    giQ_Option(4, WB, message_str(WB, 105), NodeCraftMain, 1);
+    giQ_Option(4, WB, message_str(WB, 104), NodeCraftDone, 1);
+end
+
+procedure NodeCraftBreakDown begin
+    call handle_dismantle_inventory(0);
+    gSay_Reply(WB, 120);
+    giQ_Option(4, WB, message_str(WB, 105), NodeCraftMain, 1);
+    giQ_Option(4, WB, message_str(WB, 104), NodeCraftDone, 1);
+end
+
+procedure NodeCraftParts begin
+    call show_parts;
+    gSay_Reply(WB, 130);
+    giQ_Option(4, WB, message_str(WB, 105), NodeCraftMain, 1);
+    giQ_Option(4, WB, message_str(WB, 104), NodeCraftDone, 1);
+end
+
+procedure NodeCraftDone begin
+end
+
+// ============================================================
+// PARTS HELPERS
+// ============================================================
+procedure add_part(variable part_name, variable amount) begin
+    variable cur;
+    cur := parts_array[part_name];
+    parts_array[part_name] := cur + amount;
+    save_array("megamod_parts", parts_array);
+    display_msg("  +" + amount + " " + part_name);
+    LOG("parts", part_name, cur + amount);
+end
+
+procedure show_parts begin
+    display_msg("=== Parts ===");
+    if (parts_array["electronic"] > 0) then
+        display_msg("  Electronic Parts: " + parts_array["electronic"]);
+    if (parts_array["metal"] > 0) then
+        display_msg("  Metal Parts: " + parts_array["metal"]);
+    if (parts_array["wiring"] > 0) then
+        display_msg("  Wiring: " + parts_array["wiring"]);
+    if (parts_array["casings"] > 0) then
+        display_msg("  Casings: " + parts_array["casings"]);
+    if (parts_array["powder"] > 0) then
+        display_msg("  Smokeless Powder: " + parts_array["powder"]);
+    if (parts_array["bullets_10mm_jhp"] > 0) then
+        display_msg("  10mm JHP Bullets: " + parts_array["bullets_10mm_jhp"]);
+    if (parts_array["bullets_10mm_ap"] > 0) then
+        display_msg("  10mm AP Bullets: " + parts_array["bullets_10mm_ap"]);
+    if (parts_array["bullets_5mm_jhp"] > 0) then
+        display_msg("  5mm JHP Bullets: " + parts_array["bullets_5mm_jhp"]);
+    if (parts_array["bullets_5mm_ap"] > 0) then
+        display_msg("  5mm AP Bullets: " + parts_array["bullets_5mm_ap"]);
+    if (parts_array["bullets_44_jhp"] > 0) then
+        display_msg("  .44 JHP Bullets: " + parts_array["bullets_44_jhp"]);
+    if (parts_array["bullets_44_fmj"] > 0) then
+        display_msg("  .44 FMJ Bullets: " + parts_array["bullets_44_fmj"]);
+    if (parts_array["spring"] > 0) then
+        display_msg("  Springs: " + parts_array["spring"]);
+    if (parts_array["firing_pin"] > 0) then
+        display_msg("  Firing Pins: " + parts_array["firing_pin"]);
+end
+
+// ============================================================
+// AUTO SEARCH -- find nearest scenery and dismantle
+// ============================================================
+procedure handle_dismantle_scenery_auto begin
+    variable scan_lst;
+    variable scan_obj;
+    variable best_obj;
+    variable best_dist;
+    variable cur_dist;
+    best_obj := 0;
+    best_dist := 999;
+
+    scan_lst := list_begin(LIST_SCENERY);
+    scan_obj := list_next(scan_lst);
+    while (scan_obj) do begin
+        if (scan_obj != 0 and elevation(scan_obj) == dude_elevation) then begin
+            cur_dist := tile_distance(tile_num(dude_obj), tile_num(scan_obj));
+            if (cur_dist <= 3 and cur_dist < best_dist) then begin
+                variable check_id;
+                check_id := (tile_num(scan_obj) * 10000) + obj_pid(scan_obj);
+                if (dismantled_scenery[check_id] == 0) then begin
+                    best_dist := cur_dist;
+                    best_obj := scan_obj;
+                end
+            end
+        end
+        scan_obj := list_next(scan_lst);
+    end
+    list_end(scan_lst);
+
+    if (best_obj != 0) then begin
+        call handle_dismantle_scenery(best_obj);
+    end
+    else begin
+        display_msg("Nothing to search nearby.");
+    end
+end
+
+// ============================================================
+// DISMANTLE SCENERY -- search for parts
 // ============================================================
 procedure handle_dismantle_scenery(variable target) begin
     variable pid;
     variable obj_id;
-    variable result;
-    variable junk_count;
-    variable caps_bonus;
-    variable skill_val;
-    variable roll;
+    variable proto;
 
     pid := obj_pid(target);
+    proto := pid - 33554432;
 
-    if not(is_mechanical_scenery(pid)) then begin
-        display_msg("Nothing useful to salvage from this.");
-        set_sfall_return(-1);
-        return;
-    end
+    LOG("dismantle", "pid", pid);
+    LOG("dismantle", "proto", proto);
 
     obj_id := (tile_num(target) * 10000) + pid;
 
     if (dismantled_scenery[obj_id] != 0) then begin
-        display_msg("You've already stripped this for parts.");
-        set_sfall_return(-1);
-        return;
-    end
-
-    skill_val := has_skill(dude_obj, SKILL_REPAIR);
-    if (skill_val < 25) then begin
-        display_msg("You wouldn't know where to start. More Repair training needed.");
-        give_exp_points(3);
+        display_msg("Already stripped.");
         set_sfall_return(-1);
         return;
     end
@@ -540,66 +727,188 @@ procedure handle_dismantle_scenery(variable target) begin
     dismantled_scenery[obj_id] := 1;
     save_array("megamod_repair_scen", dismantled_scenery);
 
-    roll := random(1, 100);
-    if (roll > skill_val) then begin
-        display_msg("You fumble with the parts. Nothing salvageable.");
-        give_exp_points(3);
-        set_sfall_return(-1);
-        return;
-    end
+    display_msg("You search for parts...");
 
-    variable loot_pid;
-    variable loot_name;
-    junk_count := random(1, 3);
-
-    // Different junk based on scenery type
-    // Computers, monitors, terminals -> small energy cells
-    if (pid == 9 or pid == 11 or pid == 12 or (pid >= 13 and pid <= 17) or (pid >= 43 and pid <= 48)) then begin
-        loot_pid := PID_SMALL_ENERGY_CELL;
-        loot_name := "Small Energy Cell";
-        junk_count := random(1, 2);
+    // Electronics (computers, monitors, terminals)
+    if (is_mechanical_scenery(proto)) then begin
+        call add_part("electronic", random(1, 3));
+        call add_part("wiring", random(1, 2));
+        LOG("dismantle", "type", "electronic");
     end
-    // VDU screens, big electronics -> micro fusion cells
-    else if (pid == 55 or pid == 56 or pid == 656) then begin
-        loot_pid := PID_MICRO_FUSION_CELL;
-        loot_name := "Micro Fusion Cell";
-        junk_count := random(1, 2);
+    // Big electronics (VDU, generators)
+    else if (proto == 55 or proto == 56 or proto == 656) then begin
+        call add_part("electronic", random(2, 4));
+        call add_part("wiring", random(1, 3));
+        if (proto == 656) then
+            call add_part("metal", random(1, 2));
+        LOG("dismantle", "type", "big_electronic");
     end
-    // Vents, pipes, air processing -> flares (scrap metal + chemicals)
-    else if (pid == 20 or pid == 21 or pid == 29 or pid == 32 or pid == 33 or pid == 50) then begin
-        loot_pid := PID_FLARE;
-        loot_name := "Flare";
-        junk_count := random(2, 3);
+    // Vents, pipes, metal stuff
+    else if (proto == 20 or proto == 21 or proto == 28 or proto == 29 or proto == 32 or proto == 33 or proto == 50) then begin
+        call add_part("metal", random(2, 4));
+        LOG("dismantle", "type", "metal");
     end
-    // Vending machines -> caps + junk
-    else if (pid == 907 or pid == 908) then begin
-        loot_pid := PID_JUNK;
-        loot_name := "Junk";
-        caps_bonus := random(5, 25);
-        item_caps_adjust(dude_obj, caps_bonus);
-    end
-    // Everything else -> generic junk
+    // Everything else -> random small finds
     else begin
-        loot_pid := PID_JUNK;
-        loot_name := "Junk";
-    end
-
-    variable i;
-    variable item;
-    for (i := 0; i < junk_count; i++) begin
-        item := create_object(loot_pid, 0, 0);
-        add_obj_to_inven(dude_obj, item);
-    end
-
-    if (caps_bonus > 0) then begin
-        display_msg("You salvage " + junk_count + "x " + loot_name + " and shake out " + caps_bonus + " caps.");
-    end
-    else begin
-        display_msg("You salvage " + junk_count + "x " + loot_name + ".");
+        variable r;
+        r := random(0, 2);
+        if (r == 0) then
+            call add_part("metal", random(1, 2));
+        else if (r == 1) then
+            call add_part("wiring", 1);
+        else
+            call add_part("electronic", 1);
+        LOG("dismantle", "type", "generic");
     end
 
     give_exp_points(25);
     set_sfall_return(-1);
+end
+
+// ============================================================
+// DISMANTLE INVENTORY -- break down items into parts
+// ============================================================
+procedure handle_dismantle_inventory(variable tool) begin
+    variable inv_item;
+    variable inv_pid;
+    variable found;
+    found := 0;
+
+    LOG("inv_dismantle", "called", 1);
+
+    // Scan player inventory for breakdownable items (first found)
+    // Ammo
+    inv_item := obj_carrying_pid_obj(dude_obj, PID_10MM_JHP);
+    if (inv_item and inv_item != tool) then begin
+        rm_obj_from_inven(dude_obj, inv_item);
+        destroy_object(inv_item);
+        display_msg("You break down 10mm JHP ammo...");
+        call add_part("casings", random(5, 10));
+        call add_part("powder", random(3, 6));
+        call add_part("bullets_10mm_jhp", random(5, 10));
+        give_exp_points(10);
+        found := 1;
+        LOG("inv_dismantle", "item", "10mm_jhp");
+    end
+
+    if (found == 0) then begin
+        inv_item := obj_carrying_pid_obj(dude_obj, PID_10MM_AP);
+        if (inv_item and inv_item != tool) then begin
+            rm_obj_from_inven(dude_obj, inv_item);
+            destroy_object(inv_item);
+            display_msg("You break down 10mm AP ammo...");
+            call add_part("casings", random(5, 10));
+            call add_part("powder", random(3, 6));
+            call add_part("bullets_10mm_ap", random(5, 10));
+            give_exp_points(10);
+            found := 1;
+            LOG("inv_dismantle", "item", "10mm_ap");
+        end
+    end
+
+    if (found == 0) then begin
+        inv_item := obj_carrying_pid_obj(dude_obj, PID_5MM_JHP);
+        if (inv_item and inv_item != tool) then begin
+            rm_obj_from_inven(dude_obj, inv_item);
+            destroy_object(inv_item);
+            display_msg("You break down 5mm JHP ammo...");
+            call add_part("casings", random(5, 10));
+            call add_part("powder", random(3, 6));
+            call add_part("bullets_5mm_jhp", random(5, 10));
+            give_exp_points(10);
+            found := 1;
+        end
+    end
+
+    if (found == 0) then begin
+        inv_item := obj_carrying_pid_obj(dude_obj, PID_5MM_AP);
+        if (inv_item and inv_item != tool) then begin
+            rm_obj_from_inven(dude_obj, inv_item);
+            destroy_object(inv_item);
+            display_msg("You break down 5mm AP ammo...");
+            call add_part("casings", random(5, 10));
+            call add_part("powder", random(3, 6));
+            call add_part("bullets_5mm_ap", random(5, 10));
+            give_exp_points(10);
+            found := 1;
+        end
+    end
+
+    if (found == 0) then begin
+        inv_item := obj_carrying_pid_obj(dude_obj, PID_44_MAGNUM_JHP);
+        if (inv_item and inv_item != tool) then begin
+            rm_obj_from_inven(dude_obj, inv_item);
+            destroy_object(inv_item);
+            display_msg("You break down .44 Magnum JHP ammo...");
+            call add_part("casings", random(3, 6));
+            call add_part("powder", random(2, 4));
+            call add_part("bullets_44_jhp", random(3, 6));
+            give_exp_points(10);
+            found := 1;
+        end
+    end
+
+    if (found == 0) then begin
+        inv_item := obj_carrying_pid_obj(dude_obj, PID_44_FMJ_MAGNUM);
+        if (inv_item and inv_item != tool) then begin
+            rm_obj_from_inven(dude_obj, inv_item);
+            destroy_object(inv_item);
+            display_msg("You break down .44 FMJ ammo...");
+            call add_part("casings", random(3, 6));
+            call add_part("powder", random(2, 4));
+            call add_part("bullets_44_fmj", random(3, 6));
+            give_exp_points(10);
+            found := 1;
+        end
+    end
+
+    // Weapons
+    if (found == 0) then begin
+        inv_item := obj_carrying_pid_obj(dude_obj, PID_KNIFE);
+        if (inv_item and inv_item != tool) then begin
+            rm_obj_from_inven(dude_obj, inv_item);
+            destroy_object(inv_item);
+            display_msg("You break down the knife...");
+            call add_part("metal", random(1, 2));
+            give_exp_points(10);
+            found := 1;
+        end
+    end
+
+    if (found == 0) then begin
+        inv_item := obj_carrying_pid_obj(dude_obj, PID_10MM_PISTOL);
+        if (inv_item and inv_item != tool) then begin
+            rm_obj_from_inven(dude_obj, inv_item);
+            destroy_object(inv_item);
+            display_msg("You strip the 10mm Pistol for parts...");
+            call add_part("metal", random(2, 3));
+            call add_part("spring", 1);
+            call add_part("firing_pin", 1);
+            give_exp_points(15);
+            found := 1;
+        end
+    end
+
+    // Electronics
+    if (found == 0) then begin
+        inv_item := obj_carrying_pid_obj(dude_obj, PID_GEIGER_COUNTER);
+        if (inv_item and inv_item != tool) then begin
+            rm_obj_from_inven(dude_obj, inv_item);
+            destroy_object(inv_item);
+            display_msg("You crack open the Geiger counter...");
+            call add_part("electronic", random(2, 3));
+            call add_part("wiring", 1);
+            give_exp_points(15);
+            found := 1;
+        end
+    end
+
+    if (found == 0) then begin
+        // Nothing to break down -- show current parts
+        display_msg("Nothing to break down. Current parts:");
+        call show_parts;
+        LOG("inv_dismantle", "result", "nothing");
+    end
 end
 
 // ============================================================
@@ -620,26 +929,17 @@ procedure is_mechanical_scenery(variable pid) begin
     return 0;
 end
 
-// ============================================================
-// FLAMMABLE SCENERY -- brush, weeds, tumbleweed, dead tree
-// NOT cactus (PID_CACTUS_1, PID_CACTUS_2 -- too moist to burn)
-// ============================================================
 procedure is_flammable_scenery(variable pid) begin
-    // Tumbleweed (proto 63 -- no header define)
     if (pid == PID_TUMBLEWEED) then return 1;
-    // Dead/old tree (proto 66)
     if (pid == PID_TREE_OLD) then return 1;
-    // Scrub 1-4 (proto 102-105)
     if (pid == PID_SCRUB_1 or pid == PID_SCRUB_2 or pid == PID_SCRUB_3 or pid == PID_SCRUB_4) then return 1;
-    // Weed 1-3 (proto 125-127)
     if (pid == PID_WEED_1 or pid == PID_WEED_2 or pid == PID_WEED_3) then return 1;
-    // Green bush 1-2 (proto 943-944)
     if (pid == PID_BUSH_GREEN_1 or pid == PID_BUSH_GREEN_2) then return 1;
     return 0;
 end
 
 // ============================================================
-// SHOVEL on scenery -> dig stash hole nearby
+// SHOVEL on scenery -> dig hole
 // ============================================================
 procedure handle_shovel_dig(variable target) begin
     variable my_tile;
@@ -647,6 +947,7 @@ procedure handle_shovel_dig(variable target) begin
     variable hole_key;
     variable count;
     variable hole;
+    LOG("shovel_dig", "called", 1);
 
     if (combat_is_initialized) then begin
         display_msg("No time for digging right now.");
@@ -655,6 +956,7 @@ procedure handle_shovel_dig(variable target) begin
     end
 
     if not(is_valid_dig_terrain) then begin
+        LOG("shovel_dig", "terrain", "bad");
         display_msg("The ground here is too hard to dig.");
         set_sfall_return(-1);
         return;
@@ -679,31 +981,29 @@ procedure handle_shovel_dig(variable target) begin
 
     gfade_out(1);
     game_time_advance(300);
-
     hole := create_object(PID_GRAVESITE, my_tile, dude_elevation);
-
     holes_array[hole_key] := 1;
     save_array("megamod_shovel_holes", holes_array);
     hole_count_map["" + map_idx] := count + 1;
     save_array("megamod_shovel_hcount", hole_count_map);
-
     gfade_in(1);
+
     display_msg("You dig a hole. Use it to stash your gear.");
     give_exp_points(XP_DIG_HOLE);
+    LOG("shovel_dig", "done", 1);
     set_sfall_return(-1);
 end
 
-// ============================================================
-// TERRAIN CHECK -- outdoor ground only (elevation 0, no roof)
-// ============================================================
 procedure is_valid_dig_terrain begin
     variable tile;
     variable roof_fid;
 
+    LOG("terrain", "elevation", dude_elevation);
     if (dude_elevation > 0) then return 0;
 
     tile := tile_num(dude_obj);
     roof_fid := get_tile_roof_fid(tile, 0);
+    LOG("terrain", "roof_fid", roof_fid);
     if (roof_fid != 1) then return 0;
 
     return 1;
