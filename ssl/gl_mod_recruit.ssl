@@ -1,0 +1,159 @@
+/*
+    Recruit Anyone mod -- USE Speech skill on NPC = recruit to party
+    Works on pre-approved NPC list. Movie quote on recruit.
+    Recruited NPCs follow player and fight for them.
+*/
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
+#include "sfall/lib.arrays.h"
+
+#define LOG(s, k, v) set_ini_setting("megamod.ini|" + s + "|" + k, v)
+
+procedure start;
+procedure speech_handler;
+procedure is_recruitable(variable pid);
+procedure get_movie_quote;
+
+variable recruited_array;
+
+procedure start begin
+    if game_loaded then begin
+        recruited_array := load_array("megamod_recruited");
+        if (recruited_array == 0) then begin
+            recruited_array := create_array_map;
+            save_array("megamod_recruited", recruited_array);
+        end
+        register_hook_proc(HOOK_USESKILLON, speech_handler);
+        LOG("recruit_mod", "loaded", 1);
+    end
+end
+
+procedure speech_handler begin
+    variable user;
+    variable target;
+    variable skill_type;
+    variable target_pid;
+    variable target_name;
+    variable quote;
+
+    user       := get_sfall_arg;
+    target     := get_sfall_arg;
+    skill_type := get_sfall_arg;
+
+    if (skill_type != SKILL_SPEECH) then return;
+    if (user != dude_obj) then return;
+    if (target == 0) then return;
+    if (obj_type(target) != OBJ_TYPE_CRITTER) then return;
+
+    target_pid := obj_pid(target);
+    LOG("recruit", "speech_on", target_pid);
+
+    // Already in party?
+    if (party_member_obj(target_pid) != 0) then begin
+        LOG("recruit", "already_party", 1);
+        return;
+    end
+
+    // Already recruited before?
+    if (recruited_array[target_pid] == 1) then begin
+        display_msg("They've already made their choice.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    if not(is_recruitable(target_pid)) then begin
+        LOG("recruit", "not_recruitable", target_pid);
+        return;
+    end
+
+    // Recruit!
+    target_name := obj_name(target);
+    LOG("recruit", "recruiting", target_pid);
+
+    party_add(target);
+    set_team(target, TEAM_PLAYER);
+
+    recruited_array[target_pid] := 1;
+    save_array("megamod_recruited", recruited_array);
+
+    quote := get_movie_quote;
+    display_msg(quote);
+    display_msg(target_name + " joins your party.");
+    float_msg(target, "Let's go.", FLOAT_MSG_GREEN);
+
+    give_exp_points(100);
+    LOG("recruit", "done", target_name);
+    set_sfall_return(-1);
+end
+
+procedure is_recruitable(variable pid) begin
+    // === VAULT 13 ===
+    // Medic
+    if (pid == 16777317) then return 1;  // PID for medic (need to verify)
+    // Theresa (rebel leader)
+    if (pid == 16777299 or pid == 16777300 or pid == 16777303) then return 1;  // citizens
+    // Generic vault dwellers (male, female, male2)
+    if (pid == PID_VAULT_DWELLER_MALE) then return 1;
+    if (pid == PID_VAULT_DWELLER_FEMALE) then return 1;
+    if (pid == PID_VAULT_DWELLER_MALE2) then return 1;
+
+    // === SHADY SANDS ===
+    // Curtis (farmer)
+    // Agatha (storyteller)
+    // Lance (patrol guard)
+    // Generic citizen
+    if (pid == PID_CITIZEN_1 or pid == PID_CITIZEN_2 or pid == PID_CITIZEN_3) then return 1;
+    if (pid == PID_CITIZEN_PUNK) then return 1;
+    if (pid == PID_CITIZEN_BLUE_JEANS) then return 1;
+    if (pid == PID_CITIZEN_FEMALE_YELLOWPANTS) then return 1;
+
+    // === RAIDERS ===
+    // Alya, Diana, Tolya
+    if (pid == PID_RAIDER_GUARD) then return 1;
+
+    // === JUNKTOWN ===
+    // Lenore, Trish, Sinthia, Ismarc, Marcelle, Phil, Neal, Saul
+    // Vasquez
+    if (pid == 16777563) then return 1;  // PID_VASQUEZ
+
+    // === HUB ===
+    // Loxley (thieves guild), Harold
+    // Lorenzo + guards
+
+    // === BONEYARD ===
+    // Laura, Lorraine, Sammael
+    // Followers: FolScout, FolGuard, FolInit, Marney, Peter, Neil
+
+    // === NECROPOLIS ===
+    // Ghoul Refugee, GenGhoul, Manager, Ganger, GhDorGrd
+    if (pid == PID_ZOMBIE_GUARD) then return 1;
+
+    // === BROTHERHOOD ===
+    // Darrel (initiate at door)
+    if (pid == PID_MALE_GUARD_METAL_BLACK) then return 1;
+
+    return 0;
+end
+
+procedure get_movie_quote begin
+    variable r;
+    r := random(0, 14);
+    if (r == 0) then return "Come with me if you want to live.";
+    else if (r == 1) then return "Take the red pill and I'll show you how deep the rabbit hole goes.";
+    else if (r == 2) then return "You have my sword.";
+    else if (r == 3) then return "I volunteer as tribute.";
+    else if (r == 4) then return "You son of a bitch, I'm in.";
+    else if (r == 5) then return "I'm with you to the end of the line.";
+    else if (r == 6) then return "You had me at hello.";
+    else if (r == 7) then return "I think this is the beginning of a beautiful friendship.";
+    else if (r == 8) then return "To infinity and beyond.";
+    else if (r == 9) then return "After all, tomorrow is another day.";
+    else if (r == 10) then return "May the Force be with you.";
+    else if (r == 11) then return "Here's looking at you, kid.";
+    else if (r == 12) then return "I'll be back.";
+    else if (r == 13) then return "Roads? Where we're going, we don't need roads.";
+    else return "Frankly, my dear, I don't give a damn.";
+end
