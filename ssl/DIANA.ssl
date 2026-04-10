@@ -264,10 +264,6 @@ procedure look_at_p_proc begin
 end
 
 procedure NodeRecruit begin
-   if (party_member_count(0) >= 5) then begin
-      display_msg("Your party is full.");
-      return;
-   end
    party_add(self_obj);
    set_team(self_obj, TEAM_PLAYER);
    display_msg("Diana joins your party.");
