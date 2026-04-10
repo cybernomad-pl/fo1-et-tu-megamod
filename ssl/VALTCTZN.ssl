@@ -1,0 +1,223 @@
+/*
+
+   Vault 13 - Generic citizen
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/vault13.h"
+#include "maps/vault13.h"
+
+#define NAME                    SCRIPT_VALTCTZN
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_V13)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure critter_p_proc;
+procedure damage_p_proc;
+procedure destroy_p_proc;
+procedure map_enter_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+procedure timed_event_p_proc;
+procedure push_p_proc;
+
+procedure get_rations;
+procedure set_ration_tile;
+procedure set_sleep_tile;
+
+import variable recipient;
+import variable WtrGrd_ptr;
+import variable getting_ration;
+
+variable night_person;
+variable wake_time;
+variable sleep_time;
+variable home_tile;
+variable sleep_tile;
+
+variable rndx;
+variable tmp_hostile;
+variable sleeping_disabled;
+variable ration_tile;
+
+#define LVAR_HomeTile         (4)
+#define LVAR_WaterRations     (5)
+#define LVAR_Sleeping         (6)
+
+procedure push_p_proc begin
+end
+
+procedure start begin
+end
+
+procedure critter_p_proc begin
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   else begin
+      if not(day) then begin
+         set_local_var(LVAR_WaterRations, 0);
+         sleeping_disabled := 0;
+      end
+      if (sleeping_disabled == 0) then begin
+         sleeping
+      end
+   end
+end
+
+procedure damage_p_proc begin
+   if source_is_dude then begin
+      set_local_var(7, 1);
+   end
+end
+
+procedure destroy_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_VAULT_13_HOSTILE, 1);
+   end
+   inc_good_critter
+end
+
+procedure map_enter_p_proc begin
+   if (v13_invaded) then begin
+      invasion_kill_critter_V13;
+   end
+
+   flush_add_timer_event(self_obj, game_ticks(random(1, 5)), EVENT_WaterRation);
+
+   if (not(local_var(LVAR_HomeTile))) then begin
+      set_local_var(LVAR_HomeTile, self_tile);
+   end
+   home_tile := local_var(LVAR_HomeTile);
+   set_self_team(TEAM_VAULT13);
+   call set_ration_tile;
+   call set_sleep_tile;
+   sleep_time := random(1900, 1930);
+   wake_time := sleep_time - 1300;
+end
+
+procedure pickup_p_proc begin
+   tmp_hostile := 1;
+end
+
+procedure talk_p_proc begin
+   dude_look_at_self;
+   if (local_var(6) == 1) then begin
+      if (random(0, 1)) then begin
+         float_msg(self_obj, message_str(SCRIPT_GENVAULT, 166), FLOAT_MSG_NORMAL);
+      end
+      else begin
+         display_msg(message_str(SCRIPT_GENVAULT, 167));
+      end
+   end
+   else begin
+      if (local_var(7) or REP_ENEMY_VAULT13) then begin
+         float_msg(self_obj, message_str(SCRIPT_ENEMY, 105), FLOAT_MSG_NORMAL);
+      end
+      else begin
+         if (rndx == 0) then begin
+            rndx := random(101, 106);
+         end
+         float_msg(self_obj, mstr(rndx), FLOAT_MSG_NORMAL);
+      end
+   end
+end
+
+procedure timed_event_p_proc begin
+   if (fixed_param == 1) then begin
+      self_walk_to_tile(tile_num_in_direction(tile_num(WtrGrd_ptr), 2, 1));
+      add_timer_event(self_obj, game_ticks(3), 2);
+   end
+   else if (fixed_param == 2) then begin
+      getting_ration := 1;
+      if (random(0, 1)) then begin
+         float_msg(self_obj, message_str(SCRIPT_GENVAULT, 165), FLOAT_MSG_NORMAL);
+      end
+      add_timer_event(self_obj, game_ticks(3), 3);
+   end
+   else if (fixed_param == 3) then begin
+      recipient := 0;
+      self_walk_to_tile(home_tile);
+   end
+   else if (fixed_param == EVENT_WaterRation) then begin
+      water_rations;
+   end
+end
+
+procedure get_rations begin
+   sleeping_disabled := 1;
+   if (self_tile != ration_tile) then begin
+      if not(random(0, 9)) then begin
+         if (random(0, 1)) then begin
+            self_walk_to_tile(ration_tile);
+         end
+         else begin
+            self_run_to_tile(ration_tile);
+         end
+      end
+      else begin
+         rm_timer_event(self_obj);
+         rm_timer_event(self_obj);
+      end
+   end
+   else begin
+      if (not(recipient)) then begin
+         recipient := self_obj;
+         add_timer_event(self_obj, game_ticks(3), 1);
+         set_local_var(LVAR_WaterRations, 1);
+         sleeping_disabled := 0;
+      end
+   end
+end
+
+procedure set_ration_tile begin
+   if (self_elevation == 0) then begin
+      ration_tile := tile_num_in_direction(14704, random(0, 5), random(1, 2));
+   end
+   else begin
+      if (self_elevation == 1) then begin
+         ration_tile := tile_num_in_direction(21895, random(0, 5), random(1, 2));
+      end
+      else begin
+         if (self_elevation == 2) then begin
+            variable newtile := 0;
+            newtile := random(1, 4);
+            if newtile == 1 then begin
+               newtile := 22717;
+            end
+            else begin
+               if newtile == 2 then begin
+                  newtile := 22513;
+               end
+               else begin
+                  if newtile == 3 then begin
+                     newtile := 23114;
+                  end
+                  else begin
+                     newtile := 22910;
+                  end
+               end
+            end
+            ration_tile := tile_num_in_direction(newtile, random(0, 5), random(1, 2));// was 22513
+         end
+      end
+   end
+end
+
+procedure set_sleep_tile begin
+   if (self_elevation == 0) then begin
+      sleep_tile := 7000;
+   end
+   else if (self_elevation == 1) then begin
+      sleep_tile := home_tile;
+   end
+   else if (self_elevation == 2) then begin
+      sleep_tile := 7000;
+   end
+end
