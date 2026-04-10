@@ -1,0 +1,842 @@
+/*
+
+   Shady Sands - Tandi
+
+      Note:
+      Tandi getting kidnapped is done via SHADYWST.ssl (map script)!
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/shadysands.h"
+
+#define NAME                    SCRIPT_TANDI
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_SHADYSANDS)
+
+#include "command.h"
+#include "modreact.h"
+
+#undef  set_default_party_follow
+#define set_default_party_follow             set_follow_close
+
+procedure start;
+procedure timed_event_p_proc;
+procedure combat_p_proc;
+procedure damage_p_proc;
+procedure talk_p_proc;
+procedure map_enter_p_proc;
+procedure critter_p_proc;
+procedure destroy_p_proc;
+procedure push_p_proc;
+
+procedure tandi00;
+procedure tandi00_1;
+procedure tandi01;
+procedure tandi01a;
+procedure tandi02;
+procedure tandi03;
+procedure tandi04;
+procedure tandi05;
+procedure tandi06;
+procedure tandi12;
+procedure tandi13;
+procedure tandi14;
+procedure tandi15;
+procedure tandi16;
+procedure tandi20;
+procedure tandi21;
+procedure tandi22;
+procedure tandi23;
+procedure tandi24;
+procedure tandi27;
+procedure tandi28;
+procedure tandi29;
+procedure tandi30;
+procedure tandi35;
+procedure tandi36;
+procedure tandi36a;
+procedure tandi37;
+procedure tandi38;
+procedure tandi38a;
+procedure tandi38b;
+procedure tandi39;
+procedure tandi40;
+procedure tandi41;
+procedure tandi42;
+procedure tandi43;
+procedure tandi43a;
+procedure tandi43b;
+procedure tandi44;
+procedure tandi45;
+procedure tandi46;
+procedure tandi47;
+procedure tandi48;
+procedure tandi49;
+procedure tandi50;
+procedure tandi51;
+procedure tandi52;
+procedure tandi53;
+procedure tandi54;
+procedure tandi55;
+procedure tandi62;
+procedure tandi63;
+procedure tandi64;
+procedure tandi65;
+procedure tandi66;
+procedure tandi67;
+procedure tandi68;
+procedure tandi69;
+procedure tandi70;
+procedure tandi71;
+procedure tandi72;
+
+procedure tandix;
+procedure tandixx;
+procedure tandix1;
+procedure tandix2;
+procedure tandix3;
+procedure tandix4;
+procedure tandix5;
+procedure tandiend;
+
+procedure TandiSchedule;
+
+variable BYE;
+variable tmp_hostile;
+
+#define LVAR_JoinPlayer                   (5)
+
+#define LVAR_WAITING                      (26)
+#define LVAR_FOLLOW_DISTANCE              (27)
+#define LVAR_TEAM                         (28)
+
+#define float_tandi(x)                    float_msg(self_obj, gen_mstr(x), FLOAT_MSG_NORMAL)
+#define tandi_joins_party                 party_add_self;                              \
+                                          add_timer_event(self_obj, game_ticks(1), 2); \
+                                          set_self_team(TEAM_PLAYER)
+#define dude_has_free_slot_for_tandi      ((dude_at_max_party_size == false) and (Tandi_In_Party == false))
+
+#define EVENT_FLOAT_JOIN   (2)
+#define EVENT_FLOAT_INJURED               (3)
+
+procedure Node998 begin
+end
+procedure Node999 begin
+end
+
+procedure push_p_proc begin
+end
+
+procedure start begin
+end
+
+procedure timed_event_p_proc begin
+   if (fixed_param == EVENT_FLOAT_JOIN) then begin
+      debug("Tandi is joining!");
+   end
+   else if (fixed_param == EVENT_FLOAT_INJURED) then begin
+      if not(combat_is_initialized) and Tandi_In_Party and self_visible then begin
+         if (Is_Crippled(self_obj)) then
+            float_tandi(3500);
+         else if (self_rads) then
+            float_tandi(3501);
+         else if (get_poison(self_obj)) then
+            float_tandi(3502);
+      end
+      add_timer_event(self_obj, random(50, 80), EVENT_FLOAT_INJURED);
+   end
+end
+
+procedure combat_p_proc begin
+   if (Tandi_In_Party and REP_ENEMY_SHADY_SANDS and CUR_AREA_SHADY_SANDS) then begin
+      if (fixed_param == COMBAT_SUBTYPE_TURN) then begin
+         party_remove(self_obj);
+
+         set_self_team(TEAM_SHADY_SANDS);
+         float_msg(self_obj, message_str(SCRIPT_ENEMY, 103), FLOAT_MSG_RED);
+         attack_setup(self_obj, dude_obj);
+         attack(dude_obj);
+      end
+   end
+end
+
+procedure description_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure pickup_p_proc begin
+   tmp_hostile := 1;
+end
+
+procedure destroy_p_proc begin
+   if (source_is_dude and CUR_AREA_SHADY_SANDS) then begin
+      set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+   end
+
+   // Workaround, to have Aradesh react to Tandi's death if she died while being kidnapped.
+   // Tandi will get out of the "kidnapped" state if she returns to Shady Sands, so just
+   // checking area should be enough here. No need for "tandi_is_kidnapped"-check.
+   // We need the additional variable, because by default Aradesh only checks for GVAR_TANDI_HIRELING_STATUS == 1,
+   // which is impossible to reach in case of her death (gets set to 3).
+   if not(CUR_AREA_SHADY_SANDS) then begin
+      set_global_var(GVAR_TANDI_KIDNAPPED_DEAD, 1);
+   end
+   set_global_var(GVAR_TANDI_HIRELING_STATUS, 3);
+
+   inc_good_critter
+end
+
+procedure talk_p_proc begin
+   set_tma_data(NAME, 1000, -1, -1, TMA_MSG_DONTKNOW_START, TMA_MSG_DONTKNOW_END);
+
+   dude_look_at_self;
+   get_reaction
+
+   if CUR_MAP_RAIDERS then begin
+      if (global_var(GVAR_TANDI_HIRELING_STATUS) == 5) then begin
+         float_msg(self_obj, mstr(208), FLOAT_MSG_RED);
+      end
+      else begin
+         start_gdialog(NAME, self_obj, 4, HEAD_TANDI, BACKGROUND_RAIDERS);
+         gsay_start;
+         if (global_var(GVAR_TANDI_HEREBEFORE_RAIDERS) == 1) then begin
+            set_global_var(GVAR_TANDI_TALKED_ABOUT, 1);
+            call tandi43;
+         end
+         else begin
+            set_global_var(GVAR_TANDI_HEREBEFORE_RAIDERS, 1);
+            call tandi37;
+         end
+         gsay_end;
+         end_dialogue;
+      end
+   end
+   else if CUR_AREA_SHADY_SANDS then begin
+      start_gdialog(NAME, self_obj, 4, HEAD_TANDI, BACKGROUND_SHADY);
+      gsay_start;
+      if (global_var(GVAR_TANDI_HEREBEFORE_RAIDERS) == 1) then begin
+         if (global_var(GVAR_TANDI_HIRELING_STATUS) == 0) then begin
+            if (dude_iq < 4) then
+               call tandi06;
+            else
+               call tandi30;
+         end
+         else begin
+            call tandi36;
+         end
+      end
+      else begin
+         set_global_var(GVAR_TANDI_HEREBEFORE_RAIDERS, 1);
+         if (global_var(GVAR_TANDI_HIRELING_STATUS) == 0) then
+            call tandi01;
+         else
+            call tandi36;
+      end
+      gsay_end;
+      end_dialogue;
+   end
+   else begin
+      if tandi_is_prisoner then begin
+         float_tandi(208);
+         set_tandi_prisoner(false);
+         tandi_joins_party;
+      end
+      else
+         float_msg(self_obj, mstr(random(300, 305)), FLOAT_COLOR_NORMAL);
+   end
+
+   reset_tma_data;
+end
+
+procedure tandi00 begin
+   NOption(101, tandi15, 5);
+   NOption(102, tandi00_1, 4);
+   NOption(103, tandi23, 5);
+   NOption(104, tandi24, 4);
+   NOption(105, tandi28, 4);
+end
+
+procedure tandi00_1 begin
+   if radscorp_quest_inactive then begin
+      call tandi20;
+   end
+   else if radscorp_quest_completed then begin
+      call tandi21;
+   end
+   else begin
+      call tandi22;
+   end
+end
+
+procedure tandi01 begin
+   Reply(106);
+   NOption(mstr(107) + dude_name + mstr(108), tandi02, 4);
+   BOption(mstr(109) + dude_name + mstr(110), tandi01a, 4);
+   NLowOption(111, tandi29);
+end
+
+procedure tandi01a begin
+   DownReact
+   call tandi02;
+end
+
+procedure tandi02 begin
+   Reply(112);
+   NOption(113, tandi03, 4);
+   GOption(114, tandi14, 5);
+   NOption(115, tandi04, 4);
+   GOption(116, tandi14, 4);
+end
+
+procedure tandi03 begin
+   Reply(117);
+   call tandi00;
+end
+
+procedure tandi04 begin
+   Reply(118);
+   NOption(119, tandi05, 5);
+   BOption(120, tandi12, 5);
+   NOption(121, tandi13, 4);
+end
+
+procedure tandi05 begin
+   Reply(122);
+   NOption(123, tandi03, 1);
+   NOption(124, tandi28, 1);
+end
+
+procedure tandi06 begin
+   NMessage(125);
+   call tandix2;
+end
+
+procedure tandi12 begin
+   DownReact
+   Reply(126);
+   call tandi00;
+end
+
+procedure tandi13 begin
+   Reply(127);
+   NOption(128, tandi05, 5);
+   NOption(129, tandi03, 4);
+end
+
+procedure tandi14 begin
+   Reply(130);
+   NOption(131, tandi05, 5);
+   BOption(132, tandi12, 5);
+   NOption(133, tandi13, 4);
+end
+
+procedure tandi15 begin
+   if good_critter_reaction then begin
+      Reply(134);
+      mark_on_map(AREA_JUNKTOWN)
+   end
+   else begin
+      Reply(135);
+   end
+   NOption(136, tandi16, 5);
+end
+
+procedure tandi16 begin
+   Reply(137);
+   call tandi00;
+end
+
+procedure tandi20 begin
+   Reply(138);
+   call tandi00;
+end
+
+procedure tandi21 begin
+   Reply(139);
+   call tandi00;
+end
+
+procedure tandi22 begin
+   Reply(140);
+   call tandi00;
+end
+
+procedure tandi23 begin
+   if good_critter_reaction then begin
+      Reply(141);
+   end
+   else begin
+      Reply(142);
+   end
+   NOption(143, tandi16, 4);
+   if good_critter_reaction then begin
+      NOption(144, tandi52, 4);
+   end
+end
+
+procedure tandi24 begin
+   Reply(145);
+   NOption(146, tandi05, 5);
+   BOption(147, tandi12, 5);
+   NOption(148, tandi13, 4);
+end
+
+procedure tandi28 begin
+   if (BYE < 1) then begin
+      BYE := 1;
+      Reply(151);
+      NOption(152, tandix, 1);
+   end
+   else begin
+      call tandix;
+   end
+end
+
+procedure tandi29 begin
+   Reply(153);
+   call tandix2;
+end
+
+procedure tandi30 begin
+   Reply(154);
+   NOption(155, tandi03, 4);
+   NOption(156, tandi28, 4);
+end
+
+procedure tandi35 begin
+   NMessage(157);
+   call tandix;
+end
+
+procedure tandi36 begin
+   if not(local_var(7)) then begin
+      Reply(158);
+      NOption(159, tandi03, 4);
+      NOption(161, tandi28, 4);
+      set_local_var(7, 1);
+   end
+   else begin
+      Reply(154);
+      NOption(159, tandi03, 4);
+      NOption(156, tandi28, 4);
+   end
+   NOption(160, tandi36a, 6);
+   NLowOption(162, tandi35);
+end
+
+procedure tandi36a begin
+   BottomReact
+   call tandi27;
+end
+
+procedure tandi27 begin
+   if (dude_is_male) then
+      BMessage(149);
+   else
+      NMessage(150);
+end
+
+procedure tandi37 begin
+   Reply(163);
+   NOption(mstr(164) + dude_name + mstr(165), tandi38, 4);
+   NOption(166, tandi42, 5);
+   NLowOption(167, tandi43a);
+end
+
+procedure tandi38 begin
+   if not(is_garl_alive) then begin
+      call tandi38a;
+   end
+   else begin
+      call tandi38b;
+   end
+end
+
+procedure tandi38a begin
+   Reply(168);
+   NOption(169, tandiend, 4);
+end
+
+procedure tandi38b begin
+   Reply(168);
+   NOption(169, tandi39, 4);
+   NOption(170, tandi42, 5);
+end
+
+procedure tandi39 begin
+   Reply(171);
+   NOption(172, tandi40, 4);
+   NOption(173, tandi41, 5);
+end
+
+procedure tandi40 begin
+   NMessage(174);
+   call tandix3;
+end
+
+procedure tandi41 begin
+   NMessage(175);
+   call tandix4;
+end
+
+procedure tandi42 begin
+   Reply(176);
+   NOption(177, tandi40, 4);
+   NOption(178, tandi41, 5);
+end
+
+procedure tandi43 begin
+   Reply(179);
+   NOption(180, tandi39, 4);
+   NOption(181, tandi42, 5);
+   NLowOption(182, tandi43a);
+end
+
+procedure tandi43a begin
+   NMessage(183);
+   call tandix;
+end
+
+procedure tandi43b begin
+   NMessage(184);
+   call tandix;
+end
+
+procedure tandi44 begin
+   NMessage(185);
+end
+
+procedure tandi45 begin
+   NMessage(186);
+end
+
+procedure tandi46 begin
+   NMessage(187);
+end
+
+procedure tandi47 begin
+   NMessage(188);
+end
+
+procedure tandi48 begin
+   NMessage(189);
+end
+
+procedure tandi49 begin
+   NMessage(190);
+end
+
+procedure tandi50 begin
+   NMessage(191);
+end
+
+procedure tandi51 begin
+   NMessage(192);
+end
+
+procedure tandi52 begin
+   NMessage(193);
+end
+
+procedure tandi53 begin
+   NMessage(194);
+   mark_on_map(AREA_JUNKTOWN)
+end
+
+procedure tandi54 begin
+   NMessage(195);
+   mark_on_map(AREA_HUB)
+end
+
+procedure tandi55 begin
+   NMessage(196);
+end
+
+procedure tandi62 begin
+   NMessage(197);
+end
+
+procedure tandi63 begin
+   NMessage(198);
+end
+
+procedure tandi64 begin
+   NMessage(199);
+end
+
+procedure tandi65 begin
+   float_msg(self_obj, mstr(200), FLOAT_MSG_RED);
+end
+
+procedure tandi66 begin
+   float_msg(self_obj, mstr(201), FLOAT_MSG_RED);
+   call tandix5;
+end
+
+procedure tandi67 begin
+   BMessage(202);
+end
+
+procedure tandi68 begin
+   BMessage(203);
+end
+
+procedure tandi69 begin
+   NMessage(204);
+end
+
+procedure tandi70 begin
+   NMessage(205);
+end
+
+procedure tandi71 begin
+   NMessage(206);
+end
+
+procedure tandi72 begin
+   NMessage(207);
+end
+
+procedure tandix begin
+end
+
+procedure tandixx begin
+end
+
+procedure tandix1 begin
+end
+
+procedure tandix2 begin
+end
+
+procedure tandix3 begin
+   set_self_team(TEAM_PLAYER);
+end
+
+procedure tandix4 begin
+   set_self_team(TEAM_PLAYER);
+end
+
+procedure tandix5 begin
+   set_local_var(LVAR_JoinPlayer, 1);
+   set_self_team(TEAM_PLAYER);
+end
+
+procedure tandiend begin
+end
+
+procedure TandiSchedule begin
+   variable getTime := 0;
+   getTime := game_time_hour;
+   if (getTime == 600) then begin
+      self_walk_to_tile(18709);
+   end
+   else if (getTime == 610) then begin
+      self_walk_to_tile(23232);
+   end
+   else if (getTime == 615) then begin
+      self_walk_to_tile(18492);
+   end
+   else if (getTime == 645) then begin
+      self_walk_to_tile(13565);
+   end
+   else if (getTime == 650) then begin
+      self_walk_to_tile(15683);
+   end
+   else if (getTime == 1000) then begin
+      self_walk_to_tile(18709);
+   end
+   else if (getTime == 1200) then begin
+      self_walk_to_tile(24678);
+   end
+   else if (getTime == 1300) then begin
+      self_walk_to_tile(23232);
+   end
+   else if (getTime == 1305) then begin
+      self_walk_to_tile(23701);
+   end
+   else if (getTime == 1600) then begin
+      self_walk_to_tile(17279);
+   end
+   else if (getTime == 1900) then begin
+      self_walk_to_tile(13565);
+   end
+   else if (getTime == 1905) then begin
+      self_walk_to_tile(18709);
+   end
+   else if (getTime == 2100) then begin
+      self_walk_to_tile(24678);
+   end
+end
+
+procedure map_enter_p_proc begin
+   if shady_invaded and CUR_AREA_SHADY_SANDS and (global_var(GVAR_TANDI_HIRELING_STATUS) != 5) then begin
+      invasion_kill_critter;
+   end
+
+   if CUR_MAP_SHADYW then begin
+      if (map_first_run) then begin
+         set_self_ai(AI_TANDI);
+      end
+
+      if not(Tandi_In_Party) then
+         set_self_team(TEAM_SHADY_SANDS);
+
+      // Tandi is back home:
+      if (global_var(GVAR_TANDI_HIRELING_STATUS) > 1) then begin
+         if ((global_var(GVAR_LOAD_MAP_INDEX) == 2) and (global_var(GVAR_TANDI_LOCATION_TRACKER) == 3)) then begin
+            set_self_abandon_party;
+            if not(is_loading_game) then set_self_visible;
+            critter_attempt_placement(self_obj, 22086, 0);
+            set_global_var(GVAR_TANDI_LOCATION_TRACKER, 4);
+         end
+         else if (global_var(GVAR_TANDI_LOCATION_TRACKER) >= 300) then begin
+            critter_attempt_placement(self_obj, 22086, 0);
+            set_global_var(GVAR_TANDI_LOCATION_TRACKER, 4);
+         end
+      end
+   end
+   add_timer_event(self_obj, random(25, 40), EVENT_FLOAT_INJURED);
+end
+
+procedure critter_p_proc begin
+   if (self_can_see_dude and REP_ENEMY_SHADY_SANDS and (global_var(GVAR_TANDI_LOCATION_TRACKER) != 1)) then begin
+      if Tandi_In_Party then begin
+         set_self_abandon_party;
+      end
+      attack(dude_obj);
+   end
+   else begin
+      /**************************************
+         TANDI AT KHANS
+      **************************************/
+      if CUR_MAP_RAIDERS then begin
+         if (tandi_is_kidnapped and (global_var(GVAR_TANDI_LOCATION_TRACKER) == 1)) then begin
+            set_self_abandon_party;
+            critter_attempt_placement(self_obj, 17905, 0);
+            if not(is_loading_game) then set_self_visible;
+            set_global_var(GVAR_TANDI_LOCATION_TRACKER, 2);
+         end
+         else if ((global_var(GVAR_TANDI_HIRELING_STATUS) == 5) and (global_var(GVAR_TANDI_LOCATION_TRACKER) == 2)) then begin
+            tandi_joins_party;
+            set_global_var(GVAR_TANDI_LOCATION_TRACKER, 3);
+         end
+         if ((map_var(2) != 0) and (local_var(LVAR_JoinPlayer) == 0)) then begin
+            set_global_var(GVAR_TANDI_HIRELING_STATUS, 5);
+            set_local_var(LVAR_JoinPlayer, 1);
+            if not(Tandi_In_Party) then begin
+               tandi_joins_party;
+            end
+         end
+      end
+      /**************************************
+         TANDI IN SHADY SANDS
+      **************************************/
+      else if CUR_AREA_SHADY_SANDS then begin
+         // I guess this is so Tandi will unequipp her weapons after returning to Shady
+         if (global_var(GVAR_TANDI_HIRELING_STATUS) > 1) and Tandi_In_Party then begin
+            variable Temp_ptr := 0;
+            Temp_ptr := create_object(PID_DEAD_TRAVELER, 0, 0);
+            move_to(Temp_ptr, 0, 0);
+            inven_unwield;
+            move_obj_inven_to_obj(self_obj, Temp_ptr);
+            move_obj_inven_to_obj(Temp_ptr, self_obj);
+            destroy_object(Temp_ptr);
+         end
+
+         if (tandi_is_kidnapped and (global_var(GVAR_TANDI_LOCATION_TRACKER) == 0)) then begin
+            tandi_joins_party;
+            if not(is_loading_game) then set_self_invisible;
+            set_global_var(GVAR_TANDI_LOCATION_TRACKER, 1);
+         end
+         else if ((global_var(GVAR_TANDI_HIRELING_STATUS) > 1) and (global_var(GVAR_TANDI_LOCATION_TRACKER) == 3) and CUR_MAP_SHADYW) then begin
+            set_self_abandon_party;
+            if not(is_loading_game) then set_self_visible;
+            self_run_to_tile(16710);
+            set_global_var(GVAR_TANDI_LOCATION_TRACKER, 300);
+
+            // Reputation bonus for returning Tandi
+            inc_shady_rep(REP_BONUS_TANDI_RESCUED);
+         end
+         else if ((global_var(GVAR_TANDI_LOCATION_TRACKER) == 300) and (tile_distance(self_tile, 16710) >= 2)) then begin
+            self_run_to_tile(16710);
+         end
+         else if ((global_var(GVAR_TANDI_LOCATION_TRACKER) == 300) and (tile_distance(self_tile, 16710) < 2)) then begin
+            set_global_var(GVAR_TANDI_LOCATION_TRACKER, 301);
+         end
+         else if ((global_var(GVAR_TANDI_LOCATION_TRACKER) == 301) and (tile_distance(self_tile, 20706) >= 2)) then begin
+            self_run_to_tile(20706);
+         end
+         else if ((global_var(GVAR_TANDI_LOCATION_TRACKER) == 301) and (tile_distance(self_tile, 20706) < 2)) then begin
+            set_global_var(GVAR_TANDI_LOCATION_TRACKER, 302);
+         end
+         else if ((global_var(GVAR_TANDI_LOCATION_TRACKER) == 302) and (tile_distance(self_tile, 23698) >= 2)) then begin
+            self_run_to_tile(23698);
+         end
+         else if ((global_var(GVAR_TANDI_LOCATION_TRACKER) == 302) and (tile_distance(self_tile, 23698) < 2)) then begin
+            set_global_var(GVAR_TANDI_LOCATION_TRACKER, 303);
+         end
+         else if ((global_var(GVAR_TANDI_LOCATION_TRACKER) == 303) and (tile_distance(self_tile, 22086) >= 2)) then begin
+            self_run_to_tile(22086);
+         end
+         else if ((global_var(GVAR_TANDI_LOCATION_TRACKER) == 303) and (tile_distance(self_tile, 22086) < 2)) then begin
+            set_global_var(GVAR_TANDI_LOCATION_TRACKER, 4);
+         end
+
+         if (self_can_see_dude and not(Tandi_In_Party) and tmp_hostile) then begin
+            tmp_hostile := 0;
+            attack(dude_obj);
+         end
+         if (not(Tandi_In_Party) and tandi_not_kidnapped and (global_var(GVAR_TANDI_LOCATION_TRACKER) != 300)) then begin
+            call TandiSchedule;
+            if (random(1, 20) == 1) then begin
+               self_walk_to_tile(tile_num_in_direction(self_tile, random(0, 5), random(2, 4)));
+            end
+         end
+      end
+   end
+
+   // Tandi is free and starts following the player
+   if ((global_var(GVAR_TANDI_HIRELING_STATUS) == 5) and (local_var(LVAR_JoinPlayer) == 0)) then begin
+      set_local_var(LVAR_JoinPlayer, 1);
+      if not(Tandi_In_Party) then begin
+         tandi_joins_party;
+      end
+   end
+
+   // Tandi following the player (on the worldmap and everywhere, like a regular party member)
+   if (Tandi_In_Party and (cur_map_index != MAP_SHADYW) and (cur_map_index != MAP_SHADYE)) then begin
+      if (tile_distance_objs(self_obj, dude_obj) >= (1.5 * 2)) then begin
+         self_run_to_tile(tile_num_in_direction(dude_tile, random(0, 5), 1));
+      end
+      else begin
+         if (tile_distance_objs(self_obj, dude_obj) >= 2) then begin
+            self_walk_to_tile(tile_num_in_direction(dude_tile, random(0, 5), 1));
+         end
+      end
+   end
+
+   // Tandi following the player.
+   // Player entered Shady Sands east side (via Town/World). Tandi runs to the west side.
+   else if ((global_var(GVAR_TANDI_HIRELING_STATUS) > 1) and CUR_MAP_SHADYE) then begin
+      if (self_tile != 14950) then begin
+         self_run_to_tile(14950);
+      end
+      else begin
+         if not(is_loading_game) then set_self_invisible;
+      end
+   end
+end
+
+procedure damage_p_proc begin
+   if (source_is_dude and (CUR_MAP_SHADYW or CUR_MAP_SHADYE)) then begin
+      set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+   end
+end
