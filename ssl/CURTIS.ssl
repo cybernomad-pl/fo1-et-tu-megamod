@@ -175,6 +175,7 @@ end
 
 procedure Curtis01 begin
    Reply(101);
+   // TODO: friendly recruit reply when local_var(1)==1 (post-irrigation)
    NOption(900, NodeRecruit, 4);
    NOption(102, Curtis03, 4);
    NLowOption(103, CurtisEnd);
@@ -182,6 +183,8 @@ end
 
 procedure Curtis02 begin
    Reply(104);
+   // TODO: friendly recruit reply when local_var(1)==1 (post-irrigation)
+   NOption(900, NodeRecruit, 4);
    NOption(g_more, Curtis03, 1);
 end
 

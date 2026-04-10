@@ -1,7 +1,19 @@
 /*
-    Radio Faction Summon -- MVP debug
-    USE radio outside towns = spawn guards + recall waiting party
-    Cooldown 3 days between summons.
+    Radio Faction Summon
+    USE radio outside towns = summon currently selected faction squad.
+    Each USE advances to the next unlocked faction (cycling menu).
+    Cooldown 3 days between actual summons (cycling is free).
+
+    KNOWN LIMITATION:
+    Proper gdialog menu requires either:
+      - a dedicated .msg file + critter script (like WORKBNCH) to anchor dialog, OR
+      - sfall message_box API (not present in this codebase yet).
+    MVP approach here: display_msg lists unlocked factions, cycle index picks
+    "active" faction -- single USE summons it, next USE advances the cycle.
+    TODO: upgrade to real gdialog menu once a radio NPC anchor script exists.
+
+    DEBUG: on first game load, all factions are unlocked for testing.
+    Marker: DEBUG_UNLOCK_ALL -- remove before release.
 */
 
 #include "define.h"
@@ -15,10 +27,33 @@
 
 #define is_in_town  (cur_town == AREA_VAULT_13 or cur_town == AREA_SHADY_SANDS or cur_town == AREA_JUNKTOWN or cur_town == AREA_NECROPOLIS or cur_town == AREA_HUB or cur_town == AREA_BROTHERHOOD or cur_town == AREA_BONEYARD or cur_town == AREA_CATHEDRAL)
 
+// Faction identifiers -- also used as persistent array keys
+#define FAC_SHADY_SANDS        ("shady_sands")
+#define FAC_KHANS              ("khans")
+#define FAC_JUNKTOWN_KILLIAN   ("junktown_killian")
+#define FAC_JUNKTOWN_SKULLZ    ("junktown_skullz")
+#define FAC_JUNKTOWN_GIZMO     ("junktown_gizmo")
+#define FAC_JUNKTOWN_MILITIA   ("junktown_militia")
+#define FAC_GUNRUNNERS         ("gunrunners")
+#define FAC_BLADES             ("blades")
+#define FAC_BOS                ("bos")
+#define FAC_FOLLOWERS          ("followers")
+#define FAC_NECROPOLIS         ("necropolis")
+
+#define FACTION_COUNT          (11)
+
 variable summon_cd;
+variable faction_unlocks;
 
 procedure start;
 procedure radio_handler;
+procedure init_faction_unlocks;
+procedure is_unlocked(variable fac);
+procedure faction_by_index(variable idx);
+procedure faction_display_name(variable fac);
+procedure show_menu;
+procedure spawn_squad(variable fac);
+procedure spawn_npc(variable weapon_pid);
 
 procedure start begin
     if game_loaded then begin
@@ -27,6 +62,9 @@ procedure start begin
             summon_cd := create_array_map;
             save_array("megamod_radio_cd", summon_cd);
         end
+
+        call init_faction_unlocks;
+
         // Enable Use flag on Radio
         set_proto_data(PID_RADIO, PROTO_IT_FLAGS,
             get_proto_data(PID_RADIO, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
@@ -34,15 +72,122 @@ procedure start begin
     end
 end
 
+// ============================================================
+// Faction unlocks -- persistent store, keyed by faction id
+// GVAR_FACTION_* may not exist in define.h yet, so we use
+// sfall persistent arrays. Questline scripts will set the
+// appropriate key to 1 when a faction is unlocked.
+// ============================================================
+procedure init_faction_unlocks begin
+    faction_unlocks := load_array("megamod_faction_unlocks");
+    if (faction_unlocks == 0) then begin
+        faction_unlocks := create_array_map;
+
+        // DEBUG_UNLOCK_ALL -- unlock all factions for testing
+        // REMOVE BEFORE RELEASE
+        faction_unlocks[FAC_SHADY_SANDS]      := 1;
+        faction_unlocks[FAC_KHANS]            := 1;
+        faction_unlocks[FAC_JUNKTOWN_KILLIAN] := 1;
+        faction_unlocks[FAC_JUNKTOWN_SKULLZ]  := 1;
+        faction_unlocks[FAC_JUNKTOWN_GIZMO]   := 1;
+        faction_unlocks[FAC_JUNKTOWN_MILITIA] := 1;
+        faction_unlocks[FAC_GUNRUNNERS]       := 1;
+        faction_unlocks[FAC_BLADES]           := 1;
+        faction_unlocks[FAC_BOS]              := 1;
+        faction_unlocks[FAC_FOLLOWERS]        := 1;
+        faction_unlocks[FAC_NECROPOLIS]       := 1;
+
+        save_array("megamod_faction_unlocks", faction_unlocks);
+    end
+end
+
+procedure is_unlocked(variable fac) begin
+    return (faction_unlocks[fac] == 1);
+end
+
+procedure faction_by_index(variable idx) begin
+    if (idx == 0) then return FAC_SHADY_SANDS;
+    if (idx == 1) then return FAC_KHANS;
+    if (idx == 2) then return FAC_JUNKTOWN_KILLIAN;
+    if (idx == 3) then return FAC_JUNKTOWN_SKULLZ;
+    if (idx == 4) then return FAC_JUNKTOWN_GIZMO;
+    if (idx == 5) then return FAC_JUNKTOWN_MILITIA;
+    if (idx == 6) then return FAC_GUNRUNNERS;
+    if (idx == 7) then return FAC_BLADES;
+    if (idx == 8) then return FAC_BOS;
+    if (idx == 9) then return FAC_FOLLOWERS;
+    if (idx == 10) then return FAC_NECROPOLIS;
+    return "";
+end
+
+procedure faction_display_name(variable fac) begin
+    if (fac == FAC_SHADY_SANDS)      then return "Shady Sands (Baldie, Little Mac, Harley)";
+    if (fac == FAC_KHANS)            then return "Khans War Party";
+    if (fac == FAC_JUNKTOWN_KILLIAN) then return "Junktown -- Sheriff Lars";
+    if (fac == FAC_JUNKTOWN_SKULLZ)  then return "Junktown -- Skullz Gang";
+    if (fac == FAC_JUNKTOWN_GIZMO)   then return "Junktown -- Gizmo's Crew";
+    if (fac == FAC_JUNKTOWN_MILITIA) then return "Junktown -- Citizen Militia";
+    if (fac == FAC_GUNRUNNERS)       then return "Gunrunners";
+    if (fac == FAC_BLADES)           then return "Blades";
+    if (fac == FAC_BOS)              then return "Brotherhood of Steel Paladins";
+    if (fac == FAC_FOLLOWERS)        then return "Followers of the Apocalypse";
+    if (fac == FAC_NECROPOLIS)       then return "Necropolis Ghouls + Harold";
+    return "Unknown";
+end
+
+// ============================================================
+// Menu -- list all unlocked factions + highlight active one.
+// Active = summon_cd["active"] (index into cycle).
+// ============================================================
+procedure show_menu begin
+    variable i;
+    variable fac;
+    variable active_idx;
+    variable any;
+
+    display_msg("=== RADIO FREQUENCIES ===");
+    active_idx := summon_cd["active"];
+    any := 0;
+
+    for (i := 0; i < FACTION_COUNT; i++) begin
+        fac := faction_by_index(i);
+        if (is_unlocked(fac)) then begin
+            any := 1;
+            if (i == active_idx) then begin
+                display_msg("  > " + faction_display_name(fac) + " [SELECTED]");
+            end
+            else begin
+                display_msg("    " + faction_display_name(fac));
+            end
+        end
+    end
+
+    if (any == 0) then begin
+        display_msg("No factions on frequency. Complete quests to unlock.");
+    end
+    else begin
+        display_msg("(USE radio again to cycle, hold for 1s then release to summon)");
+    end
+end
+
+// ============================================================
+// Main USE handler
+// Behavior:
+//   - 1st USE: show menu, select first unlocked faction
+//   - subsequent USE within same minute: cycle active selection
+//   - cooldown gate only blocks actual spawn, not cycling
+// ============================================================
 procedure radio_handler begin
     variable user;
     variable item;
     variable last_summon;
     variable hours_passed;
+    variable last_use_time;
+    variable active_idx;
+    variable cycled_idx;
+    variable fac;
     variable i;
-    variable npc;
-    variable tile;
-    variable dir;
+    variable tries;
 
     user := get_sfall_arg;
     item := get_sfall_arg;
@@ -58,7 +203,7 @@ procedure radio_handler begin
         return;
     end
 
-    // Check cooldown
+    // Cooldown applies only to actual spawn, not to cycling/listing
     last_summon := summon_cd["last"];
     if (last_summon > 0) then begin
         hours_passed := (game_time - last_summon) / 600;
@@ -68,22 +213,249 @@ procedure radio_handler begin
         end
     end
 
-    // Spawn squad around player
-    tile := tile_num(dude_obj);
+    // Determine cycling vs summon.
+    // If last USE was within ~10 game seconds, treat as "cycle to next".
+    // Otherwise treat as "show menu + select current" OR "summon current".
+    last_use_time := summon_cd["last_use"];
+    active_idx := summon_cd["active"];
 
-    for (i := 0; i < SQUAD_SIZE; i++) begin
-        dir := random(0, 5);
-        npc := create_object(PID_GUARD, tile_num_in_direction(tile, dir, random(2, 4)), dude_elevation);
-        set_team(npc, TEAM_PLAYER);
-        // Give them decent starting gear
-        add_obj_to_inven(npc, create_object(PID_ASSAULT_RIFLE, 0, 0));
-        add_obj_to_inven(npc, create_object(PID_STIMPAK, 0, 0));
-        add_obj_to_inven(npc, create_object(PID_STIMPAK, 0, 0));
+    // First make sure active_idx points to an unlocked faction.
+    // If not, advance to first unlocked. If none unlocked, bail.
+    tries := 0;
+    while (tries < FACTION_COUNT) do begin
+        fac := faction_by_index(active_idx);
+        if (is_unlocked(fac)) then begin
+            tries := FACTION_COUNT + 1;  // break
+        end
+        else begin
+            active_idx := (active_idx + 1) % FACTION_COUNT;
+            tries := tries + 1;
+        end
     end
 
-    // Set cooldown
-    summon_cd["last"] := game_time;
-    save_array("megamod_radio_cd", summon_cd);
+    if (tries == FACTION_COUNT) then begin
+        display_msg("Radio is silent. No frequencies unlocked.");
+        return;
+    end
 
-    display_msg("Reinforcements arrive. " + SQUAD_SIZE + " guards reporting for duty.");
+    // If last USE within 10 game seconds -- cycle to next unlocked faction.
+    if ((last_use_time > 0) and ((game_time - last_use_time) < 100)) then begin
+        cycled_idx := (active_idx + 1) % FACTION_COUNT;
+        tries := 0;
+        while (tries < FACTION_COUNT) do begin
+            fac := faction_by_index(cycled_idx);
+            if (is_unlocked(fac)) then begin
+                tries := FACTION_COUNT + 1;
+            end
+            else begin
+                cycled_idx := (cycled_idx + 1) % FACTION_COUNT;
+                tries := tries + 1;
+            end
+        end
+        active_idx := cycled_idx;
+        summon_cd["active"] := active_idx;
+        summon_cd["last_use"] := game_time;
+        save_array("megamod_radio_cd", summon_cd);
+
+        call show_menu;
+        return;
+    end
+
+    // Not cycling -- either show menu for the first time, or confirm+summon.
+    // Use summon_cd["confirmed"] to implement a confirm-on-second-press pattern.
+    if (summon_cd["confirmed"] != active_idx + 1) then begin
+        // Show menu, mark this index as "primed for confirmation"
+        summon_cd["active"] := active_idx;
+        summon_cd["confirmed"] := active_idx + 1;
+        summon_cd["last_use"] := game_time;
+        save_array("megamod_radio_cd", summon_cd);
+
+        call show_menu;
+        display_msg("USE radio once more to CONFIRM summon.");
+        return;
+    end
+
+    // Confirmed -- spawn squad for active faction
+    fac := faction_by_index(active_idx);
+    display_msg("Radio crackles. " + faction_display_name(fac) + " inbound.");
+    call spawn_squad(fac);
+
+    // Set cooldown + clear confirmation
+    summon_cd["last"] := game_time;
+    summon_cd["confirmed"] := 0;
+    summon_cd["last_use"] := game_time;
+    save_array("megamod_radio_cd", summon_cd);
+end
+
+// ============================================================
+// spawn_npc helper -- spawns one critter with given weapon
+// TODO FID: per-faction art change via art_change_fid_num
+// ============================================================
+procedure spawn_npc(variable weapon_pid) begin
+    variable npc;
+    variable tile;
+    variable dir;
+
+    tile := tile_num(dude_obj);
+    dir := random(0, 5);
+    // TODO FID: use faction-specific critter PID / art change
+    npc := create_object(PID_GUARD, tile_num_in_direction(tile, dir, random(2, 4)), dude_elevation);
+    set_team(npc, TEAM_PLAYER);
+    add_obj_to_inven(npc, create_object(weapon_pid, 0, 0));
+    add_obj_to_inven(npc, create_object(PID_STIMPAK, 0, 0));
+    add_obj_to_inven(npc, create_object(PID_STIMPAK, 0, 0));
+    return npc;
+end
+
+// ============================================================
+// Per-faction squad spawner.
+// Each faction has distinct gear. FIDs are placeholders (PID_GUARD)
+// with TODO markers -- real sprites to be set once FIDs are identified.
+// ============================================================
+procedure spawn_squad(variable fac) begin
+    variable npc;
+
+    // ----------------------------------------------------------
+    // SHADY SANDS -- Baldie / Little Mac / Harley on motorcycle
+    // ----------------------------------------------------------
+    if (fac == FAC_SHADY_SANDS) then begin
+        // TODO FID: Baldie -- combat armor, no helmet (bald unique sprite)
+        // TODO PID: combat rifle or better -- using PID_ASSAULT_RIFLE as placeholder
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+
+        // TODO FID: Little Mac -- dwarf sprite
+        // TODO PID: PID_SMG -- verify in define.h, falling back to PID_ASSAULT_RIFLE
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+
+        // TODO FID: Harley -- mohawk + leather armor
+        // TODO PID: PID_SAWED_OFF_SHOTGUN or PID_SHOTGUN -- verify
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+
+        // TODO: spawn motorcycle under them (integrate with motorcycle mod)
+        display_msg("Engine roars. The trio rolls in.");
+        return;
+    end
+
+    // ----------------------------------------------------------
+    // KHANS -- raider war party
+    // ----------------------------------------------------------
+    if (fac == FAC_KHANS) then begin
+        // TODO FID: Khan raiders (leather armor, mohawks)
+        // TODO PID: mixed SMG / combat knife / shotgun
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        return;
+    end
+
+    // ----------------------------------------------------------
+    // JUNKTOWN -- Killian's Law
+    // ----------------------------------------------------------
+    if (fac == FAC_JUNKTOWN_KILLIAN) then begin
+        // TODO FID: Sheriff Lars + Junktown guards (leather jacket, badges)
+        // TODO PID: 10mm SMG for guards, shotgun for Lars
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        return;
+    end
+
+    // ----------------------------------------------------------
+    // JUNKTOWN -- Skullz Gang
+    // ----------------------------------------------------------
+    if (fac == FAC_JUNKTOWN_SKULLZ) then begin
+        // TODO FID: Skullz sprites (punk/ragged)
+        // TODO PID: knives, pipe rifles, pistols
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        return;
+    end
+
+    // ----------------------------------------------------------
+    // JUNKTOWN -- Gizmo's Crew
+    // ----------------------------------------------------------
+    if (fac == FAC_JUNKTOWN_GIZMO) then begin
+        // TODO FID: Gizmo's people (led by black lieutenant)
+        // TODO PID: SMGs, combat shotguns
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        return;
+    end
+
+    // ----------------------------------------------------------
+    // JUNKTOWN -- Citizen Militia
+    // ----------------------------------------------------------
+    if (fac == FAC_JUNKTOWN_MILITIA) then begin
+        // TODO FID: civilian sprites (boxer, bartender, hotel owner, etc.)
+        // TODO PID: each with best weapon they can use based on skills
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        return;
+    end
+
+    // ----------------------------------------------------------
+    // GUNRUNNERS -- heavy gear traders turned fighters
+    // ----------------------------------------------------------
+    if (fac == FAC_GUNRUNNERS) then begin
+        // TODO FID: Gunrunner sprites (combat armor)
+        // TODO PID: heavy weapons, minigun, rocket launcher
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        return;
+    end
+
+    // ----------------------------------------------------------
+    // BLADES -- melee combat faction
+    // ----------------------------------------------------------
+    if (fac == FAC_BLADES) then begin
+        // TODO FID: Blades fighters (leather, punk look)
+        // TODO PID: combat knives, sledgehammers, ripper
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        return;
+    end
+
+    // ----------------------------------------------------------
+    // BROTHERHOOD OF STEEL -- Paladins in Power Armor
+    // ----------------------------------------------------------
+    if (fac == FAC_BOS) then begin
+        // TODO FID: BoS Paladin in Power Armor (ART: hmpwra / hmpwrb)
+        // TODO PID: PID_LASER_RIFLE or PID_PLASMA_RIFLE -- verify in define.h
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        return;
+    end
+
+    // ----------------------------------------------------------
+    // FOLLOWERS OF THE APOCALYPSE -- medics, scientists
+    // ----------------------------------------------------------
+    if (fac == FAC_FOLLOWERS) then begin
+        // TODO FID: Follower sprites (robes, civilian)
+        // TODO PID: pistols + extra stimpaks + first aid kits
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        return;
+    end
+
+    // ----------------------------------------------------------
+    // NECROPOLIS -- Set's ghouls + Harold
+    // ----------------------------------------------------------
+    if (fac == FAC_NECROPOLIS) then begin
+        // TODO FID: Ghoul sprites + Harold unique sprite
+        // TODO PID: pipe rifles, hunting rifles for ghouls, whatever for Harold
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        npc := spawn_npc(PID_ASSAULT_RIFLE);
+        return;
+    end
+
+    // Fallback
+    display_msg("Unknown faction.");
 end

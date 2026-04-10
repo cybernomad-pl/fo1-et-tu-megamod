@@ -42,6 +42,15 @@
 - Seth swears allegiance, gives radio if player doesn't have one
 - **Radio summon:** Seth + Shady Sands militia (armed guards)
 - Summoning Shady Sands also triggers Hub caravan (see Hub below)
+- **Radio summon squad (confirmed design):**
+  - Baldie -- Combat Armor, no helmet (bald unique sprite)
+  - Little Mac -- dwarf with SMG
+  - Harley -- mohawk, leather armor, double-barrel shotgun
+- **Mount:** Motorcycle -- the 3 ride together as a unit
+- **Squad type:** Second party (bypasses vanilla party cap of 5)
+- Squad grows as more Shady Sands NPCs are helped/recruited
+- TODO: locate exact FIDs in critters.lst (FO2 tribal/hero sprites)
+- TODO: integrate with motorcycle mod (already in Borys's Fallout stack)
 
 ### RAIDERS / KHANS -- War Party
 - **Unlock:** Defeat Garl (Khan leader), become new Khan leader
@@ -91,6 +100,8 @@
 - **Radio summon:** Paladins in Power Armor
 - Strongest combat faction in the game
 - Barter access to BoS arsenal
+- **Confirmed:** Paladins option appears in radio menu ONLY after BoS questline complete (GVAR_FACTION_BOS set)
+- Menu dynamically lists unlocked factions only
 
 ### FOLLOWERS OF THE APOCALYPSE (support faction)
 - **Unlock:** Quest line with Followers
@@ -103,6 +114,22 @@
 - **Radio summon:** Set's ghoul fighters + Harold
 - Harold = unique mutated human NPC (iconic Fallout character)
 - Harold can join party or be summoned
+
+---
+
+## Post-Quest NPC Recruitment (generic pattern)
+
+Design principle: when a talking NPC has no active quest branches remaining in their dialog menu, a "join party" option appears in the main dialog node.
+
+- Applies to ALL talking NPCs in towns (not just V13)
+- Trigger: all quest-related local_vars set / all quest options exhausted
+- Stronger flavor text when player has actively helped the NPC (e.g. Curtis crop rotation -> friendly recruit line)
+- First confirmed case: Curtis (Shady Sands) -- recruit should be available in Curtis01 AND Curtis02 main menus, with warmer text after local_var(1)==1 (crop rotation explained)
+
+### Known NPCs for this pattern (initial list)
+- Vault 13: Officer, Medic (already working)
+- Shady Sands: Theresa (working), Curtis (BUG -- fixed in wrk1/radio-factions)
+- More to be identified during playtest
 
 ---
 
