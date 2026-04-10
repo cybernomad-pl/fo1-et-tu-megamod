@@ -1,0 +1,67 @@
+#include "define.h"
+
+#define NAME                    SCRIPT_DOG
+
+#include "command.h"
+
+procedure start;
+procedure critter_p_proc;
+procedure damage_p_proc;
+procedure talk_p_proc;
+procedure use_skill_on_p_proc;
+procedure push_p_proc;
+
+variable rndx;
+variable rndy;
+variable critter_tile;
+variable Only_Once := 1;
+variable tmp_hostile := 0;
+
+procedure push_p_proc begin
+end
+
+procedure start begin
+   if Only_Once then begin
+      Only_Once := 0;
+      set_self_ai(AI_DOG);
+      if CUR_AREA_SHADY_SANDS then begin
+         set_self_team(TEAM_SHADY_SANDS);
+      end
+   end
+end
+
+procedure map_enter_p_proc begin
+   if shady_invaded and (CUR_AREA_SHADY_SANDS or CUR_MAP_RAIDERS) then begin
+      invasion_kill_critter;
+   end
+end
+
+procedure talk_p_proc begin
+end
+
+procedure critter_p_proc begin
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   else begin
+      rndy := random(1, 20);
+      if (rndy == 1) then begin
+         rndx := random(0, 5);
+         critter_tile := tile_num_in_direction(self_tile, rndx, 1);
+         self_walk_to_tile(critter_tile);
+      end
+      detach;
+   end
+end
+
+procedure damage_p_proc begin
+   if source_is_dude then begin
+      party_remove(self_obj);
+      set_self_team(TEAM_SHADY_SANDS);
+      tmp_hostile := 1;
+   end
+end
+
+procedure use_skill_on_p_proc begin
+end
