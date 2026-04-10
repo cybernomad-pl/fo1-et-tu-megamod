@@ -1,0 +1,351 @@
+/*
+
+   Shady Sands - Katrina, standing near the entrance
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/shadysands.h"
+
+#define NAME                    SCRIPT_SSGUIDE
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_SHADYSANDS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure look_at_p_proc;
+procedure description_p_proc;
+procedure talk_p_proc;
+procedure critter_p_proc;
+procedure damage_p_proc;
+procedure destroy_p_proc;
+procedure pickup_p_proc;
+
+procedure DialogWeapon;
+procedure DialogFirstTime;
+procedure DialogSubsequent;
+procedure DialogExit;
+procedure DialogWeapon1;
+procedure DialogWeapon2;
+procedure DialogWeapon3;
+procedure DialogWeapon4;
+procedure DialogMain;
+procedure DialogMain1;
+procedure DialogMain2;
+procedure DialogMain3;
+procedure DialogMain4;
+procedure DialogMain5;
+procedure DialogMain6;
+procedure DialogMain7;
+procedure DialogMain8;
+procedure DialogMain9;
+procedure DialogMain10;
+procedure DialogSpecial1;
+procedure DialogSpecial2;
+procedure DialogSpecial3;
+procedure DialogSpecial4;
+
+variable Only_Once := 1;
+variable tmp_hostile;
+variable DisplayMessage;
+variable Hurt;
+variable Equipment;
+variable Barter;
+variable Bartered;
+variable Place;
+variable World;
+variable Yourself;
+variable Vault;
+variable Vaulted;
+
+procedure start begin
+   if (map_first_run) and (local_var(7) != 1) then begin
+      variable LVar0;
+      set_local_var(7, 1);
+      if (self_item(PID_BROWN_BAG) > 0) then begin
+         LVar0 := self_item(PID_BROWN_BAG);
+         rm_obj_from_inven(self_obj, LVar0);
+         destroy_object(LVar0);
+         LVar0 := 0;
+      end
+      if (self_item(PID_LEATHER_JACKET) > 0) then begin
+         LVar0 := self_item(PID_LEATHER_JACKET);
+         rm_obj_from_inven(self_obj, LVar0);
+         destroy_object(LVar0);
+         LVar0 := 0;
+      end
+   end
+
+   if (Only_Once == 1) then begin
+      Only_Once := 0;
+      set_self_team(TEAM_SHADY_SANDS);
+      set_self_ai(AI_PEASANT);
+   end
+end
+
+procedure map_enter_p_proc begin
+   if shady_invaded then begin
+      invasion_kill_critter;
+   end
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure description_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure talk_p_proc begin
+   set_tma_data_generic(TMA_MSG_SHADYW);
+
+   dude_look_at_self;
+   if REP_ENEMY_SHADY_SANDS then begin
+      float_msg(self_obj, message_str(SCRIPT_ENEMY, random(100, 105)), FLOAT_MSG_RED);
+   end
+   else begin
+      get_reaction
+
+      if dude_is_armed then begin
+         start_dialog_at_node(DialogWeapon);
+      end
+      else if (local_var(4) == 0) then begin
+         set_local_var(4, 1);
+         start_dialog_at_node(DialogFirstTime);
+      end
+      else begin
+         start_dialog_at_node(DialogSubsequent);
+      end
+
+      Hurt := 0;
+      Equipment := 0;
+      Barter := 0;
+      Bartered := 0;
+      Place := 0;
+      World := 0;
+      Yourself := 0;
+      Vault := 0;
+      Vaulted := 0;
+   end
+end
+
+procedure critter_p_proc begin
+   if (self_can_see_dude) then begin
+      if REP_ENEMY_SHADY_SANDS then begin
+         attack(dude_obj);
+      end
+   end
+end
+
+procedure damage_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+   end
+end
+
+procedure destroy_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+   end
+   inc_good_critter
+end
+
+procedure pickup_p_proc begin
+   if (local_var(6) == 0) then begin
+      float_msg(self_obj, mstr(151), FLOAT_MSG_RED);
+      set_local_var(6, 1);
+   end
+   else begin
+      set_global_var(GVAR_ENEMY_SHADY_SANDS, 1);
+   end
+end
+
+procedure DialogWeapon begin
+   Reply(101);
+   NLowOption(102, DialogWeapon1);
+   NOption(103, DialogWeapon2, 4);
+   NOption(104, DialogWeapon3, 4);
+   NOption(105, DialogWeapon4, 4);
+end
+
+procedure DialogFirstTime begin
+   Reply(111);
+   DisplayMessage := 125;
+   NLowOption(112, DialogSpecial1);
+   NOption(113, DialogMain5, 4);
+   NOption(114, DialogMain, 4);
+   NOption(115, DialogMain8, 5);
+   if tandi_is_kidnapped then begin
+      NOption(116, DialogMain9, 4);
+   end
+   if radscorp_quest_active then begin
+      NOption(117, DialogMain10, 4);
+   end
+   NOption(118, DialogExit, 4);
+end
+
+procedure DialogSubsequent begin
+   variable LVar0 := 0;
+   LVar0 := game_time_hour;
+   Reply(144);
+   DisplayMessage := 125;
+   NLowOption(112, DialogSpecial1);
+   if ((LVar0 > 1800) or (LVar0 < 800)) then begin
+      NOption(145, DialogSpecial4, 4);
+   end
+   else begin
+      NOption(113, DialogMain5, 4);
+   end
+   NOption(114, DialogMain, 4);
+   NOption(115, DialogMain8, 5);
+   if tandi_is_kidnapped then begin
+      NOption(116, DialogMain9, 4);
+   end
+   if radscorp_quest_active then begin
+      NOption(117, DialogMain10, 4);
+   end
+   NOption(118, DialogExit, 4);
+end
+
+procedure DialogExit begin
+end
+
+procedure DialogWeapon1 begin
+   NMessage(106);
+end
+
+procedure DialogWeapon2 begin
+   Reply(107);
+   NOption(108, DialogExit, 4);
+end
+
+procedure DialogWeapon3 begin
+   Reply(109);
+   NOption(110, DialogExit, 4);
+end
+
+procedure DialogWeapon4 begin
+   Reply(109);
+   NOption(110, DialogExit, 4);
+end
+
+procedure DialogMain begin
+   Reply(DisplayMessage);
+   if (Hurt == 0) then begin
+      NOption(126, DialogMain1, 4);
+   end
+   if (Equipment == 0) then begin
+      NOption(127, DialogMain2, 4);
+   end
+   else begin
+      if (Barter == 1) then begin
+         NOption(134, DialogMain6, 4);
+      end
+   end
+   if (Place == 0) then begin
+      NOption(128, DialogMain3, 4);
+   end
+   if (World == 0) then begin
+      NOption(129, DialogMain4, 4);
+   end
+   if (Yourself == 0) then begin
+      NOption(130, DialogMain5, 4);
+   end
+   else begin
+      if (Vault == 1) then begin
+         NOption(138, DialogMain7, 4);
+      end
+   end
+   NOption(131, DialogExit, 4);
+   if ((local_var(5) == 0) and ((Hurt == 1) and (Equipment == 1) and (Place == 1) and (World == 1) and (Yourself == 1) and (Bartered == 1) and (Vaulted == 1))) then begin
+      set_local_var(5, 1);
+      give_xp_msg(EXP_GUIDE_BONUS, mstr(150));
+   end
+end
+
+procedure DialogMain1 begin
+   Hurt := 1;
+   DisplayMessage := 132;
+   call DialogMain;
+end
+
+procedure DialogMain2 begin
+   Equipment := 1;
+   DisplayMessage := 133;
+   Barter := 1;
+   call DialogMain;
+end
+
+procedure DialogMain3 begin
+   Place := 1;
+   DisplayMessage := 135;
+   call DialogMain;
+end
+
+procedure DialogMain4 begin
+   World := 1;
+   DisplayMessage := 136;
+   call DialogMain;
+end
+
+procedure DialogMain5 begin
+   Yourself := 1;
+   DisplayMessage := 137;
+   Vault := 1;
+   call DialogMain;
+end
+
+procedure DialogMain6 begin
+   Barter := 0;
+   DisplayMessage := 139;
+   Bartered := 1;
+   call DialogMain;
+end
+
+procedure DialogMain7 begin
+   Vault := 0;
+   DisplayMessage := 140;
+   Vaulted := 1;
+   call DialogMain;
+end
+
+procedure DialogMain8 begin
+   DisplayMessage := 143;
+   call DialogMain;
+end
+
+procedure DialogMain9 begin
+   DisplayMessage := 141;
+   call DialogMain;
+end
+
+procedure DialogMain10 begin
+   DisplayMessage := 142;
+   call DialogMain;
+end
+
+procedure DialogSpecial1 begin
+   Reply(119);
+   NLowOption(120, DialogSpecial2);
+end
+
+procedure DialogSpecial2 begin
+   Reply(121);
+   NLowOption(122, DialogSpecial3);
+end
+
+procedure DialogSpecial3 begin
+   Reply(123);
+   NLowOption(124, DialogExit);
+end
+
+procedure DialogSpecial4 begin
+   Reply(146);
+   NOption(147, DialogExit, 4);
+end
