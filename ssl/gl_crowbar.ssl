@@ -1,0 +1,73 @@
+/*
+    Crowbar Forcing -- fo1-et-tu-megamod
+    Use a Crowbar on locked doors/containers to force them open.
+    Strength check: random(1,10) <= ST means success.
+
+    Hook: HOOK_USEOBJON
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+
+#define CROWBAR_PID        PID_CROWBAR
+#define XP_SUCCESS         10
+#define XP_FAIL            3
+
+procedure start;
+procedure useobjon_handler;
+
+procedure start begin
+    if game_loaded then begin
+        register_hook_proc(HOOK_USEOBJON, useobjon_handler);
+    end
+end
+
+procedure useobjon_handler begin
+    variable user;
+    variable item;
+    variable target;
+    variable obj_type_val;
+    variable str_val;
+    variable roll;
+
+    user   := get_sfall_arg;
+    item   := get_sfall_arg;
+    target := get_sfall_arg;
+
+    // Only player using a crowbar
+    if (user != dude_obj) then return;
+    if (obj_pid(item) != CROWBAR_PID) then return;
+
+    // Target must be scenery (door) or item (container)
+    obj_type_val := obj_type(target);
+    if (obj_type_val != OBJ_TYPE_SCENERY) then begin
+        if (obj_type_val != OBJ_TYPE_ITEM) then return;
+    end
+
+    // Block default use action
+    set_sfall_return(-1);
+
+    // Check if locked
+    if (obj_is_locked(target) == false) then begin
+        display_msg("It's not locked.");
+        return;
+    end
+
+    // Strength check
+    str_val := get_critter_stat(dude_obj, STAT_st);
+    roll := random(1, 10);
+
+    if (roll <= str_val) then begin
+        obj_unlock(target);
+        display_msg("You wedge the crowbar in and force it open.");
+        give_exp_points(XP_SUCCESS);
+        display_msg("[Crowbar] +" + XP_SUCCESS + " XP");
+    end
+    else begin
+        display_msg("You strain against it, but it won't budge. Need more muscle.");
+        give_exp_points(XP_FAIL);
+        display_msg("[Crowbar] +" + XP_FAIL + " XP");
+    end
+end
