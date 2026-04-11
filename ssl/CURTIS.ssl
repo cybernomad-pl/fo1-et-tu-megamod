@@ -121,6 +121,9 @@ procedure look_at_p_proc begin
 end
 
 procedure map_enter_p_proc begin
+   // Curtis is ALWAYS tribal warrior (hmwarr, index 130)
+   art_change_fid_num(self_obj, 130);
+
    if shady_invaded then begin
       invasion_kill_critter;
    end
@@ -182,6 +185,7 @@ end
 
 procedure Curtis02 begin
    Reply(104);
+   NOption(900, NodeRecruit, 4);
    NOption(g_more, Curtis03, 1);
 end
 

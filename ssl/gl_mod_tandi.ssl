@@ -1,5 +1,15 @@
 /*
     Sexy Tandi + Easy Quest mod
+
+    Strategy:
+    1. set_proto_data on PID_TANDI to overwrite the proto base FID -- affects
+       any FRESH instance of Tandi created after this call.
+    2. HOOK_GAMEMODECHANGE iterates LIST_CRITTERS and patches existing Tandi
+       objects (e.g. ones loaded from save) with art_change_fid_num.
+
+    HOOK_ADJUSTFID was tried earlier but its arg layout is unclear in this
+    sfall version -- it ended up matching wrong critters (Agatha got the
+    sexy Tandi sprite, Tandi stayed red-haired). Removed.
 */
 #include "define.h"
 #include "command.h"
@@ -9,13 +19,19 @@
 #include "sfall/lib.arrays.h"
 
 #define LOG(s, k, v) set_ini_setting("megamod.ini|" + s + "|" + k, v)
-#define TANDI_ART_INDEX 86
+
+#define TANDI_ART_INDEX 86  // hfprim
+#define FID_HFPRIM_FULL 16777302
 
 procedure start;
 procedure gamemode_handler;
 
 procedure start begin
     if game_loaded then begin
+        // Overwrite Tandi's proto base FID -- affects fresh spawns.
+        set_proto_data(PID_TANDI, PROTO_FID, FID_HFPRIM_FULL);
+        LOG("tandi_mod", "proto_fid", get_proto_data(PID_TANDI, PROTO_FID));
+
         register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
         LOG("tandi_mod", "loaded", 1);
     end
@@ -25,13 +41,15 @@ procedure gamemode_handler begin
     variable lst;
     variable obj;
 
-    // Swap Tandi FID on every map
+    // Swap any existing Tandi on the current map.
+    // Direct OBJ_DATA_FID write bypasses metarule cache.
     lst := list_begin(LIST_CRITTERS);
     obj := list_next(lst);
     while (obj) do begin
         if (obj != 0) then begin
             if (obj_pid(obj) == PID_TANDI) then begin
-                art_change_fid_num(obj, TANDI_ART_INDEX);
+                set_object_data(obj, OBJ_DATA_FID, FID_HFPRIM_FULL);
+                LOG("tandi_mod", "swapped", 1);
             end
         end
         obj := list_next(lst);

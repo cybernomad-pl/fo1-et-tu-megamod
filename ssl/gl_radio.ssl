@@ -1,89 +1,395 @@
 /*
-    Radio Faction Summon -- MVP debug
-    USE radio outside towns = spawn guards + recall waiting party
-    Cooldown 3 days between summons.
+    Radio Faction Summon -- Megamod
+    USE radio outside towns = sequentially summon factions to your aid.
+    Each USE summons the NEXT unlocked faction.
+    Faction unlocks are tracked via GVARs / quest progress.
+    Summoned NPCs join TEAM_PLAYER and fight alongside the Vault Dweller.
 */
 
 #include "define.h"
 #include "command.h"
+#include "global.h"
+#include "artfid.h"
 #include "sfall/sfall.h"
 #include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
 #include "sfall/lib.arrays.h"
 
-#define SUMMON_COOLDOWN_HOURS  (24 * 3)
-#define SQUAD_SIZE             3
+// === Faction IDs (used as keys in saved arrays) ===
+#define FACTION_BALDIE       (1)
+#define FACTION_BROTHERHOOD  (2)
+#define FACTION_ZAX          (8)
+#define FACTION_RAIDERS      (3)
+#define FACTION_SKULLZ       (4)
+#define FACTION_BLADES       (5)
+#define FACTION_GUNRUNNERS   (6)
+#define FACTION_RAZLO        (7)
 
-#define is_in_town  (cur_town == AREA_VAULT_13 or cur_town == AREA_SHADY_SANDS or cur_town == AREA_JUNKTOWN or cur_town == AREA_NECROPOLIS or cur_town == AREA_HUB or cur_town == AREA_BROTHERHOOD or cur_town == AREA_BONEYARD or cur_town == AREA_CATHEDRAL)
+#define FACTION_COUNT        (8)
 
-variable summon_cd;
+#define LOG(s, k, v) set_ini_setting("megamod.ini|" + s + "|" + k, v)
+
+// === Town blocking -- DISABLED, radio works in cities too ===
+// #define is_in_town  (cur_town == AREA_VAULT_13 or cur_town == AREA_SHADY_SANDS or cur_town == AREA_JUNKTOWN or cur_town == AREA_NECROPOLIS or cur_town == AREA_HUB or cur_town == AREA_BROTHERHOOD or cur_town == AREA_BONEYARD or cur_town == AREA_CATHEDRAL)
+
+// === ART_NUM macro -- art_change_fid_num expects raw art number, not full FID ===
+// Critter FID = 0x01000000 + art_num. Strip the type prefix.
+#define ART_NUM(fid)  ((fid) bwand 0x00FFFFFF)
+
+// Sprite picks (from artfid.h, verified by reading PRO files in fo1_base):
+//   FID_HMGLCM (16777355) -- Male Bald Combat Armor       -- BALDIE
+//   FID_NMBRLP (16777256) -- nmbrlp = BUTCH dwarf sprite  -- LITTLE MAC
+//                            (BUTCH is Doc Morbid's mortuary assistant
+//                             in Junktown -- the "Iguana Bob long pork"
+//                             quest. Verified via 00000154.PRO -> FID 0x01000028)
+//   FID_NFPGLA (16777308) -- Female punk leather armor    -- HARLEY (mohawk)
+//   FID_HANPWR (16777303) -- Hardened Power Armor         -- BoS Paladin
+//   FID_HMCMBT (16777226) -- Hero Male Combat Armor       -- generic combat trooper
+
+// === Saved arrays ===
+variable summoned_factions;   // map: faction_id -> 1 if already summoned this run
+variable unlocked_factions;   // map: faction_id -> 1 if currently unlocked
 
 procedure start;
 procedure radio_handler;
+procedure refresh_unlocks;
+procedure summon_next_faction;
+procedure spawn_at_offset(variable pid, variable base_tile, variable dir, variable dist);
+procedure spawn_in_radius(variable pid);
+procedure spawn_baldie_gang;
+procedure spawn_brotherhood;
+procedure spawn_zax;
+procedure spawn_raiders;
+procedure spawn_skullz;
+procedure spawn_blades;
+procedure spawn_gunrunners;
+procedure spawn_razlo;
 
 procedure start begin
     if game_loaded then begin
-        summon_cd := load_array("megamod_radio_cd");
-        if (summon_cd == 0) then begin
-            summon_cd := create_array_map;
-            save_array("megamod_radio_cd", summon_cd);
+        LOG("radio", "start", 1);
+        summoned_factions := load_array("megamod_factions_summoned");
+        if (summoned_factions == 0) then begin
+            summoned_factions := create_array_map;
+            save_array("megamod_factions_summoned", summoned_factions);
         end
-        // Enable Use flag on Radio
+
+        unlocked_factions := load_array("megamod_factions_unlocked");
+        if (unlocked_factions == 0) then begin
+            unlocked_factions := create_array_map;
+            save_array("megamod_factions_unlocked", unlocked_factions);
+        end
+
+        // Enable Use action on Radio item
         set_proto_data(PID_RADIO, PROTO_IT_FLAGS,
             get_proto_data(PID_RADIO, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+        LOG("radio", "radio_flags", get_proto_data(PID_RADIO, PROTO_IT_FLAGS));
         register_hook_proc(HOOK_USEOBJ, radio_handler);
+        LOG("radio", "hook_registered", 1);
     end
+end
+
+// Refresh which factions are currently unlocked, based on GVARs / quest progress.
+procedure refresh_unlocks begin
+    // Baldie's Gang -- ALWAYS unlocked from game start
+    unlocked_factions[FACTION_BALDIE] := 1;
+
+    // Brotherhood Paladins
+    // TODO: GVAR_BROTHERHOOD_ORDERS does not exist in globals.h.
+    // Using GVAR_BROTHERHOOD_SEND_HELP as a stand-in for "player is in good standing with BoS".
+    if (global_var(GVAR_BROTHERHOOD_SEND_HELP) > 0) then
+        unlocked_factions[FACTION_BROTHERHOOD] := 1;
+
+    // Khans / Raiders
+    // TODO: GVAR_QUEST_RAIDERS_LEADER_DEAD / GVAR_JOINED_RAIDERS do not exist.
+    // Using GVAR_TOTAL_RAIDERS as a stand-in (player has interacted with raiders).
+    if (global_var(GVAR_TOTAL_RAIDERS) > 0) then
+        unlocked_factions[FACTION_RAIDERS] := 1;
+
+    // Skullz Gang
+    // TODO: GVAR_SKULLZ_JOINED does not exist; using GVAR_JOIN_SKULLZ.
+    if (global_var(GVAR_JOIN_SKULLZ) > 0) then
+        unlocked_factions[FACTION_SKULLZ] := 1;
+
+    // Blades
+    // TODO: GVAR_BLADES_WEAPONS_DELIVERED does not exist; using GVAR_BLADES_HELP.
+    if (global_var(GVAR_BLADES_HELP) > 0) then
+        unlocked_factions[FACTION_BLADES] := 1;
+
+    // Gunrunners
+    // TODO: GVAR_GUNRUNNER_QUEST does not exist; placeholder always-true so they can be tested.
+    // Replace with proper GVAR once available.
+    unlocked_factions[FACTION_GUNRUNNERS] := 1;
+
+    // Razlo medic
+    if (global_var(GVAR_VAULT_WATER) >= 1) then
+        unlocked_factions[FACTION_RAZLO] := 1;
+
+    // ZAX -- always unlocked for now (TODO: GVAR for ZAX friendship)
+    unlocked_factions[FACTION_ZAX] := 1;
+
+    save_array("megamod_factions_unlocked", unlocked_factions);
 end
 
 procedure radio_handler begin
     variable user;
     variable item;
-    variable last_summon;
-    variable hours_passed;
-    variable i;
-    variable npc;
-    variable tile;
-    variable dir;
+    variable next_faction;
 
     user := get_sfall_arg;
     item := get_sfall_arg;
+    LOG("radio", "handler_fired", obj_pid(item));
 
     if (user != dude_obj) then return;
     if (obj_pid(item) != PID_RADIO) then return;
+    LOG("radio", "radio_match", 1);
 
     set_sfall_return(-1);
 
-    // Block in towns
-    if is_in_town then begin
-        display_msg("Radio static. Too close to town. Move to the wasteland.");
+    // Town blocking REMOVED -- radio works in cities too.
+
+    // Refresh unlock list each USE so quest progress is reflected.
+    call refresh_unlocks;
+
+    // Find the next unlocked faction not yet summoned this run.
+    // ZAX inserted between Brotherhood and Raiders.
+    next_faction := 0;
+    if (unlocked_factions[FACTION_BALDIE] == 1 and summoned_factions[FACTION_BALDIE] != 1) then
+        next_faction := FACTION_BALDIE;
+    else if (unlocked_factions[FACTION_BROTHERHOOD] == 1 and summoned_factions[FACTION_BROTHERHOOD] != 1) then
+        next_faction := FACTION_BROTHERHOOD;
+    else if (unlocked_factions[FACTION_ZAX] == 1 and summoned_factions[FACTION_ZAX] != 1) then
+        next_faction := FACTION_ZAX;
+    else if (unlocked_factions[FACTION_RAIDERS] == 1 and summoned_factions[FACTION_RAIDERS] != 1) then
+        next_faction := FACTION_RAIDERS;
+    else if (unlocked_factions[FACTION_SKULLZ] == 1 and summoned_factions[FACTION_SKULLZ] != 1) then
+        next_faction := FACTION_SKULLZ;
+    else if (unlocked_factions[FACTION_BLADES] == 1 and summoned_factions[FACTION_BLADES] != 1) then
+        next_faction := FACTION_BLADES;
+    else if (unlocked_factions[FACTION_GUNRUNNERS] == 1 and summoned_factions[FACTION_GUNRUNNERS] != 1) then
+        next_faction := FACTION_GUNRUNNERS;
+    else if (unlocked_factions[FACTION_RAZLO] == 1 and summoned_factions[FACTION_RAZLO] != 1) then
+        next_faction := FACTION_RAZLO;
+
+    LOG("radio", "next_faction", next_faction);
+
+    if (next_faction == 0) then begin
+        display_msg("You called everyone already.");
         return;
     end
 
-    // Check cooldown
-    last_summon := summon_cd["last"];
-    if (last_summon > 0) then begin
-        hours_passed := (game_time - last_summon) / 600;
-        if (hours_passed < SUMMON_COOLDOWN_HOURS) then begin
-            display_msg("No response. Forces en route. " + (SUMMON_COOLDOWN_HOURS - hours_passed) + " hours until available.");
-            return;
-        end
+    // Summon the chosen faction.
+    if (next_faction == FACTION_BALDIE) then begin
+        LOG("radio", "spawning", "baldie");
+        call spawn_baldie_gang;
+        summoned_factions["baldie"] := 1;
+    end else if (next_faction == FACTION_BROTHERHOOD) then begin
+        call spawn_brotherhood;
+        summoned_factions["brotherhood"] := 1;
+    end else if (next_faction == FACTION_ZAX) then begin
+        call spawn_zax;
+        summoned_factions["zax"] := 1;
+    end else if (next_faction == FACTION_RAIDERS) then begin
+        call spawn_raiders;
+        summoned_factions["khans"] := 1;
+    end else if (next_faction == FACTION_SKULLZ) then begin
+        call spawn_skullz;
+        summoned_factions["skullz"] := 1;
+    end else if (next_faction == FACTION_BLADES) then begin
+        call spawn_blades;
+        summoned_factions["blades"] := 1;
+    end else if (next_faction == FACTION_GUNRUNNERS) then begin
+        call spawn_gunrunners;
+        summoned_factions["gunrunners"] := 1;
+    end else if (next_faction == FACTION_RAZLO) then begin
+        call spawn_razlo;
+        summoned_factions["razlo"] := 1;
     end
 
-    // Spawn squad around player
-    tile := tile_num(dude_obj);
+    // Mark this faction as summoned (numeric key for sequencing) and persist.
+    summoned_factions[next_faction] := 1;
+    save_array("megamod_factions_summoned", summoned_factions);
+end
 
-    for (i := 0; i < SQUAD_SIZE; i++) begin
-        dir := random(0, 5);
-        npc := create_object(PID_GUARD, tile_num_in_direction(tile, dir, random(2, 4)), dude_elevation);
-        set_team(npc, TEAM_PLAYER);
-        // Give them decent starting gear
-        add_obj_to_inven(npc, create_object(PID_ASSAULT_RIFLE, 0, 0));
-        add_obj_to_inven(npc, create_object(PID_STIMPAK, 0, 0));
-        add_obj_to_inven(npc, create_object(PID_STIMPAK, 0, 0));
+// Helper -- spawn a critter at an offset from base_tile and return it.
+procedure spawn_at_offset(variable pid, variable base_tile, variable dir, variable dist) begin
+    variable npc;
+    npc := create_object(pid, tile_num_in_direction(base_tile, dir, dist), dude_elevation);
+    set_team(npc, TEAM_PLAYER);
+    return npc;
+end
+
+// Helper -- spawn a critter in a radius of 3-5 tiles around the player.
+procedure spawn_in_radius(variable pid) begin
+    variable npc;
+    variable player_tile;
+    player_tile := tile_num(dude_obj);
+    npc := create_object(pid, tile_num_in_direction(player_tile, random(0, 5), random(3, 5)), dude_elevation);
+    set_team(npc, TEAM_PLAYER);
+    return npc;
+end
+
+// === FACTION 1: BALDIE'S GANG (Shady Sands squad) ===
+// Spawn generic PID_GUARD critters, then OVERWRITE the FID directly on the
+// object with set_object_data(npc, OBJ_DATA_FID, full_fid). This bypasses
+// the metarule3 ART_SET_BASE_FID_NUM path which is cached and does not
+// take effect after create_object.
+procedure spawn_baldie_gang begin
+    variable npc;
+
+    // Baldie -- bald combat armor, combat shotgun
+    npc := spawn_in_radius(PID_GUARD);
+    set_object_data(npc, OBJ_DATA_FID, FID_HMGLCM);  // Male Bald Combat Armor
+    add_obj_to_inven(npc, create_object(PID_COMBAT_SHOTGUN, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_SHOTGUN_SHELLS, 0, 0), 30);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+
+    // Little Mac -- nmbrlp dwarf sprite (BUTCH from mortuary), 10mm SMG
+    npc := spawn_in_radius(PID_GUARD);
+    set_object_data(npc, OBJ_DATA_FID, FID_NMBRLP);
+    add_obj_to_inven(npc, create_object(PID_10MM_SMG, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_10MM_AP, 0, 0), 60);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+
+    // Harley -- female punk leather (mohawk), sawed-off
+    npc := spawn_in_radius(PID_GUARD);
+    set_object_data(npc, OBJ_DATA_FID, FID_NFPGLA);
+    add_obj_to_inven(npc, create_object(PID_SAWED_OFF_SHOTGUN, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_SHOTGUN_SHELLS, 0, 0), 30);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+
+    tile_refresh_display;
+    display_msg("Baldie, Little Mac and Harley roll in. Ready to rock.");
+end
+
+// === FACTION 2: BROTHERHOOD PALADINS ===
+procedure spawn_brotherhood begin
+    variable npc;
+
+    // Paladin -- Rocket Launcher
+    npc := spawn_in_radius(PID_MALE_GUARD_METAL_BLACK);
+    add_obj_to_inven(npc, create_object(PID_ROCKET_LAUNCHER, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_EXPLOSIVE_ROCKET, 0, 0), 10);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+
+    // Paladin #1 -- Minigun
+    npc := spawn_in_radius(PID_MALE_GUARD_METAL_BLACK);
+    add_obj_to_inven(npc, create_object(PID_MINIGUN, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_5MM_AP, 0, 0), 200);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+
+    // Paladin #2 -- Minigun
+    npc := spawn_in_radius(PID_MALE_GUARD_METAL_BLACK);
+    add_obj_to_inven(npc, create_object(PID_MINIGUN, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_5MM_AP, 0, 0), 200);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+
+    // Samson -- Elder leader, helmet off (combat armor face), laser rifle
+    npc := spawn_in_radius(PID_MALE_GUARD_METAL_BLACK);
+    art_change_fid_num(npc, ART_NUM(FID_HMGLCM));
+    add_obj_to_inven(npc, create_object(PID_LASER_RIFLE, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_MICRO_FUSION_CELL, 0, 0), 20);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 5);
+
+    tile_refresh_display;
+    display_msg("Brotherhood paladins teleport in. Steel rains from the sky.");
+end
+
+// === FACTION 8: ZAX -- remote-controlled Robobrain ===
+procedure spawn_zax begin
+    variable npc;
+
+    npc := spawn_in_radius(PID_ROBOBRAIN);
+    add_obj_to_inven(npc, create_object(PID_LASER_RIFLE, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_MICRO_FUSION_CELL, 0, 0), 30);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 5);
+
+    display_msg("ZAX arrives in his remote Robobrain body.");
+end
+
+// === FACTION 3: KHANS / RAIDERS ===
+procedure spawn_raiders begin
+    variable npc;
+    variable i;
+
+    for (i := 0; i < 6; i++) begin
+        npc := spawn_in_radius(PID_RAIDER_GUARD);
+        add_obj_to_inven(npc, create_object(PID_SAWED_OFF_SHOTGUN, 0, 0));
+        add_mult_objs_to_inven(npc, create_object(PID_SHOTGUN_SHELLS, 0, 0), 15);
+        add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 2);
     end
 
-    // Set cooldown
-    summon_cd["last"] := game_time;
-    save_array("megamod_radio_cd", summon_cd);
+    display_msg("The Khans roll in. Six raiders, ready for blood.");
+end
 
-    display_msg("Reinforcements arrive. " + SQUAD_SIZE + " guards reporting for duty.");
+// === FACTION 4: SKULLZ GANG ===
+procedure spawn_skullz begin
+    variable npc;
+    variable i;
+
+    for (i := 0; i < 5; i++) begin
+        npc := spawn_in_radius(PID_GUARD);
+        add_obj_to_inven(npc, create_object(PID_KNIFE, 0, 0));
+        add_obj_to_inven(npc, create_object(PID_10MM_SMG, 0, 0));
+        add_mult_objs_to_inven(npc, create_object(PID_10MM_AP, 0, 0), 30);
+        add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 2);
+    end
+
+    display_msg("The Skullz arrive. Five killers in your service.");
+end
+
+// === FACTION 5: BLADES ===
+procedure spawn_blades begin
+    variable npc;
+    variable i;
+
+    for (i := 0; i < 4; i++) begin
+        npc := spawn_in_radius(PID_GUARD);
+        add_obj_to_inven(npc, create_object(PID_COMBAT_KNIFE, 0, 0));
+        add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 2);
+    end
+
+    display_msg("The Blades arrive. Four melee killers at your side.");
+end
+
+// === FACTION 6: GUNRUNNERS ===
+procedure spawn_gunrunners begin
+    variable npc;
+
+    // Merchant -- mobile gun shop
+    npc := spawn_in_radius(PID_MERCHANT);
+    add_mult_objs_to_inven(npc, create_object(PID_ASSAULT_RIFLE, 0, 0), 3);
+    add_obj_to_inven(npc, create_object(PID_MINIGUN, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_LASER_RIFLE, 0, 0), 2);
+    add_obj_to_inven(npc, create_object(PID_ROCKET_LAUNCHER, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_5MM_AP, 0, 0), 500);
+    add_mult_objs_to_inven(npc, create_object(PID_EXPLOSIVE_ROCKET, 0, 0), 20);
+    add_mult_objs_to_inven(npc, create_object(PID_COMBAT_ARMOR, 0, 0), 2);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 20);
+
+    // Guard #1
+    npc := spawn_in_radius(PID_MERCHANT_2);
+    add_obj_to_inven(npc, create_object(PID_ASSAULT_RIFLE, 0, 0));
+
+    // Guard #2
+    npc := spawn_in_radius(PID_MERCHANT_2);
+    add_obj_to_inven(npc, create_object(PID_ASSAULT_RIFLE, 0, 0));
+
+    display_msg("Gunrunners arrive. Open for business.");
+end
+
+// === FACTION 7: RAZLO MEDIC ===
+// TODO: replace PID_GUARD + FID with proper Razlo PID/FID once Razlo recruitment implemented.
+procedure spawn_razlo begin
+    variable npc;
+
+    npc := spawn_in_radius(PID_GUARD);
+    art_change_fid_num(npc, ART_NUM(FID_HMBJMP));
+    add_obj_to_inven(npc, create_object(PID_DOCTORS_BAG, 0, 0));
+    add_obj_to_inven(npc, create_object(PID_FIRST_AID_KIT, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 20);
+    add_mult_objs_to_inven(npc, create_object(PID_SUPER_STIMPAK, 0, 0), 5);
+
+    tile_refresh_display;
+    display_msg("Razlo the doctor arrives with his medical kit.");
 end

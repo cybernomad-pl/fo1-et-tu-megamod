@@ -109,6 +109,14 @@ procedure start begin
         register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
         LOG("start", "gamemode_hook", 1);
 
+        // Set Tandi's proto base FID to hfprim (sexy tribal). This affects
+        // any FRESH instance of Tandi created after this call. Existing
+        // instances on the current map (e.g. loaded from save) still hold
+        // the old FID, so the gamemode_handler also iterates LIST_CRITTERS
+        // and patches existing Tandi objects with art_change_fid_num.
+        set_proto_data(PID_TANDI, PROTO_FID, 16777302);  // FID_HFPRIM
+        LOG("start", "tandi_proto_fid", get_proto_data(PID_TANDI, PROTO_FID));
+
         variable saved_lighter := load_array("megamod_lighter");
         if (saved_lighter != 0) then begin
             lighter_lit := saved_lighter["lit"];
@@ -128,19 +136,22 @@ end
 // ============================================================
 // GAMEMODE
 // ============================================================
-#define TANDI_ART_INDEX  86
+#define FID_HFPRIM_FULL  16777302  // hfprim -- Hero Female Primitive (FO2 tribal)
 
 procedure gamemode_handler begin
     variable lst;
     variable obj;
     LOG("gamemode", "fired", cur_map_index);
 
+    // Patch existing Tandi instances on the current map by writing FID
+    // directly to the object data field. set_object_data(OBJ_DATA_FID)
+    // bypasses the metarule cache that breaks art_change_fid_num.
     lst := list_begin(LIST_CRITTERS);
     obj := list_next(lst);
     while (obj) do begin
         if (obj != 0) then begin
             if (obj_pid(obj) == PID_TANDI) then begin
-                art_change_fid_num(obj, TANDI_ART_INDEX);
+                set_object_data(obj, OBJ_DATA_FID, FID_HFPRIM_FULL);
                 LOG("gamemode", "tandi_swapped", 1);
             end
         end
