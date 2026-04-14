@@ -1,0 +1,246 @@
+/*
+    Junk Farmer -- fo1-et-tu-megamod
+
+    Collect parts from scenery (Repair skill) and rocks (click).
+    Merged from gl_general_repair (scenery) + gl_rocks (rock harvest).
+
+    Hooks:
+      HOOK_USESKILLON  -- Repair skill on scenery = dismantle for parts
+      HOOK_USEANIMOBJ  -- Click rock scenery = pick up rocks
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/lib.arrays.h"
+
+#define PID_JUNK  98
+
+#define LOG(s, k, v) set_ini_setting("megamod.ini|" + s + "|" + k, v)
+
+/* Scenery PID base (type 2 << 24) */
+#define SCEN_BASE  (33554432)
+
+variable dismantled_scenery;
+variable harvested_rocks;
+
+procedure start;
+procedure repair_on_scenery_handler;
+procedure rock_click_handler;
+procedure try_dismantle_scenery(variable target);
+procedure do_harvest_rocks(variable target);
+procedure has_tools;
+procedure add_junk(variable count);
+procedure is_rock_scenery(variable pid);
+
+procedure start begin
+    if game_loaded then begin
+        dismantled_scenery := load_array("megamod_repair_scen");
+        if (dismantled_scenery == 0) then begin
+            dismantled_scenery := create_array_map;
+            save_array("megamod_repair_scen", dismantled_scenery);
+        end
+        harvested_rocks := load_array("megamod_rocks");
+        if (harvested_rocks == 0) then begin
+            harvested_rocks := create_array_map;
+            save_array("megamod_rocks", harvested_rocks);
+        end
+
+        register_hook_proc(HOOK_USESKILLON, repair_on_scenery_handler);
+        register_hook_proc(HOOK_USEANIMOBJ, rock_click_handler);
+
+        // Junk/parts weigh nothing
+        set_proto_data(PID_JUNK, PROTO_IT_WEIGHT, 0);
+
+        // Starting kit: give player Multi-Tool if they don't have one
+        if (obj_is_carrying_obj_pid(dude_obj, PID_MULTI_TOOL) == 0 and obj_is_carrying_obj_pid(dude_obj, PID_SUPER_TOOL_KIT) == 0) then begin
+            add_obj_to_inven(dude_obj, create_object(PID_MULTI_TOOL, 0, 0));
+        end
+
+        LOG("junk_farmer", "loaded", 1);
+    end
+end
+
+procedure has_tools begin
+    if (obj_is_carrying_obj_pid(dude_obj, PID_MULTI_TOOL) > 0) then return 1;
+    if (obj_is_carrying_obj_pid(dude_obj, PID_SUPER_TOOL_KIT) > 0) then return 1;
+    return 0;
+end
+
+procedure add_junk(variable count) begin
+    variable i;
+    variable item;
+    for (i := 0; i < count; i++) begin
+        item := create_object(PID_JUNK, 0, 0);
+        add_obj_to_inven(dude_obj, item);
+    end
+end
+
+// ============================================================
+// REPAIR SKILL ON SCENERY -> dismantle for parts
+// ============================================================
+procedure repair_on_scenery_handler begin
+    variable user;
+    variable target;
+    variable skill_type;
+
+    user       := get_sfall_arg;
+    target     := get_sfall_arg;
+    skill_type := get_sfall_arg;
+
+    if (skill_type != SKILL_REPAIR) then return;
+    if (user != dude_obj) then return;
+    if (target == 0) then return;
+    if (obj_type(target) != OBJ_TYPE_SCENERY) then return;
+
+    if not(has_tools) then begin
+        display_msg("You need tools for this.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    LOG("junk_farmer", "repair_scenery", obj_pid(target));
+    call try_dismantle_scenery(target);
+    set_sfall_return(-1);
+end
+
+procedure try_dismantle_scenery(variable target) begin
+    variable pid;
+    variable obj_id;
+    variable proto;
+    variable junk_count;
+    variable caps_bonus;
+    variable item;
+
+    pid := obj_pid(target);
+    proto := pid - SCEN_BASE;
+
+    obj_id := (tile_num(target) * 10000) + pid;
+
+    if (dismantled_scenery[obj_id] != 0) then begin
+        display_msg("Already stripped.");
+        return;
+    end
+
+    dismantled_scenery[obj_id] := 1;
+    save_array("megamod_repair_scen", dismantled_scenery);
+
+    caps_bonus := 0;
+    junk_count := 0;
+
+    // Electronics (computers, monitors, terminals)
+    if (proto == 9 or proto == 11 or proto == 12 or (proto >= 13 and proto <= 17) or (proto >= 43 and proto <= 48) or proto == 25 or proto == 26 or proto == 158 or proto == 159) then begin
+        junk_count := random(1, 3);
+    end
+    // Big electronics (generators, VDUs)
+    else if (proto == 55 or proto == 56 or proto == 656) then begin
+        junk_count := random(2, 4);
+    end
+    // Vents, pipes, metal objects
+    else if (proto == 20 or proto == 21 or proto == 28 or proto == 29 or proto == 32 or proto == 33 or proto == 50) then begin
+        junk_count := random(2, 4);
+    end
+    // Slot machines, vending machines
+    else if (proto == 907 or proto == 908) then begin
+        junk_count := random(1, 3);
+        caps_bonus := random(5, 25);
+        item_caps_adjust(dude_obj, caps_bonus);
+    end
+    // Car wrecks
+    else if (proto == 224 or proto == 225 or proto == 226 or proto == 227 or proto == 228) then begin
+        junk_count := random(3, 6);
+    end
+    // Rocks -> pick up rocks
+    else if (is_rock_scenery(pid)) then begin
+        variable rock_count;
+        variable r;
+        rock_count := random(1, 3);
+        for (r := 0; r < rock_count; r++) begin
+            item := create_object(PID_ROCK, 0, 0);
+            add_obj_to_inven(dude_obj, item);
+        end
+        display_msg("You pick through the rocks. " + rock_count + " usable stone(s).");
+        give_exp_points(3);
+        return;
+    end
+    // Nothing useful
+    else begin
+        display_msg("Nothing useful to salvage here.");
+        dismantled_scenery[obj_id] := 0;
+        save_array("megamod_repair_scen", dismantled_scenery);
+        return;
+    end
+
+    call add_junk(junk_count);
+
+    if (caps_bonus > 0) then
+        display_msg("You salvage " + junk_count + " part(s) + " + caps_bonus + " caps.");
+    else
+        display_msg("You salvage " + junk_count + " part(s).");
+
+    give_exp_points(25);
+end
+
+// ============================================================
+// CLICK ROCK SCENERY -> pick up rocks (no tools needed)
+// ============================================================
+procedure rock_click_handler begin
+    variable user;
+    variable target;
+
+    user   := get_sfall_arg;
+    target := get_sfall_arg;
+
+    if (user != dude_obj) then return;
+    if (target == 0) then return;
+    if (obj_type(target) != OBJ_TYPE_SCENERY) then return;
+    if not(is_rock_scenery(obj_pid(target))) then return;
+    if (combat_is_initialized) then begin
+        display_msg("No time for that during combat!");
+        return;
+    end
+
+    call do_harvest_rocks(target);
+end
+
+procedure do_harvest_rocks(variable target) begin
+    variable tile;
+    variable pid;
+    variable key;
+    variable count;
+    variable i;
+    variable rock;
+
+    tile := tile_num(target);
+    pid  := obj_pid(target);
+    key  := "" + cur_map_index + "_" + tile + "_" + pid;
+
+    if (harvested_rocks[key] != 0) then begin
+        display_msg("Nothing but pebbles left here.");
+        return;
+    end
+
+    count := random(1, 3);
+    for (i := 0; i < count; i++) begin
+        rock := create_object(PID_ROCK, 0, 0);
+        add_obj_to_inven(dude_obj, rock);
+    end
+
+    harvested_rocks[key] := 1;
+    save_array("megamod_rocks", harvested_rocks);
+
+    display_msg("You pick through the rocks and find a few useful ones.");
+    give_exp_points(3);
+end
+
+procedure is_rock_scenery(variable pid) begin
+    if (pid == SCEN_BASE + 72 or pid == SCEN_BASE + 73 or pid == SCEN_BASE + 74 or pid == SCEN_BASE + 75) then return 1;
+    if (pid == SCEN_BASE + 78) then return 1;
+    if (pid == PID_BLUE_ROCK_PILE_SMALL_1 or pid == PID_BLUE_ROCK_PILE_SMALL_2 or pid == PID_LARGE_BLUE_ROCK_PILE) then return 1;
+    if (pid == PID_ROCKS_1 or pid == PID_ROCKS_2 or pid == PID_ROCKS_3 or pid == PID_ROCKS_4) then return 1;
+    if (pid == PID_ROCKS_6 or pid == PID_ROCKS_7 or pid == PID_ROCKS_8 or pid == PID_ROCKS_9) then return 1;
+    if (pid == PID_ROCKS_10 or pid == PID_ROCKS_11 or pid == PID_ROCKS_12 or pid == PID_ROCKS_13) then return 1;
+    if (pid == PID_ROCKS_14 or pid == PID_ROCKS_15 or pid == PID_ROCKS_16) then return 1;
+    return 0;
+end

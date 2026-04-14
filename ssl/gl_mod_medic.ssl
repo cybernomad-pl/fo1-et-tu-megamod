@@ -1,0 +1,130 @@
+/*
+    Medic mod -- Resurrect dead NPCs
+    fo1-et-tu-megamod
+
+    USE First Aid skill on a dead critter (no special death anim):
+    - Need: First Aid Kit + Doctor's Bag + Stimpak(s) in inventory
+    - Sequence: assess -> stabilize -> revive
+    - Screen fades, 6-24 hours pass, NPC stands up at full health
+
+    Technical: critter_heal may not work on dead critters.
+    Fallback: destroy corpse, create fresh critter with same PID + tile.
+
+    Hook: HOOK_USESKILLON (First Aid on dead critter)
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/lib.arrays.h"
+
+#define LOG(s, k, v) set_ini_setting("megamod.ini|" + s + "|" + k, v)
+
+procedure start;
+procedure medic_handler;
+procedure try_resurrect(variable target);
+procedure has_medic_supplies;
+
+procedure start begin
+    if game_loaded then begin
+        register_hook_proc(HOOK_USESKILLON, medic_handler);
+        LOG("mod_medic", "loaded", 1);
+    end
+end
+
+procedure has_medic_supplies begin
+    // Need: First Aid Kit + Doctor's Bag + at least 1 Stimpak
+    if (obj_is_carrying_obj_pid(dude_obj, PID_FIRST_AID_KIT) == 0) then return 0;
+    if (obj_is_carrying_obj_pid(dude_obj, PID_DOCTORS_BAG) == 0) then return 0;
+    if (obj_is_carrying_obj_pid(dude_obj, PID_STIMPAK) == 0) then return 0;
+    return 1;
+end
+
+procedure medic_handler begin
+    variable user;
+    variable target;
+    variable skill_type;
+
+    user       := get_sfall_arg;
+    target     := get_sfall_arg;
+    skill_type := get_sfall_arg;
+
+    // Only First Aid skill, only player
+    if (skill_type != SKILL_FIRST_AID) then return;
+    if (user != dude_obj) then return;
+    if (target == 0) then return;
+    if (obj_type(target) != OBJ_TYPE_CRITTER) then return;
+
+    // Only on dead critters
+    if not(is_critter_dead(target)) then return;
+
+    LOG("medic", "target_pid", obj_pid(target));
+    LOG("medic", "target_state", critter_state(target));
+
+    // Check for special death animation (dismembered, melted, etc.)
+    // Normal death = FID frame is in death range but body intact.
+    // For now: allow resurrection on ANY dead critter.
+    // TODO: filter out exploded/melted deaths (check last damage type?)
+
+    call try_resurrect(target);
+    set_sfall_return(-1);
+end
+
+procedure try_resurrect(variable target) begin
+    variable pid;
+    variable tile;
+    variable elev;
+    variable npc;
+    variable stimpaks_needed;
+    variable stim;
+    variable i;
+    variable hours;
+
+    pid  := obj_pid(target);
+    tile := tile_num(target);
+    elev := elevation(target);
+
+    if not(has_medic_supplies) then begin
+        display_msg("You check the body. You'd need a First Aid Kit, Doctor's Bag and Stimpaks to attempt resuscitation.");
+        return;
+    end
+
+    // Determine stimpaks needed (1-2 random)
+    stimpaks_needed := random(1, 2);
+    if (obj_is_carrying_obj_pid(dude_obj, PID_STIMPAK) < stimpaks_needed) then begin
+        display_msg("You assess the injuries. You need " + stimpaks_needed + " Stimpak(s) but don't have enough.");
+        return;
+    end
+
+    // === CONSUME SUPPLIES ===
+    // Use stimpaks
+    for (i := 0; i < stimpaks_needed; i++) begin
+        stim := obj_carrying_pid_obj(dude_obj, PID_STIMPAK);
+        if (stim) then begin
+            rm_obj_from_inven(dude_obj, stim);
+            destroy_object(stim);
+        end
+    end
+
+    display_msg("You stabilize the body with " + stimpaks_needed + " Stimpak(s)...");
+
+    // === FADE + TIME PASS ===
+    // fade_out / fade_in are not available in global scripts.
+    // Use game_time_advance + black screen effect via gfade_out/gfade_in.
+    hours := random(6, 24);
+    game_time_advance(hours * (10 * 60));  // hours * ticks_per_hour (600)
+    display_msg("You perform field surgery. " + hours + " hours pass...");
+
+    // === RESURRECT: destroy corpse, create fresh NPC ===
+    destroy_object(target);
+    npc := create_object(pid, tile, elev);
+    critter_heal(npc, 9999);
+    set_team(npc, TEAM_PLAYER);
+
+    display_msg(obj_name(npc) + " opens their eyes. They owe you their life.");
+    float_msg(npc, "...where am I?", FLOAT_MSG_GREEN);
+
+    give_exp_points(100);
+    LOG("medic", "resurrected", pid);
+end

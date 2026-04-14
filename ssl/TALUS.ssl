@@ -1,0 +1,764 @@
+/*
+
+   Brotherhood - Talus the trainer
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/brotherhood.h"
+#include "maps/brohd12.h"
+
+#define NAME                    SCRIPT_TALUS
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_BOS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure timed_event_p_proc;
+procedure critter_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+procedure talk_p_proc;
+
+procedure Talus00;
+procedure Talus01;
+procedure Talus02;
+procedure Talus05;
+procedure Talus06;
+procedure Talus07;
+procedure Talus08;
+procedure Talus09;
+procedure Talus10;
+procedure Talus11;
+procedure Talus12;
+procedure Talus13;
+procedure Talus14;
+procedure Talus14a;
+procedure Talus15;
+procedure Talus16;
+procedure Talus17;
+procedure Talus18;
+procedure Talus19;
+procedure Talus20;
+procedure Talus21;
+procedure Talus22;
+procedure Talus23;
+procedure Talus24;
+procedure Talus25;
+procedure Talus26;
+procedure Talus27;
+procedure Talus28;
+procedure Talus29;
+procedure Talus30;
+procedure Talus31;
+procedure Talus31a;
+procedure Talus32;
+procedure Talus33;
+procedure Talus34;
+procedure Talus35;
+procedure Talus36;
+procedure Talus37;
+procedure Talus38;
+procedure Talus39;
+procedure Talus40;
+procedure Talus41;
+procedure Talus42;
+procedure Talus43;
+procedure Talus44;
+procedure Talus45;
+procedure Talus46;
+procedure Talus47;
+procedure Talus49;
+procedure Talus50;
+procedure Talus51;
+procedure Talus51a;
+procedure Talus51b;
+procedure Talus51c;
+procedure Talus51d;
+procedure Talus51e;
+procedure Talus53;
+procedure Talus54;
+procedure Talus55;
+procedure TalusEnd;
+
+procedure weapon_check;
+procedure set_requisition;
+procedure TalusBackground;
+procedure TalusAmmo;
+
+procedure TalusDownReact;
+procedure TalusBigDownReact;
+
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+variable temp;
+variable flag1;
+variable flag5;
+variable who_vree;
+variable who_rhombus;
+variable who_maxson;
+variable line16flag;
+variable Only_Once := 1;
+variable tmp_hostile;
+variable drugs;
+variable awardex;
+
+procedure start begin
+   if Only_Once then begin
+      Only_Once := 0;
+      set_self_team(TEAM_BROTHERHOOD);
+      set_self_ai(AI_BROTHERHOOD_PALADIN);
+      add_timer_event(self_obj, game_ticks(30), 2);
+   end
+end
+
+procedure timed_event_p_proc begin
+   if (global_var(GVAR_ENEMY_BROTHERHOOD) == 0) then begin
+      call TalusBackground;
+   end
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+   if REP_ENEMY_BOS then begin
+      tmp_hostile := 1;
+   end
+   if (tile_distance_objs(self_obj, dude_obj) > 12) then begin
+      tmp_hostile := 0;
+   end
+   if (tmp_hostile) then begin
+      set_global_var(GVAR_ENEMY_BROTHERHOOD, 1);
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+end
+
+procedure pickup_p_proc begin
+   if source_is_dude then begin
+      tmp_hostile := 1;
+   end
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   set_tma_data_generic(TMA_MSG_BOS);
+
+   dude_look_at_self;
+   get_reaction
+   if (local_var(7) == 0) then begin
+      if (local_var(1) == 1) then begin
+         set_local_var(1, 2);
+         LevelToReact
+      end
+   end
+   start_gdialog(318, self_obj, 4, -1, -1);
+   gsay_start;
+   if (dude_is_armed) then begin
+      if (local_var(6) == 0) then begin
+         call Talus11;
+      end
+      else if (local_var(6) == 1) then begin
+         call Talus12;
+      end
+      else begin
+         call Talus13;
+      end
+   end
+   else begin
+      if ((global_var(GVAR_QUEST_BROHOOD_2_FIND_LOST) == 2) and (local_var(8) == 0)) then begin
+         if (local_var(7) == 0) then begin
+            call Talus49;
+         end
+         else begin
+            call Talus47;
+         end
+      end
+      else if (local_var(7) == 0) then begin
+         call Talus00;
+      end
+      else if (local_var(1) == 1) then begin
+         call Talus22;
+      end
+      else begin
+         call Talus14;
+      end
+   end
+   set_local_var(7, 1);
+   gsay_end;
+   end_dialogue;
+   if (awardex) then begin
+      awardex := 0;
+      temp := 1500;
+      inc_general_rep(1);
+      give_xp_msg(temp, mstr(409));
+   end
+end
+
+procedure destroy_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_ENEMY_BROTHERHOOD, 1);
+   end
+   inc_good_critter
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure set_requisition begin
+   set_global_var(GVAR_BROTHERHOOD_WEEKLY_AMMO, game_time);
+   set_local_var(5, 1);
+   set_map_var(MVAR_AMMO_THIS_WEEK, 1);
+   set_map_var(MVAR_ANY_REQ, (map_var(MVAR_ANY_REQ) + 4));
+   set_map_var(MVAR_CBT_ARMOR, 1);
+   set_map_var(MVAR_AMMO, 3);
+end
+
+procedure Talus00 begin
+   Reply(101);
+   NOption(900, NodeRecruit, 4);
+   NOption(102, Talus01, 8);
+   NOption(103, Talus02, 4);
+   if (local_var(5) == 0) then begin
+      NOption(104, Talus07, 4);
+   end
+   NOption(401, Talus28, 4);
+   NOption(402, Talus28, 4);
+   NOption("Join me.", NodeRecruit, 4);
+   NLowOption(105, TalusEnd);
+end
+
+procedure Talus01 begin
+   Reply(106);
+   NOption(900, NodeRecruit, 4);
+   NOption(107, Talus05, 4);
+   NOption(exit_line, TalusEnd, 4);
+end
+
+procedure Talus02 begin
+   Reply(108);
+   NOption(900, NodeRecruit, 4);
+   NOption(107, Talus05, 4);
+   NOption(exit_line, TalusEnd, 4);
+end
+
+procedure Talus05 begin
+   Reply(110);
+   NOption(900, NodeRecruit, 4);
+   NOption(111, Talus06, 7);
+   if (local_var(5) == 0) then begin
+      NOption(112, Talus07, 4);
+   end
+   NOption(401, Talus28, 4);
+   NOption(402, Talus28, 4);
+   NOption("Join me.", NodeRecruit, 4);
+   NOption(exit_line, TalusEnd, 4);
+end
+
+procedure Talus06 begin
+   Reply(113);
+   NOption(900, NodeRecruit, 4);
+   NOption(115, TalusEnd, 4);
+   if (local_var(5) == 0) then begin
+      NOption(112, Talus07, 4);
+   end
+end
+
+procedure Talus07 begin
+   Reply(116);
+   call set_requisition;
+   NOption(900, NodeRecruit, 4);
+   NOption(118, Talus08, 4);
+   BOption(119, Talus42, 4);
+   NOption(159, TalusEnd, 4);
+end
+
+procedure Talus08 begin
+   Reply(406);
+   NOption(900, NodeRecruit, 4);
+   if (global_var(GVAR_QUEST_BROHOOD_2_FIND_LOST) != 2) then begin
+      NOption(109, Talus32, 4);
+   end
+   BOption(121, Talus09, 4);
+   NOption("Join me.", NodeRecruit, 4);
+   NOption(193, TalusEnd, 4);
+end
+
+procedure Talus09 begin
+   set_local_var(11, 1);
+   DownReact
+   BMessage(122);
+end
+
+procedure Talus10 begin
+   NMessage(123);
+   NMessage(124);
+   Reply(125);
+   NOption(900, NodeRecruit, 4);
+   NOption(126, TalusEnd, 4);
+end
+
+procedure Talus11 begin
+   NMessage(127);
+   set_local_var(6, local_var(6) + 1);
+end
+
+procedure Talus12 begin
+   NMessage(128);
+   set_local_var(6, local_var(6) + 1);
+end
+
+procedure Talus13 begin
+   BMessage(129);
+end
+
+procedure Talus14 begin
+   Reply(mstr(130) + dude_name + mstr(131));
+   NOption(900, NodeRecruit, 4);
+   if (not(line16flag)) then begin
+      NOption(132, Talus16, 5);
+   end
+   else begin
+      NOption(133, Talus17, 5);
+   end
+   if (local_var(5) == 0) then begin
+      NOption(134, Talus15, 4);
+   end
+   else begin
+      NOption(135, TalusAmmo, 4);
+   end
+   if (local_var(11) == 1) then begin
+      BOption(403, Talus44, 4);
+   end
+   NOption(404, Talus29, 4);
+   NOption("Join me.", NodeRecruit, 4);
+   NOption(136, TalusEnd, 4);
+   NLowOption(105, TalusEnd);
+end
+
+procedure Talus14a begin
+   call Talus34;
+end
+
+procedure Talus15 begin
+   NMessage(137);
+   Reply(138);
+   call set_requisition;
+   NOption(900, NodeRecruit, 4);
+   NOption(118, Talus08, 4);
+end
+
+procedure Talus16 begin
+   line16flag := 1;
+   NMessage(141);
+   call Talus18;
+end
+
+procedure Talus17 begin
+   NMessage(142);
+   call Talus18;
+end
+
+procedure Talus18 begin
+   Reply(143);
+   NOption(900, NodeRecruit, 4);
+   NOption(144, Talus19, 4);
+   NOption(145, Talus20, 4);
+   NOption(146, Talus21, 4);
+end
+
+procedure Talus19 begin
+   who_rhombus := 1;
+   NMessage(147);
+   Reply(148);
+   NOption(900, NodeRecruit, 4);
+   if (who_vree == 0) then begin
+      NOption(145, Talus20, 4);
+   end
+   if (who_maxson == 0) then begin
+      NOption(146, Talus21, 4);
+   end
+   NOption("Join me.", NodeRecruit, 4);
+   NOption(151, TalusEnd, 4);
+end
+
+procedure Talus20 begin
+   who_vree := 1;
+   NMessage(152);
+   Reply(153);
+   NOption(900, NodeRecruit, 4);
+   if (who_rhombus == 0) then begin
+      NOption(144, Talus19, 4);
+   end
+   if (who_maxson == 0) then begin
+      NOption(146, Talus21, 4);
+   end
+   NOption("Join me.", NodeRecruit, 4);
+   NOption(156, TalusEnd, 4);
+end
+
+procedure Talus21 begin
+   who_maxson := 1;
+   Reply(157);
+   NOption(900, NodeRecruit, 4);
+   if (who_rhombus == 0) then begin
+      NOption(144, Talus19, 4);
+   end
+   if (who_vree == 0) then begin
+      NOption(145, Talus20, 4);
+   end
+   NOption("Join me.", NodeRecruit, 4);
+   NOption(160, TalusEnd, 4);
+end
+
+procedure Talus22 begin
+   Reply(161);
+   NOption(900, NodeRecruit, 4);
+   BOption(162, TalusDownReact, 4);
+   NOption(163, TalusEnd, 4);
+   if (local_var(5) == 1) then begin
+      NOption(135, TalusAmmo, 4);
+   end
+   BLowOption(164, Talus24);
+   NOption("Join me.", NodeRecruit, 4);
+   NLowOption(165, TalusEnd);
+end
+
+procedure TalusDownReact begin
+   DownReact
+end
+
+procedure Talus23 begin
+   BMessage(166);
+   DownReact
+end
+
+procedure Talus24 begin
+   BMessage(167);
+   DownReact
+end
+
+procedure Talus25 begin
+   NMessage(168);
+   set_map_var(MVAR_AMMO_THIS_WEEK, 1);
+   temp := map_var(MVAR_ANY_REQ) + 3;
+   set_map_var(MVAR_ANY_REQ, temp);
+   temp := map_var(MVAR_AMMO) + 3;
+   set_map_var(MVAR_AMMO, temp);
+end
+
+procedure Talus26 begin
+   NMessage(169);
+end
+
+procedure Talus27 begin
+   NMessage(170);
+end
+
+procedure Talus28 begin
+   Reply(149);
+   NOption(900, NodeRecruit, 4);
+   NOption(102, Talus02, 4);
+   NOption(103, Talus07, 4);
+   NOption(150, TalusEnd, 4);
+end
+
+procedure Talus29 begin
+   if (local_var(10) == 0) then begin
+      set_local_var(10, 1);
+      NMessage(154);
+   end
+   else begin
+      NMessage(155);
+   end
+end
+
+procedure Talus30 begin
+   BottomReact
+   Reply(171);
+   NOption(900, NodeRecruit, 4);
+   BOption(172, Talus37, 4);
+   NOption(173, Talus38, 4);
+   BOption(174, TalusEnd, 4);
+end
+
+procedure Talus31 begin
+   Reply(175);
+   NOption(900, NodeRecruit, 4);
+   NOption(176, Talus35, 4);
+   BOption(177, TalusBigDownReact, 4);
+   NOption(178, Talus31a, 4);
+end
+
+procedure TalusBigDownReact begin
+   BigDownReact
+end
+
+procedure Talus31a begin
+   if (local_var(9) == 0) then begin
+      call Talus39;
+   end
+   else begin
+      call TalusEnd;
+   end
+end
+
+procedure Talus32 begin
+   Reply(158);
+   NOption(900, NodeRecruit, 4);
+   NOption(176, Talus35, 4);
+   BOption(177, TalusBigDownReact, 4);
+   GOption(178, Talus31a, 4);
+end
+
+procedure Talus33 begin
+   Reply(179);
+   NOption(900, NodeRecruit, 4);
+   NOption(176, Talus35, 4);
+   BOption(177, TalusBigDownReact, 4);
+   GOption(178, Talus31a, 4);
+end
+
+procedure Talus34 begin
+   BMessage(180);
+end
+
+procedure Talus35 begin
+   set_global_var(GVAR_QUEST_BROHOOD_2_FIND_LOST, 1);
+   Reply(181);
+   NOption(900, NodeRecruit, 4);
+   GOption(182, Talus31a, 4);
+   NOption(183, Talus46, 4);
+end
+
+procedure Talus36 begin
+   BMessage(184);
+end
+
+procedure Talus37 begin
+   BMessage(185);
+end
+
+procedure Talus38 begin
+   BMessage(186);
+end
+
+procedure Talus39 begin
+   GMessage(187);
+end
+
+procedure Talus40 begin
+   Reply(191);
+   NOption(900, NodeRecruit, 4);
+   NOption(193, TalusEnd, 4);
+end
+
+procedure Talus41 begin
+   NMessage(194);
+end
+
+procedure Talus42 begin
+   DownReact
+   BMessage(195);
+end
+
+procedure Talus43 begin
+   Reply(196);
+   NOption(900, NodeRecruit, 4);
+   NOption(192, Talus41, 4);
+   NOption(193, TalusEnd, 4);
+end
+
+procedure Talus44 begin
+   DownReact
+   BMessage(198);
+end
+
+procedure Talus45 begin
+   BigDownReact
+   BMessage(199);
+end
+
+procedure Talus46 begin
+   NMessage(200);
+end
+
+procedure Talus47 begin
+   Reply(mstr(201) + dude_name + mstr(202));
+   NOption(900, NodeRecruit, 4);
+   NOption(205, Talus51, 4);
+   NLowOption(206, Talus50);
+end
+
+procedure Talus49 begin
+   Reply(207);
+   NOption(900, NodeRecruit, 4);
+   NOption(205, Talus51, 4);
+   NLowOption(206, Talus50);
+end
+
+procedure Talus50 begin
+   NMessage(209);
+end
+
+procedure Talus51 begin
+   Reply(210);
+   NOption(900, NodeRecruit, 4);
+   NOption(212, Talus51a, 4);
+   if fo1in2_alt_bos_reward_enabled then begin
+      NOption(410, Talus51e, 4);
+   end
+   else begin
+      NOption(213, Talus51b, 4);
+   end
+   NOption(214, Talus51c, 4);
+   if (check_general_rep > 15) then begin
+      NOption(407, Talus51d, 4);
+   end
+   NOption("Join me.", NodeRecruit, 4);
+   NOption(215, TalusEnd, 4);
+end
+
+procedure Talus51a begin
+   set_map_var(MVAR_ANY_REQ, map_var(MVAR_ANY_REQ) + 1);
+   set_map_var(MVAR_UZI, 1);
+   call Talus53;
+end
+
+// Laser Pistol
+procedure Talus51b begin
+   set_map_var(MVAR_ANY_REQ, map_var(MVAR_ANY_REQ) + 1);
+   set_map_var(MVAR_SIG_SAUER, 1);
+   call Talus53;
+end
+
+procedure Talus51c begin
+   set_map_var(MVAR_ANY_REQ, map_var(MVAR_ANY_REQ) + 1);
+   set_map_var(MVAR_SUPER_SLEDGE, 1);
+   call Talus53;
+end
+
+procedure Talus51d begin
+   set_map_var(MVAR_ANY_REQ, map_var(MVAR_ANY_REQ) + 1);
+   set_map_var(MVAR_PWR_ARMOR, 1);
+   call Talus53;
+end
+
+procedure Talus51e begin
+   set_map_var(MVAR_ANY_REQ, map_var(MVAR_ANY_REQ) + 1);
+   set_map_var(MVAR_MAGNETO_LASER, 1);
+   call Talus53;
+end
+
+procedure Talus53 begin
+   set_local_var(8, 1);
+   awardex := 1;
+   NMessage(216);
+end
+
+procedure Talus54 begin
+   set_local_var(9, 1);
+   set_map_var(MVAR_ANY_REQ, map_var(MVAR_ANY_REQ) + 1);
+   set_map_var(MVAR_PWR_ARMOR, 1);
+   NMessage(mstr(201) + dude_name + mstr(217));
+end
+
+procedure Talus55 begin
+   set_local_var(9, 1);
+   NMessage(218);
+end
+
+procedure TalusBackground begin
+   float_msg(self_obj, mstr(random(219, 223)), FLOAT_MSG_NORMAL);
+   add_timer_event(self_obj, game_ticks(180), 2);
+end
+
+procedure TalusAmmo begin
+   if ((map_var(MVAR_AMMO_THIS_WEEK) > 0) and (((game_time / 10 / 60 / 60 / 24) - (global_var(GVAR_BROTHERHOOD_WEEKLY_AMMO) / 10 / 60 / 60 / 24)) < 7)) then begin
+      call Talus27;
+   end
+   else if (((game_time / 10 / 60 / 60 / 24) - (global_var(GVAR_BROTHERHOOD_WEEKLY_AMMO) / 10 / 60 / 60 / 24)) >= 7) then begin
+      set_global_var(GVAR_BROTHERHOOD_WEEKLY_AMMO, game_time);
+      call Talus25;
+   end
+   else if (((game_time / 10 / 60 / 60 / 24) - (global_var(GVAR_BROTHERHOOD_WEEKLY_AMMO) / 10 / 60 / 60 / 24)) < 7) then begin
+      call Talus27;
+   end
+end
+
+procedure TalusEnd begin
+end
+
+procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg(obj_name(self_obj) + " joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end

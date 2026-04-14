@@ -89,6 +89,16 @@ procedure razloend;
 procedure givestuff;
 procedure remove_items;
 
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
 variable night_person;
 variable wake_time;
 variable sleep_time;
@@ -134,6 +144,8 @@ procedure combat_p_proc begin
 end
 
 procedure map_enter_p_proc begin
+   // Razlo uses white doctor FID (index 57 = nmdocc)
+   art_change_fid_num(self_obj, 57);
    if shady_invaded then begin
       invasion_kill_critter;
    end
@@ -152,6 +164,14 @@ procedure map_update_p_proc begin
 end
 
 procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
    set_tma_data(NAME, 1000, -1, -1, TMA_MSG_DONTKNOW_START, TMA_MSG_DONTKNOW_END);
 
    dude_look_at_self;
@@ -229,6 +249,7 @@ end
 
 procedure razlo01 begin
    Reply(104);
+   NOption(900, NodeRecruit, 4);
    if (tandi_is_kidnapped and (global_var(GVAR_TANDI_TALKED_ABOUT) == 1)) then begin
       NOption(105, razlo03, 4);
    end
@@ -246,6 +267,7 @@ procedure razlo03 begin
    set_local_var(LVAR_Here_Before, 1);
    Reply(108);
    NOption(110, razlo04, 5);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(109, razloend, 4);
    NOption(111, razloend, 5);
 end
@@ -306,6 +328,7 @@ end
 
 procedure razlo10 begin
    Reply(120);
+   NOption(900, NodeRecruit, 4);
    NOption(122, razlo14, 4);
    NOption(144, razlo23a, 4);
    NOption(121, razloend, 4);
@@ -371,6 +394,7 @@ end
 
 procedure razlo18 begin
    Reply(128);
+   NOption(900, NodeRecruit, 4);
    NOption(130, razlo14, 4);
    NOption(144, razlo23a, 4);
    NOption(129, razloend, 5);
@@ -378,6 +402,7 @@ end
 
 procedure razlo19 begin
    Reply(131);
+   NOption(900, NodeRecruit, 4);
    NOption(132, razlo20, 4);
    NOption(143, razlo22, 4);
    NOption(144, razlo23a, 4);
@@ -390,6 +415,7 @@ end
 
 procedure razlo21 begin
    Reply(136);
+   NOption(900, NodeRecruit, 4);
    NOption(138, razlo22, 4);
    NOption(144, razlo23a, 4);
    NLowOption(139, razlo11);
@@ -403,6 +429,7 @@ end
 
 procedure razlo23 begin
    Reply(141);
+   NOption(900, NodeRecruit, 4);
    NOption(143, razlo22, 4);
    NOption(144, razlo23a, 4);
    NOption(145, razlo27, 5);
@@ -412,6 +439,7 @@ procedure razlo23 begin
       NLowOption(303, razlo30);
    end
 
+   NOption("Join me.", NodeRecruit, 4);
    NOption(142, razloend, 4);
    NLowOption(147, razlo11);
 end
@@ -459,6 +487,7 @@ end
 
 procedure razlo28 begin
    Reply(158);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(159, razloend, 5);
 end
 
@@ -483,6 +512,7 @@ variable count_tails := dude_item_count(PID_SCORPION_TAIL);
       Reply(161);
       NOption(2000, razlo30a, 1);
       NOption(mstr(2001) + num_text + mstr(2002), razlo30b, 1);
+      NOption("Join me.", NodeRecruit, 4);
       NOption(2003, razloend, 4);
       NLowOption(g_grunt, razloend);
    end
@@ -586,6 +616,7 @@ procedure razlo06n begin
       NOption(305, razlo06na, 4);
       NLowOption(303, razlo06na);
    end
+   NOption("Join me.", NodeRecruit, 4);
    NOption(188, razloend, 4);
    NLowOption(304, razlo17);
    NLowOption(302, razloend);
@@ -620,6 +651,7 @@ end
 procedure razlo11n begin
    Reply(108);
    NOption(194, razlo04, 5);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(195, razloend, 5);
 end
 
@@ -660,6 +692,7 @@ procedure razlofixa begin
    NOption(178, razlo08n, 4);
    NOption(179, razlo06n, 4);
    NLowOption(301, razlo08n);
+   NOption("Join me.", NodeRecruit, 4);
    NLowOption(302, razloend);
 end
 
@@ -669,6 +702,7 @@ procedure razlofixb begin
    NOption(181, razlo08n, 4);
    NOption(182, razlo06n, 4);
    NLowOption(301, razlo08n);
+   NOption("Join me.", NodeRecruit, 4);
    NLowOption(302, razloend);
 end
 
@@ -678,6 +712,7 @@ procedure razlofixc begin
    NOption(184, razlo08n, 4);
    NOption(185, razlo06n, 4);
    NLowOption(301, razlo08n);
+   NOption("Join me.", NodeRecruit, 4);
    NLowOption(302, razloend);
 end
 
@@ -740,6 +775,10 @@ procedure remove_items begin
 end
 
 procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
    if (map_var(MVAR_Caught_Stealing) == 1) then begin
       set_local_var(10, local_var(10) + 1);
       set_map_var(MVAR_Caught_Stealing, 0);
@@ -784,4 +823,54 @@ procedure razlo00n_a begin
    else begin
       call razlo00;
    end
+end
+
+procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg(obj_name(self_obj) + " joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
 end

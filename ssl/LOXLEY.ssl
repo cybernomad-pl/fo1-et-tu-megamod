@@ -824,9 +824,13 @@ procedure loxleyend begin
 end
 
 procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
    party_add(self_obj);
    set_team(self_obj, TEAM_PLAYER);
-   display_msg("Loxley joins your party.");
+   display_msg(obj_name(self_obj) + " joins your party.");
 end
 
 procedure loxley63 begin

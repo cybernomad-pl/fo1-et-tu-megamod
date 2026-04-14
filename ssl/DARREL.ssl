@@ -199,6 +199,7 @@ procedure Darrel01 begin
    if (global_var(GVAR_MISSING_CARAVAN) == 1) then begin
       NOption(106, Darrel75, 4);
    end
+   NOption("Join me.", NodeRecruit, 4);
    NOption(107, DarrelEnd, 4);
 end
 
@@ -232,12 +233,14 @@ procedure Darrel03 begin
    NOption(111, Darrel05, 4);
    NOption(112, Darrel12, 4);
    NOption(113, Darrel06, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(114, DarrelEnd, 4);
 end
 
 procedure Darrel04 begin
    Reply(115);
    NOption(116, Darrel07, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(201, DarrelEnd, 4);
    NOption(118, Darrel11, 4);
 end
@@ -245,6 +248,7 @@ end
 procedure Darrel05 begin
    Reply(119);
    if (has_rep_berserker) then begin
+      NOption("Join me.", NodeRecruit, 4);
       NOption(120, DarrelEnd, 4);
    end
    NOption(121, Darrel08, 4);
@@ -253,12 +257,14 @@ end
 
 procedure Darrel06 begin
    Reply(123);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(202, DarrelEnd, 4);
    NOption(125, Darrel04, 4);
 end
 
 procedure Darrel07 begin
    Reply(126);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(202, DarrelEnd, 4);
    NOption(127, Darrel03, 4);
 end
@@ -289,6 +295,7 @@ procedure Darrel12 begin
    Reply(135);
    NOption(136, Darrel13, 4);
    NOption(137, Darrel15, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(203, DarrelEnd, 4);
 end
 
@@ -296,6 +303,7 @@ procedure Darrel13 begin
    Reply(139);
    NOption(140, Darrel13, 4);
    NOption(132, Darrel07, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(204, DarrelEnd, 4);
 end
 
@@ -306,6 +314,7 @@ procedure Darrel14 begin
    end
    NOption(141, Darrel07, 4);
    NOption(146, Darrel05, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(145, DarrelEnd, 4);
 end
 
@@ -313,6 +322,7 @@ procedure Darrel15 begin
    Reply(147);
    NOption(148, Darrel14, 4);
    NOption(149, Darrel07, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(203, DarrelEnd, 4);
 end
 
@@ -335,6 +345,7 @@ procedure Darrel59 begin
    NOption(155, Darrel60, 4);
    NOption(156, Darrel61, 4);
    NOption(157, Darrel62, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(158, DarrelEnd, 4);
    NLowOption(103, Darrel02);
 end
@@ -359,12 +370,14 @@ end
 
 procedure Darrel63 begin
    Reply(168);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(203, DarrelEnd, 4);
    NOption(170, Darrel72, 4);
 end
 
 procedure Darrel64 begin
    Reply(171);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(205, DarrelEnd, 4);
    NOption(170, Darrel69, 4);
 end
@@ -372,6 +385,7 @@ end
 procedure Darrel66 begin
    Reply(174);
    NOption(175, Darrel68, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(176, DarrelEnd, 4);
    NOption(177, Darrel63, 4);
    NOption(206, DarrelEnd, 4);
@@ -380,11 +394,13 @@ end
 procedure Darrel67 begin
    Reply(179);
    NOption(180, Darrel64, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(203, DarrelEnd, 4);
 end
 
 procedure Darrel68 begin
    Reply(181);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(182, DarrelEnd, 4);
    NOption(183, Darrel63, 4);
    NOption(184, DarrelEnd, 4);
@@ -392,12 +408,14 @@ end
 
 procedure Darrel69 begin
    Reply(189);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(203, DarrelEnd, 4);
    NOption(190, Darrel72, 4);
 end
 
 procedure Darrel70 begin
    Reply(168);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(203, DarrelEnd, 4);
    NOption(190, Darrel72, 4);
 end
@@ -405,6 +423,7 @@ end
 procedure Darrel71 begin
    Reply(191);
    NOption(188, Darrel72, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(192, DarrelEnd, 4);
    NLowOption(103, Darrel02);
 end
@@ -416,6 +435,7 @@ procedure Darrel72 begin
    if (global_var(GVAR_MISSING_CARAVAN) == 1) then begin
       NOption(106, Darrel75, 4);
    end
+   NOption("Join me.", NodeRecruit, 4);
    NOption(207, DarrelEnd, 4);
 end
 
@@ -440,6 +460,7 @@ procedure Darrel75 begin
    NOption(196, Darrel11, 4);
    NOption(197, Darrel76, 4);
    NOption(104, Darrel03, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(198, DarrelEnd, 4);
 end
 
@@ -449,6 +470,7 @@ procedure Darrel76 begin
    if (global_var(GVAR_NECROP_WATER_CHIP_TAKEN) != 1) then begin
       NOption(105, Darrel04, 4);
    end
+   NOption("Join me.", NodeRecruit, 4);
    NOption(208, DarrelEnd, 4);
 end
 
@@ -460,6 +482,7 @@ procedure giveradx begin
    radx := create_object(PID_RAD_X, 0, 0);
    add_obj_to_inven(dude_obj, radx);
    Reply(212);
+   NOption("Join me.", NodeRecruit, 4);
    NLowOption(300, DarrelEnd);
 end
 
@@ -468,9 +491,13 @@ procedure combat begin
 end
 
 procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
    party_add(self_obj);
    set_team(self_obj, TEAM_PLAYER);
-   display_msg("Darrel joins your party.");
+   display_msg(obj_name(self_obj) + " joins your party.");
 end
 
 procedure NodePartyMain begin

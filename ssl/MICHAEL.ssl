@@ -1,0 +1,1127 @@
+/*
+
+   Brotherhood - Michael
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/brotherhood.h"
+#include "maps/brohd12.h"
+
+#define NAME                    SCRIPT_MICHAEL
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_BOS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure map_enter_p_proc;
+procedure critter_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+
+procedure Michael0;
+procedure Michael1;
+procedure Michael2;
+procedure Michael3;
+procedure Michael3a;
+procedure Michael4;
+procedure Michael5;
+procedure Michael10;
+procedure Michael11;
+procedure Michael11a;
+procedure Michael12;
+procedure Michael13;
+procedure Michael13a;
+procedure Michael13b;
+procedure Michael14;
+procedure Michael15;
+procedure Michael16;
+procedure Michael16a;
+procedure Michael16b;
+procedure Michael17;
+procedure Michael18;
+procedure Michael19;
+procedure Michael20;
+procedure Michael21;
+procedure Michael22;
+procedure Michael23;
+procedure Michael24;
+procedure Michael26;
+procedure Michael27;
+procedure Michael28;
+procedure Michael29;
+procedure Michael30;
+procedure Michael38;
+procedure Michael39;
+procedure Michael40;
+procedure Michael41;
+procedure Michael42;
+procedure Michael43;
+procedure Michael44a;
+procedure Michael44b;
+procedure Michael44c;
+procedure Michael44d;
+procedure Michael44e;
+procedure Michael44f;
+procedure Michael44g;
+procedure Michael44h;
+procedure Michael44i;
+procedure Michael44j;
+procedure Michael47;
+procedure Michael47a;
+procedure Michael48;
+procedure Michael49;
+procedure Michael50;
+procedure Michael52;
+procedure Michael52a;
+procedure Michael53;
+procedure Michael54;
+procedure Michael55;
+procedure Michael56;
+procedure Michael57;
+procedure Michael59;
+procedure Michael60;
+procedure Michael61;
+procedure Michael72;
+procedure Michael73;
+procedure Michael73a;
+procedure Michael73b;
+procedure Michael73c;
+procedure Michael74;
+procedure Michael75;
+procedure Michael75a;
+procedure Michael75b;
+procedure Michael75c;
+procedure Michael76;
+procedure Michael76a;
+procedure Michael77;
+procedure Michael78;
+procedure Michael79;
+procedure Michael79a;
+procedure Michael80;
+procedure Michael144;
+procedure Michael144more;
+procedure Michael145;
+procedure Michael146;
+procedure Michael146a;
+procedure Michael146b;
+procedure Michael147;
+procedure Michael147a;
+procedure Michael148;
+procedure Michael149;
+procedure Michael150;
+procedure Michaelend;
+
+procedure combat;
+procedure grenadesFail;
+procedure putGrenades;
+
+procedure MichaelUpReact;
+
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+#define LVAR_Asked_PA_Motivator       (8)
+
+variable tmp_hostile;
+variable Only_Once := 1;
+variable Open_Door;
+variable Herebefore;
+variable item;
+variable conmod;
+variable femmod;
+variable Hear_28;
+variable Hear_29;
+variable Hear_50;
+variable temp;
+variable temp2;
+
+procedure start begin
+   if Only_Once then begin
+      Only_Once := 0;
+      set_self_team(TEAM_BROTHERHOOD);
+      set_self_ai(AI_BROTHERHOOD_KNIGHT);
+   end
+end
+
+procedure map_enter_p_proc begin
+   check_bos_ca_enabled
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+   if REP_ENEMY_BOS then begin
+      tmp_hostile := 1;
+   end
+   if (tile_distance_objs(self_obj, dude_obj) > 12) then begin
+      tmp_hostile := 0;
+   end
+   if (tmp_hostile) then begin
+      set_global_var(GVAR_ENEMY_BROTHERHOOD, 1);
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+end
+
+procedure pickup_p_proc begin
+   if source_is_dude then begin
+      tmp_hostile := 1;
+   end
+end
+
+procedure talk_p_proc begin
+   variable talk := true;
+
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+
+   set_tma_data_generic(TMA_MSG_BOS);
+
+   dude_look_at_self;
+   get_reaction
+
+   if (map_var(MVAR_SOPHIA_FLAG1) == 2 and global_var(GVAR_MICHAEL_SOPHIA_GRENADES) < 3) then begin//angry
+      float_msg(self_obj, mstr(203), FLOAT_MSG_RED);
+      return;
+   end
+
+   start_gdialog(320, self_obj, 4, -1, -1);
+   gsay_start;
+   if (local_var(7)) then begin
+      if (map_var(MVAR_SOPHIA_FLAG1) == 1) or (map_var(MVAR_SOPHIA_FLAG1) == 2) or (map_var(MVAR_SOPHIA_FLAG1) == 3) then begin
+         if (global_var(GVAR_MICHAEL_SOPHIA_GRENADES) >= 3) then begin//quest done
+            set_map_var(MVAR_SOPHIA_FLAG1, 4);//done
+            GMessage(206);
+            BigUpReact
+            if (global_var(GVAR_MICHAEL_SOPHIA_GRENADES) == 4) then begin
+               NMessage(300);
+               item := create_object(PID_MICRO_FUSION_CELL, 0, 0);
+               add_mult_objs_to_inven(dude_obj, item, 2);
+            end
+            give_xp(EXP_DELIVERED_GRENADES);
+
+            talk := false;
+         end
+         else begin//quest in progress
+            if (global_var(GVAR_MICHAEL_SOPHIA_GRENADES) == 2) or ((GAME_TIME_IN_HOURS) > local_var(5)) then begin
+               talk := false;
+               call grenadesFail;
+            end
+            else if (map_var(MVAR_SOPHIA_FLAG1) == 1) then begin
+               call Michael52;//grenade_quest_remind
+               talk := false;
+            end//else normal speech (talk := true)
+         end
+      end
+      if (talk) then begin
+         if bad_critter_reaction then begin
+            call Michael60;
+         end
+         else begin
+            call Michael47;
+         end
+      end
+   end
+   else begin
+      set_local_var(7, 1);
+      call Michael3;
+   end
+   gsay_end;
+   end_dialogue;
+end
+
+procedure destroy_p_proc begin
+   if source_is_dude then begin
+      set_global_var(GVAR_ENEMY_BROTHERHOOD, 1);
+   end
+   inc_good_critter
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure Michael0 begin
+   float_msg(self_obj, mstr(103), FLOAT_MSG_NORMAL);
+end
+
+procedure Michael1 begin
+   float_msg(self_obj, mstr(104), FLOAT_MSG_NORMAL);
+end
+
+procedure Michael2 begin
+   float_msg(self_obj, mstr(105), FLOAT_MSG_NORMAL);
+end
+
+procedure Michael3 begin
+   Reply(106);
+   NOption(900, NodeRecruit, 4);
+   if (local_var(6) == 0) then begin
+      GOption(107, Michael3a, 5);
+      NOption(108, Michael11, 4);
+      NOption(109, Michael10, 4);
+   end
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(146, Michael48, 4);
+   NLowOption(110, Michael4);
+end
+
+procedure Michael3a begin
+   UpReact
+   call Michael11;
+end
+
+procedure Michael4 begin
+   Reply(111);
+   NOption(900, NodeRecruit, 4);
+   NLowOption(112, Michael5);
+   NLowOption(113, Michael5);
+end
+
+procedure Michael5 begin
+   NMessage(114);
+end
+
+procedure Michael10 begin
+   NMessage(115);
+end
+
+procedure Michael11 begin
+   set_local_var(6, 1);
+   Reply(116);
+   NOption(900, NodeRecruit, 4);
+   NOption(117, Michael11a, 5);
+   NOption(118, Michael26, 4);
+   NOption(119, Michaelend, 4);
+end
+
+procedure Michael11a begin
+   if (dude_stat_success(STAT_ch, 0)) then begin
+      call Michael13;
+   end
+   else begin
+      call Michael12;
+   end
+end
+
+procedure Michael12 begin
+   NMessage(120);
+end
+
+procedure Michael13 begin
+   Reply(121);
+   NOption(900, NodeRecruit, 4);
+   NOption(122, Michael13a, 5);
+   NOption(123, Michael13b, 4);
+   NOption(124, Michael22, 4);
+end
+
+procedure Michael13a begin
+   if (dude_stat_success(STAT_ch, 0)) then begin
+      if (dude_is_male) then begin
+         call Michael16;
+      end
+      else begin
+         call Michael18;
+      end
+   end
+   else begin
+      if (dude_is_male) then begin
+         call Michael14;
+      end
+      else begin
+         call Michael17;
+      end
+   end
+end
+
+procedure Michael13b begin
+   if (dude_stat_success(STAT_ch, 0)) then begin
+      call Michael22;
+   end
+   else begin
+      call Michael15;
+   end
+end
+
+procedure Michael14 begin
+   BMessage(125);
+   DownReact
+end
+
+procedure Michael15 begin
+   BMessage(126);
+   DownReact
+end
+
+procedure Michael16 begin
+   Reply(127);
+   NOption(900, NodeRecruit, 4);
+   GOption(128, Michael16a, 4);
+   BOption(129, Michael16b, 4);
+end
+
+procedure Michael16a begin
+   BigUpReact
+   call Michael19;
+end
+
+procedure Michael16b begin
+   DownReact
+   call Michael20;
+end
+
+procedure Michael17 begin
+   BMessage(130);
+   DownReact
+end
+
+procedure Michael18 begin
+   Reply(131);
+   NOption(900, NodeRecruit, 4);
+   GOption(132, Michael16a, 4);
+   BOption(133, Michael16b, 4);
+end
+
+procedure Michael19 begin
+   GMessage(134);
+   TopReact
+   item := create_object(PID_PULSE_GRENADE, 0, 0);
+   add_obj_to_inven(dude_obj, item);
+   item := create_object(PID_PULSE_GRENADE, 0, 0);
+   add_obj_to_inven(dude_obj, item);
+   item := create_object(PID_PULSE_GRENADE, 0, 0);
+   add_obj_to_inven(dude_obj, item);
+end
+
+procedure Michael20 begin
+   NMessage(135);
+end
+
+procedure Michael21 begin
+   NMessage(136);
+end
+
+procedure Michael22 begin
+   Reply(137);
+   NOption(900, NodeRecruit, 4);
+   NOption(138, Michael23, 6);
+   NOption(139, Michael24, 4);
+   NOption(140, Michaelend, 4);
+end
+
+procedure Michael23 begin
+   NMessage(141);
+   TopReact
+   item := create_object(PID_PSYCHO, 0, 0);
+   add_obj_to_inven(dude_obj, item);
+   item := create_object(PID_PSYCHO, 0, 0);
+   add_obj_to_inven(dude_obj, item);
+end
+
+procedure Michael24 begin
+   if (dude_is_male) then begin
+      NMessage(142);
+   end
+   else begin
+      NMessage(143);
+   end
+end
+
+procedure Michael26 begin
+   Reply(144);
+   NOption(900, NodeRecruit, 4);
+   NOption(145, Michael27, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(146, Michael48, 4);
+   NOption(147, Michael27, 4);
+end
+
+procedure Michael27 begin
+   Reply(148);
+   NOption(900, NodeRecruit, 4);
+   NOption(149, Michael28, 4);
+   NOption(150, Michael29, 4);
+   NOption(151, Michaelend, 4);
+end
+
+procedure Michael28 begin
+   Hear_28 := 1;
+   Reply(152);
+   NOption(900, NodeRecruit, 4);
+   if (Hear_29 == 0) then
+      NOption(153, Michael29, 4);
+   NOption(154, Michaelend, 4);
+end
+
+procedure Michael29 begin
+   Hear_29 := 1;
+   Reply(155);
+   NOption(900, NodeRecruit, 4);
+   if (Hear_28 == 0) then begin
+      NOption(156, Michael30, 8);
+      NOption(157, Michael28, 4);
+   end
+   NOption("Join me.", NodeRecruit, 4);
+   NOption(158, Michaelend, 4);
+end
+
+procedure Michael30 begin
+   Reply(159);
+   NOption(900, NodeRecruit, 4);
+   NOption(160, MichaelUpReact, 8);
+end
+
+procedure MichaelUpReact begin
+   UpReact
+end
+
+procedure Michael38 begin
+   Reply(167);
+
+   temp2 := map_var(MVAR_AMMO_TAKEN) + 1;
+   set_map_var(MVAR_AMMO_TAKEN, temp2);
+   temp2 := map_var(MVAR_ANY_REQ) - 1;
+   set_map_var(MVAR_ANY_REQ, temp2);
+   item := create_object(temp, 0, 0);
+   add_obj_to_inven(dude_obj, item);
+
+   NOption(900, NodeRecruit, 4);
+   NOption(168, Michaelend, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(169, Michael43, 4);
+end
+
+procedure Michael39 begin
+   Reply(170);
+   NOption(900, NodeRecruit, 4);
+   NOption(171, Michaelend, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(172, Michael43, 4);
+end
+
+procedure Michael40 begin
+   Reply(173);
+   NOption(900, NodeRecruit, 4);
+   NOption(174, Michaelend, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(175, Michael43, 4);
+end
+
+procedure Michael41 begin
+   Reply(176);
+   NOption(900, NodeRecruit, 4);
+   NOption(177, Michaelend, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(178, Michael43, 4);
+end
+
+procedure Michael42 begin
+   Reply(179);
+   NOption(900, NodeRecruit, 4);
+   NOption(180, Michaelend, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(181, Michael43, 4);
+end
+
+procedure Michael43 begin
+   NMessage(182);
+   call Michael49;
+end
+
+procedure Michael44a begin
+   temp := 29;
+   call Michael38;
+end
+
+procedure Michael44b begin
+   temp := 30;
+   call Michael38;
+end
+
+procedure Michael44c begin
+   temp := 31;
+   call Michael38;
+end
+
+procedure Michael44d begin
+   temp := 111;
+   call Michael38;
+end
+
+procedure Michael44e begin
+   temp := 33;
+   call Michael38;
+end
+
+procedure Michael44f begin
+   temp := 34;
+   call Michael38;
+end
+
+procedure Michael44g begin
+   temp := 35;
+   call Michael38;
+end
+
+procedure Michael44h begin
+   temp := 36;
+   call Michael38;
+end
+
+procedure Michael44i begin
+   temp := 95;
+   call Michael38;
+end
+
+procedure Michael44j begin
+   temp := 363;
+   call Michael38;
+end
+
+procedure Michael47 begin
+   Reply(183);
+
+   NOption(900, NodeRecruit, 4);
+   if (Hear_50 == 0 and map_var(MVAR_SOPHIA_FLAG1) == 0) then
+      NOption(184, Michael50, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(185, Michael48, 4);
+   NOption(186, Michaelend, 4);
+   BOption(187, Michael47a, 4);
+
+   if ((global_var(GVAR_BROTHER_BUILD_POWER_ARMOR) == 1) and (local_var(LVAR_Asked_PA_Motivator) == 0)) then
+      NOption(240, Michael72, 4);
+
+   NLowOption(110, Michael4);
+end
+
+procedure Michael47a begin
+   BigDownReact
+   call Michaelend;
+end
+
+procedure Michael48 begin
+   NMessage(188);
+   call Michael49;
+end
+
+procedure Michael49 begin
+   NMessage(189);
+   if (map_var(MVAR_SUPER_SLEDGE) > 0) then
+      call Michael146a;
+
+   if (map_var(MVAR_UZI) > 0) then
+      call Michael146b;
+   else if (map_var(MVAR_SIG_SAUER) > 0) then
+      call Michael147;
+   else if (map_var(MVAR_MAGNETO_LASER) > 0) then
+      call Michael147a;
+   else if (map_var(MVAR_CBT_ARMOR) > 0) then
+      call Michael148;
+   else if (map_var(MVAR_PWR_ARMOR) > 0) then
+      call Michael149;
+   else if (map_var(MVAR_GEIGER) > 0) then
+      call Michael150;
+   else if (map_var(MVAR_AMMO) > map_var(MVAR_AMMO_TAKEN)) then
+      call Michael144;
+end
+
+procedure Michael50 begin
+   Hear_50 := 1;
+   Reply(190);
+   NOption(900, NodeRecruit, 4);
+   NOption(191, putGrenades, 4);
+   NOption(192, Michaelend, 4);
+   BOption(193, Michael47a, 4);
+end
+
+procedure putGrenades begin
+   NMessage(194);
+
+   set_local_var(5, GAME_TIME_IN_HOURS);//   1 sec * 1min * 1 hour
+   set_map_var(MVAR_SOPHIA_FLAG1, 1);
+   set_global_var(GVAR_MICHAEL_SOPHIA_GRENADES, 1);
+   item := create_object(PID_PULSE_GRENADE, 0, 0);
+   add_mult_objs_to_inven(dude_obj, item, 3);
+end
+
+procedure Michael52 begin
+   Reply(195);
+   NOption(900, NodeRecruit, 4);
+   NOption(196, Michael53, 4);
+   NOption(197, Michael57, 4);
+   NOption(198, Michaelend, 4);
+   NOption(199, Michael52a, 4);
+end
+
+procedure Michael52a begin
+   if (dude_is_male) then begin
+      call Michael54;
+   end
+   else begin
+      call Michael55;
+   end
+end
+
+procedure Michael53 begin
+   NMessage(200);
+end
+
+procedure Michael54 begin
+   NMessage(201);
+   set_global_var(GVAR_ENEMY_BROTHERHOOD, 1);
+end
+
+procedure Michael55 begin
+   NMessage(202);
+   set_global_var(GVAR_ENEMY_BROTHERHOOD, 1);
+end
+
+procedure Michael56 begin
+   NMessage(203);
+end
+
+procedure Michael57 begin
+   NMessage(204);
+   BottomReact
+   set_map_var(MVAR_SOPHIA_FLAG1, 3); //hide_quest_until_solved
+end
+
+procedure grenadesFail begin
+   NMessage(205);
+   set_map_var(MVAR_SOPHIA_FLAG1, 2);
+end
+
+procedure Michael59 begin
+   NMessage(206);
+end
+
+
+procedure Michael60 begin
+   Reply(207);
+   NOption(900, NodeRecruit, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(208, Michael61, 4);
+   NOption(209, Michaelend, 4);
+end
+
+procedure Michael61 begin
+   NMessage(210);
+   call Michael49;
+end
+
+procedure Michael72 begin
+   set_local_var(LVAR_Asked_PA_Motivator, 1);
+
+   femmod := (dude_charisma - 5) * 10;
+   Reply(241);
+   NOption(900, NodeRecruit, 4);
+   NOption(242, Michael73, 4);
+   NOption(243, Michael76, 4);
+   NOption(244, Michael77, 4);
+   NOption(245, Michael79, 4);
+end
+
+procedure Michael73 begin
+   Reply(246);
+   NOption(900, NodeRecruit, 4);
+   NOption(247, Michael73a, 4);
+   NOption(248, Michael73b, 6);
+   NOption(249, Michaelend, 7);
+   NOption(250, Michael73c, 4);
+end
+
+procedure Michael73a begin
+   if (dude_is_male) then begin
+      conmod := -30;
+   end
+   else begin
+      conmod := femmod;
+   end
+   if (dude_skill_success(SKILL_SPEECH, conmod)) then begin
+      call Michael74;
+   end
+   else begin
+      call Michael80;
+   end
+end
+
+procedure Michael73b begin
+   if (dude_is_male) then begin
+      conmod := -20;
+   end
+   else begin
+      conmod := femmod;
+   end
+   if (dude_skill_success(SKILL_SPEECH, conmod)) then begin
+      call Michael74;
+   end
+   else begin
+      call Michael80;
+   end
+end
+
+procedure Michael73c begin
+   if (dude_is_male) then begin
+      conmod := -10;
+   end
+   else begin
+      conmod := femmod;
+   end
+   if (dude_skill_success(SKILL_SPEECH, conmod)) then begin
+      call Michael74;
+   end
+   else begin
+      call Michael75;
+   end
+end
+
+procedure Michael74 begin
+   item := create_object(PID_MOTIVATOR, 0, 0);
+   add_obj_to_inven(dude_obj, item);
+   Reply(251);
+   NOption(900, NodeRecruit, 4);
+   NOption(252, Michaelend, 4);
+end
+
+procedure Michael75 begin
+   Reply(253);
+   NOption(900, NodeRecruit, 4);
+   NOption(254, Michael75a, 6);
+   NOption(255, Michael75b, 4);
+   NOption(256, Michael75c, 4);
+end
+
+procedure Michael75a begin
+   if (dude_is_male) then begin
+      conmod := 0;
+   end
+   else begin
+      conmod := femmod;
+   end
+   if (dude_skill_success(SKILL_SPEECH, conmod)) then begin
+      call Michael74;
+   end
+   else begin
+      call Michael80;
+   end
+end
+
+procedure Michael75b begin
+   if (dude_is_male) then begin
+      conmod := -100;
+   end
+   else begin
+      conmod := femmod;
+   end
+   if (dude_skill_success(SKILL_SPEECH, conmod)) then begin
+      call Michael74;
+   end
+   else begin
+      call Michael80;
+   end
+end
+
+procedure Michael75c begin
+   if (dude_is_male) then begin
+      conmod := -20;
+   end
+   else begin
+      conmod := femmod;
+   end
+   if (dude_skill_success(SKILL_SPEECH, conmod)) then begin
+      call Michael74;
+   end
+   else begin
+      call Michael80;
+   end
+end
+
+procedure Michael76 begin
+   Reply(257);
+   NOption(900, NodeRecruit, 4);
+   NOption(258, Michael76a, 4);
+   NOption(259, Michaelend, 4);
+end
+
+procedure Michael76a begin
+   if (dude_is_male) then begin
+      conmod := -20;
+   end
+   else begin
+      conmod := femmod;
+   end
+   if (dude_skill_success(SKILL_SPEECH, conmod)) then begin
+      call Michael74;
+   end
+   else begin
+      call Michael75;
+   end
+end
+
+procedure Michael77 begin
+   Reply(260);
+   NOption(900, NodeRecruit, 4);
+   NOption(261, Michael78, 4);
+   NOption(262, Michael73, 4);
+end
+
+procedure Michael78 begin
+   NMessage(263);
+end
+
+procedure Michael79 begin
+   Reply(264);
+   NOption(900, NodeRecruit, 4);
+   NOption(265, Michaelend, 4);
+   NOption(266, Michael79a, 4);
+   NOption(267, Michael76, 4);
+end
+
+procedure Michael79a begin
+   if (dude_is_male) then begin
+      conmod := -20;
+   end
+   else begin
+      conmod := femmod;
+   end
+   if (dude_skill_success(SKILL_SPEECH, 0)) then begin
+      call Michael73;
+   end
+   else begin
+      call Michael77;
+   end
+end
+
+procedure Michael80 begin
+   NMessage(268);
+end
+
+procedure Michael144 begin
+   Reply(211);
+   NOption(900, NodeRecruit, 4);
+   NOption(212, Michael145, 4);
+   if (map_var(MVAR_AMMO) > map_var(MVAR_AMMO_TAKEN)) then begin
+      NOption(213, Michael44a, 4);
+      NOption(214, Michael44b, 4);
+      NOption(215, Michael44c, 4);
+      NOption(216, Michael44d, 4);
+      NOption(217, Michael44e, 4);
+      NOption(218, Michael44f, 4);
+
+      // Fo1in2:
+      NOption(600, Michael44j, 4);
+
+      NOption(500, Michael144more, 4);
+   end
+end
+
+procedure Michael144more begin
+   Reply(211);
+   NOption(900, NodeRecruit, 4);
+   NOption(212, Michael145, 4);
+   NOption(219, Michael44g, 4);
+   NOption(220, Michael44h, 4);
+   NOption(221, Michael44i, 4);
+
+   NOption(501, Michael144, 4);
+end
+
+procedure Michael145 begin
+   NMessage(222);
+end
+
+procedure Michael146 begin
+end
+
+procedure Michael146a begin
+   Reply(235);
+
+   temp2 := map_var(MVAR_SUPER_SLEDGE) - 1;
+   set_map_var(MVAR_SUPER_SLEDGE, temp2);
+   temp2 := map_var(MVAR_ANY_REQ) - 1;
+   set_map_var(MVAR_ANY_REQ, temp2);
+   item := create_object(PID_SUPER_SLEDGE, 0, 0);
+   add_obj_to_inven(dude_obj, item);
+
+   NOption(900, NodeRecruit, 4);
+   NOption(224, Michaelend, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(225, Michael43, 4);
+end
+
+procedure Michael146b begin
+   Reply(223);
+
+   temp2 := map_var(MVAR_UZI) - 1;
+   set_map_var(MVAR_UZI, temp2);
+   temp2 := map_var(MVAR_ANY_REQ) - 1;
+   set_map_var(MVAR_ANY_REQ, temp2);
+   item := create_object(PID_ROCKET_LAUNCHER, 0, 0);
+   add_obj_to_inven(dude_obj, item);
+
+   NOption(900, NodeRecruit, 4);
+   NOption(224, Michaelend, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(225, Michael43, 4);
+end
+
+procedure Michael147 begin
+   Reply(226);
+
+   temp2 := map_var(MVAR_SIG_SAUER) - 1;
+   set_map_var(MVAR_SIG_SAUER, temp2);
+   temp2 := map_var(MVAR_ANY_REQ) - 1;
+   set_map_var(MVAR_ANY_REQ, temp2);
+   item := create_object(PID_LASER_PISTOL, 0, 0);
+   add_obj_to_inven(dude_obj, item);
+
+   NOption(900, NodeRecruit, 4);
+   NOption(227, Michaelend, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(228, Michael43, 4);
+end
+
+procedure Michael147a begin
+   Reply(226);
+
+   temp2 := map_var(MVAR_MAGNETO_LASER) - 1;
+   set_map_var(MVAR_MAGNETO_LASER, temp2);
+   temp2 := map_var(MVAR_ANY_REQ) - 1;
+   set_map_var(MVAR_ANY_REQ, temp2);
+   item := create_object(PID_MAGNETO_LASER_PISTOL, 0, 0);
+   add_obj_to_inven(dude_obj, item);
+
+   NOption(900, NodeRecruit, 4);
+   NOption(227, Michaelend, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(228, Michael43, 4);
+end
+
+procedure Michael148 begin
+   Reply(229);
+
+   temp2 := map_var(MVAR_CBT_ARMOR) - 1;
+   set_map_var(MVAR_CBT_ARMOR, temp2);
+   temp2 := map_var(MVAR_ANY_REQ) - 1;
+   set_map_var(MVAR_ANY_REQ, temp2);
+   item := create_object(PID_BROTHERHOOD_COMBAT_ARMOR, 0, 0);
+   add_obj_to_inven(dude_obj, item);
+
+   NOption(900, NodeRecruit, 4);
+   NOption(230, Michaelend, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(231, Michael43, 4);
+end
+
+procedure Michael149 begin
+   Reply(232);
+
+   temp2 := map_var(MVAR_PWR_ARMOR) - 1;
+   set_map_var(MVAR_PWR_ARMOR, temp2);
+   temp2 := map_var(MVAR_ANY_REQ) - 1;
+   set_map_var(MVAR_ANY_REQ, temp2);
+   item := create_object(PID_POWERED_ARMOR, 0, 0);
+   add_obj_to_inven(dude_obj, item);
+
+   NOption(900, NodeRecruit, 4);
+   NOption(233, Michaelend, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(234, Michael43, 4);
+end
+
+procedure Michael150 begin
+   Reply(235);
+
+   temp2 := map_var(MVAR_GEIGER) - 1;
+   set_map_var(MVAR_GEIGER, temp2);
+   temp2 := map_var(MVAR_ANY_REQ) - 1;
+   set_map_var(MVAR_ANY_REQ, temp2);
+   item := create_object(PID_GEIGER_COUNTER, 0, 0);
+   add_obj_to_inven(dude_obj, item);
+
+   NOption(900, NodeRecruit, 4);
+   NOption(236, Michaelend, 4);
+   if (map_var(MVAR_ANY_REQ) > 0) then
+      NOption(237, Michael43, 4);
+end
+
+procedure combat begin
+   tmp_hostile := 1;
+end
+
+procedure Michaelend begin
+end
+
+procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg(obj_name(self_obj) + " joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end

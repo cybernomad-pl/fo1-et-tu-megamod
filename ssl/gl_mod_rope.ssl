@@ -1,0 +1,69 @@
+/*
+    Rope mod -- USE ON rope on critter = knocked out + cripple all limbs
+    Rope is consumed, target switches to TEAM_PLAYER.
+*/
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/lib.arrays.h"
+
+#define LOG(s, k, v) set_ini_setting("megamod.ini|" + s + "|" + k, v)
+#define XP_ROPE   100
+
+procedure start;
+procedure useobjon_handler;
+
+procedure start begin
+    if game_loaded then begin
+        register_hook_proc(HOOK_USEOBJON, useobjon_handler);
+        LOG("rope_mod", "loaded", 1);
+    end
+end
+
+procedure useobjon_handler begin
+    variable user;
+    variable used_obj;
+    variable target;
+    variable used_pid;
+    variable rope;
+
+    user := get_sfall_arg;
+    used_obj := get_sfall_arg;
+    target := get_sfall_arg;
+
+    if (user != dude_obj) then return;
+    if (used_obj == 0 or target == 0) then return;
+
+    used_pid := obj_pid(used_obj);
+    if (used_pid != PID_ROPE) then return;
+    if (obj_type(target) != OBJ_TYPE_CRITTER) then return;
+
+    LOG("rope", "target_pid", obj_pid(target));
+
+    if (is_critter_dead(target)) then begin
+        display_msg("They're already dead. No point in tying them up.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    // Knock out + cripple all limbs
+    critter_injure(target, DAM_KNOCKED_OUT);
+    critter_injure(target, DAM_CRIP_ARM_LEFT);
+    critter_injure(target, DAM_CRIP_ARM_RIGHT);
+    critter_injure(target, DAM_CRIP_LEG_LEFT);
+    critter_injure(target, DAM_CRIP_LEG_RIGHT);
+    set_team(target, TEAM_PLAYER);
+
+    // Consume rope
+    rope := obj_carrying_pid_obj(dude_obj, PID_ROPE);
+    if (rope) then begin
+        rm_obj_from_inven(dude_obj, rope);
+        destroy_object(rope);
+    end
+
+    display_msg("You bind " + obj_name(target) + " tight. They won't be going anywhere.");
+    give_exp_points(XP_ROPE);
+    LOG("rope", "tied", 1);
+    set_sfall_return(-1);
+end

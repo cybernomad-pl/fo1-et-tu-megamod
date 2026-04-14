@@ -1,6 +1,6 @@
 /*
     Radio Faction Summon -- Megamod
-    USE radio outside towns = sequentially summon factions to your aid.
+    USE radio = sequentially summon factions to your aid. Works EVERYWHERE.
     Each USE summons the NEXT unlocked faction.
     Faction unlocks are tracked via GVARs / quest progress.
     Summoned NPCs join TEAM_PLAYER and fight alongside the Vault Dweller.
@@ -56,6 +56,7 @@ procedure refresh_unlocks;
 procedure summon_next_faction;
 procedure spawn_at_offset(variable pid, variable base_tile, variable dir, variable dist);
 procedure spawn_in_radius(variable pid);
+procedure spawn_companion(variable proto_pid, variable sprite_fid, variable armor_pid, variable weapon_pid, variable ammo_pid, variable ammo_count);
 procedure spawn_baldie_gang;
 procedure spawn_brotherhood;
 procedure spawn_zax;
@@ -100,10 +101,9 @@ procedure refresh_unlocks begin
     if (global_var(GVAR_BROTHERHOOD_SEND_HELP) > 0) then
         unlocked_factions[FACTION_BROTHERHOOD] := 1;
 
-    // Khans / Raiders
-    // TODO: GVAR_QUEST_RAIDERS_LEADER_DEAD / GVAR_JOINED_RAIDERS do not exist.
-    // Using GVAR_TOTAL_RAIDERS as a stand-in (player has interacted with raiders).
-    if (global_var(GVAR_TOTAL_RAIDERS) > 0) then
+    // Khans / Raiders -- unlocked when player takes control of the gang:
+    //   Garl dead (became new leader) OR Garls_friend (allied with Garl)
+    if (global_var(GVAR_GARL_DEAD) > 0 or global_var(GVAR_GARLS_FRIEND) > 0) then
         unlocked_factions[FACTION_RAIDERS] := 1;
 
     // Skullz Gang
@@ -134,7 +134,10 @@ end
 procedure radio_handler begin
     variable user;
     variable item;
-    variable next_faction;
+    variable roster;
+    variable i;
+    variable obj;
+    variable count;
 
     user := get_sfall_arg;
     item := get_sfall_arg;
@@ -146,69 +149,32 @@ procedure radio_handler begin
 
     set_sfall_return(-1);
 
-    // Town blocking REMOVED -- radio works in cities too.
-
-    // Refresh unlock list each USE so quest progress is reflected.
     call refresh_unlocks;
 
-    // Find the next unlocked faction not yet summoned this run.
-    // ZAX inserted between Brotherhood and Raiders.
-    next_faction := 0;
-    if (unlocked_factions[FACTION_BALDIE] == 1 and summoned_factions[FACTION_BALDIE] != 1) then
-        next_faction := FACTION_BALDIE;
-    else if (unlocked_factions[FACTION_BROTHERHOOD] == 1 and summoned_factions[FACTION_BROTHERHOOD] != 1) then
-        next_faction := FACTION_BROTHERHOOD;
-    else if (unlocked_factions[FACTION_ZAX] == 1 and summoned_factions[FACTION_ZAX] != 1) then
-        next_faction := FACTION_ZAX;
-    else if (unlocked_factions[FACTION_RAIDERS] == 1 and summoned_factions[FACTION_RAIDERS] != 1) then
-        next_faction := FACTION_RAIDERS;
-    else if (unlocked_factions[FACTION_SKULLZ] == 1 and summoned_factions[FACTION_SKULLZ] != 1) then
-        next_faction := FACTION_SKULLZ;
-    else if (unlocked_factions[FACTION_BLADES] == 1 and summoned_factions[FACTION_BLADES] != 1) then
-        next_faction := FACTION_BLADES;
-    else if (unlocked_factions[FACTION_GUNRUNNERS] == 1 and summoned_factions[FACTION_GUNRUNNERS] != 1) then
-        next_faction := FACTION_GUNRUNNERS;
-    else if (unlocked_factions[FACTION_RAZLO] == 1 and summoned_factions[FACTION_RAZLO] != 1) then
-        next_faction := FACTION_RAZLO;
-
-    LOG("radio", "next_faction", next_faction);
-
-    if (next_faction == 0) then begin
-        display_msg("You called everyone already.");
+    // If roster already has spawned NPCs -> FAJRANT (dismiss all)
+    roster := load_array("megamod_radio_roster");
+    if (roster != 0 and len_array(roster) > 0) then begin
+        count := len_array(roster);
+        LOG("radio", "fajrant_count", count);
+        for (i := 0; i < count; i++) begin
+            obj := roster[i];
+            if (obj != 0) then begin
+                destroy_object(obj);
+            end
+        end
+        free_array(roster);
+        save_array("megamod_radio_roster", 0);
+        display_msg("Fajrant. Everyone stands down.");
         return;
     end
 
-    // Summon the chosen faction.
-    if (next_faction == FACTION_BALDIE) then begin
-        LOG("radio", "spawning", "baldie");
+    // Roster empty -> spawn ALL unlocked factions at once
+    LOG("radio", "spawn_all", 1);
+    if (unlocked_factions[FACTION_BALDIE] == 1) then
         call spawn_baldie_gang;
-        summoned_factions["baldie"] := 1;
-    end else if (next_faction == FACTION_BROTHERHOOD) then begin
-        call spawn_brotherhood;
-        summoned_factions["brotherhood"] := 1;
-    end else if (next_faction == FACTION_ZAX) then begin
-        call spawn_zax;
-        summoned_factions["zax"] := 1;
-    end else if (next_faction == FACTION_RAIDERS) then begin
+    if (unlocked_factions[FACTION_RAIDERS] == 1) then
         call spawn_raiders;
-        summoned_factions["khans"] := 1;
-    end else if (next_faction == FACTION_SKULLZ) then begin
-        call spawn_skullz;
-        summoned_factions["skullz"] := 1;
-    end else if (next_faction == FACTION_BLADES) then begin
-        call spawn_blades;
-        summoned_factions["blades"] := 1;
-    end else if (next_faction == FACTION_GUNRUNNERS) then begin
-        call spawn_gunrunners;
-        summoned_factions["gunrunners"] := 1;
-    end else if (next_faction == FACTION_RAZLO) then begin
-        call spawn_razlo;
-        summoned_factions["razlo"] := 1;
-    end
-
-    // Mark this faction as summoned (numeric key for sequencing) and persist.
-    summoned_factions[next_faction] := 1;
-    save_array("megamod_factions_summoned", summoned_factions);
+    return;
 end
 
 // Helper -- spawn a critter at an offset from base_tile and return it.
@@ -234,32 +200,77 @@ end
 // object with set_object_data(npc, OBJ_DATA_FID, full_fid). This bypasses
 // the metarule3 ART_SET_BASE_FID_NUM path which is cached and does not
 // take effect after create_object.
-procedure spawn_baldie_gang begin
+// Helper -- spawn party-capable NPC, override sprite, equip armor + weapon
+procedure spawn_companion(variable proto_pid, variable sprite_fid, variable armor_pid, variable weapon_pid, variable ammo_pid, variable ammo_count) begin
     variable npc;
+    variable armor;
+    variable weapon;
 
-    // Baldie -- bald combat armor, combat shotgun
-    npc := spawn_in_radius(PID_GUARD);
-    set_object_data(npc, OBJ_DATA_FID, FID_HMGLCM);  // Male Bald Combat Armor
-    add_obj_to_inven(npc, create_object(PID_COMBAT_SHOTGUN, 0, 0));
-    add_mult_objs_to_inven(npc, create_object(PID_SHOTGUN_SHELLS, 0, 0), 30);
-    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+    npc := spawn_in_radius(proto_pid);
+    party_add(npc);
+    set_team(npc, TEAM_PLAYER);
 
-    // Little Mac -- nmbrlp dwarf sprite (BUTCH from mortuary), 10mm SMG
-    npc := spawn_in_radius(PID_GUARD);
-    set_object_data(npc, OBJ_DATA_FID, FID_NMBRLP);
-    add_obj_to_inven(npc, create_object(PID_10MM_SMG, 0, 0));
-    add_mult_objs_to_inven(npc, create_object(PID_10MM_AP, 0, 0), 60);
-    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+    // Armor: give + force-equip FIRST (engine will set FID from armor proto)
+    if (armor_pid > 0) then begin
+        armor := create_object(armor_pid, 0, 0);
+        add_obj_to_inven(npc, armor);
+        wield_obj_critter(npc, armor);
+    end
 
-    // Harley -- female punk leather (mohawk), sawed-off
-    npc := spawn_in_radius(PID_GUARD);
-    set_object_data(npc, OBJ_DATA_FID, FID_NFPGLA);
-    add_obj_to_inven(npc, create_object(PID_SAWED_OFF_SHOTGUN, 0, 0));
-    add_mult_objs_to_inven(npc, create_object(PID_SHOTGUN_SHELLS, 0, 0), 30);
-    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+    // Weapon: give + force-equip + ammo
+    if (weapon_pid > 0) then begin
+        weapon := create_object(weapon_pid, 0, 0);
+        add_obj_to_inven(npc, weapon);
+        wield_obj_critter(npc, weapon);
+        if (ammo_pid > 0 and ammo_count > 0) then
+            add_mult_objs_to_inven(npc, create_object(ammo_pid, 0, 0), ammo_count);
+    end
+
+    // Override FID LAST -- after engine has set FID from armor proto,
+    // so our custom sprite is the final word.
+    if (sprite_fid > 0) then
+        set_object_data(npc, OBJ_DATA_FID, sprite_fid);
+
+    // Stimpaks
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 5);
+
+    // Track in radio roster for "fajrant" dismiss
+    variable roster;
+    variable sz;
+    roster := load_array("megamod_radio_roster");
+    if (roster == 0) then begin
+        roster := create_array(0, 4);
+    end
+    sz := len_array(roster);
+    resize_array(roster, sz + 1);
+    roster[sz] := npc;
+    save_array("megamod_radio_roster", roster);
+
+    return npc;
+end
+
+procedure spawn_baldie_gang begin
+    variable baldie;
+    variable little_mac;
+    variable harley;
+    LOG("baldie", "spawn_start", 1);
+
+    // BALDIE -- bald combat armor sprite, FN FAL Scoped + FRAG GRENADES
+    baldie := spawn_companion(PID_MERCENARY, FID_HMGLCM, PID_COMBAT_ARMOR, PID_FN_FAL_NIGHT_SCOPE, PID_7_62MM_AMMO, 100);
+    add_mult_objs_to_inven(baldie, create_object(PID_FRAG_GRENADE, 0, 0), 10);
+
+    // LITTLE MAC -- DWARF sprite, Grease Gun + MOLOTOVS
+    little_mac := spawn_companion(PID_MERCENARY, FID_NMGRCH, PID_LEATHER_JACKET, PID_GREASE_GUN, PID_45_CALIBER_AMMO, 100);
+    add_mult_objs_to_inven(little_mac, create_object(PID_MOLOTOV_COCKTAIL, 0, 0), 10);
+
+    // HARLEY -- female mohawk leather sprite, 2x Sawed-off + MOLOTOVS
+    harley := spawn_companion(PID_MERCENARY_NFMAXX, FID_NFPGLA, PID_LEATHER_JACKET, PID_SAWED_OFF_SHOTGUN, PID_SHOTGUN_SHELLS, 80);
+    add_obj_to_inven(harley, create_object(PID_SAWED_OFF_SHOTGUN, 0, 0));
+    add_mult_objs_to_inven(harley, create_object(PID_MOLOTOV_COCKTAIL, 0, 0), 10);
 
     tile_refresh_display;
-    display_msg("Baldie, Little Mac and Harley roll in. Ready to rock.");
+    LOG("baldie", "spawn_done", 1);
+    display_msg("Baldie, Little Mac and Harley roll in.");
 end
 
 // === FACTION 2: BROTHERHOOD PALADINS ===
@@ -309,14 +320,23 @@ end
 
 // === FACTION 3: KHANS / RAIDERS ===
 procedure spawn_raiders begin
-    variable npc;
     variable i;
+    LOG("raiders", "spawn_start", 1);
 
+    // 6 raiders: mix of weapons, leather armor
     for (i := 0; i < 6; i++) begin
-        npc := spawn_in_radius(PID_RAIDER_GUARD);
-        add_obj_to_inven(npc, create_object(PID_SAWED_OFF_SHOTGUN, 0, 0));
-        add_mult_objs_to_inven(npc, create_object(PID_SHOTGUN_SHELLS, 0, 0), 15);
-        add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 2);
+        if (i == 0) then
+            // Leader -- combat shotgun
+            call spawn_companion(PID_MERCENARY, 0, PID_LEATHER_ARMOR, PID_COMBAT_SHOTGUN, PID_SHOTGUN_SHELLS, 30);
+        else if (i == 1 or i == 2) then
+            // Sawed-off gunners
+            call spawn_companion(PID_MERCENARY, 0, PID_LEATHER_ARMOR, PID_SAWED_OFF_SHOTGUN, PID_SHOTGUN_SHELLS, 20);
+        else if (i == 3) then
+            // SMG
+            call spawn_companion(PID_MERCENARY, 0, PID_LEATHER_JACKET, PID_10MM_SMG, PID_10MM_AP, 60);
+        else
+            // Pistols
+            call spawn_companion(PID_MERCENARY, 0, PID_LEATHER_JACKET, PID_10MM_PISTOL, PID_10MM_AP, 40);
     end
 
     display_msg("The Khans roll in. Six raiders, ready for blood.");

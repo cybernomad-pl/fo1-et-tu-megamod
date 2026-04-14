@@ -87,6 +87,9 @@ procedure critter_p_proc begin
 end
 
 procedure map_enter_p_proc begin
+   // Agatha is ALWAYS hfprim (index 86) -- what Tandi was before
+   art_change_fid_num(self_obj, 86);
+
    if shady_invaded then begin
       invasion_kill_critter;
    end
@@ -148,6 +151,7 @@ end
 procedure Agatha01 begin
    Reply(104);
    GLowOption(105, Agatha02);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(106, AgathaEnd, 4);
    NOption(107, Agatha03, 5);
    NOption(108, Agatha04, 4);
@@ -161,6 +165,7 @@ procedure Agatha03 begin
    Reply(110);
    GOption(111, AgathaEnd, 5);
    NOption(112, Agatha04, 6);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(113, AgathaEnd, 5);
 end
 
@@ -203,6 +208,7 @@ end
 procedure Agatha10 begin
    Reply(126);
    NOption(127, Agatha11, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(128, AgathaEnd, 4);
    GOption(129, Agatha12, 6);
 end
@@ -222,6 +228,7 @@ end
 
 procedure Agatha14 begin
    Reply(133);
+   NOption("Join me.", NodeRecruit, 4);
    NLowOption(134, AgathaEnd);
    NOption(135, AgathaEnd, 4);
    NOption(136, Agatha15, 6);
@@ -236,6 +243,7 @@ procedure Agatha16 begin
    NLowOption(139, Agatha17);
    NOption(140, Agatha20, 4);
    NOption(141, Agatha18, 6);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(142, AgathaEnd, 4);
 end
 
@@ -266,9 +274,13 @@ procedure AgathaEnd begin
 end
 
 procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
    party_add(self_obj);
    set_team(self_obj, TEAM_PLAYER);
-   display_msg("Agatha joins your party.");
+   display_msg(obj_name(self_obj) + " joins your party.");
 end
 
 procedure NodePartyMain begin

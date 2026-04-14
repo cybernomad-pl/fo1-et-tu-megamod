@@ -27,6 +27,7 @@ procedure damage_p_proc;
 procedure talk_p_proc;
 procedure map_enter_p_proc;
 procedure critter_p_proc;
+procedure NodeRecruit;
 procedure destroy_p_proc;
 procedure push_p_proc;
 
@@ -260,7 +261,19 @@ procedure tandi00 begin
    NOption(102, tandi00_1, 4);
    NOption(103, tandi23, 5);
    NOption(104, tandi24, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(105, tandi28, 4);
+end
+
+procedure NodeRecruit begin
+   if (Tandi_In_Party) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
+   // Use Tandi's own join mechanism -- sets up hireling status,
+   // timer events, and team properly so she follows the player.
+   tandi_joins_party;
+   display_msg(obj_name(self_obj) + " joins your party.");
 end
 
 procedure tandi00_1 begin

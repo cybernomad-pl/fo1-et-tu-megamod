@@ -601,7 +601,11 @@ procedure destroy_p_proc begin
 end
 
 procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
    party_add(self_obj);
    set_team(self_obj, TEAM_PLAYER);
-   display_msg("Vasquez joins your party.");
+   display_msg(obj_name(self_obj) + " joins your party.");
 end

@@ -1,0 +1,483 @@
+/*
+
+   Brotherhood - Sophia
+
+*/
+
+/* Include Files */
+#include "define.h"
+//#include "area/necropolis.h"
+
+#define NAME                    SCRIPT_SOPHIA
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_BOS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure combat;
+procedure critter_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+
+procedure goto00;
+procedure goto01;
+procedure goto02;
+procedure goto03;
+procedure goto04;
+procedure goto05;
+procedure goto06;
+procedure goto07;
+procedure goto08;
+procedure goto09;
+procedure goto10;
+procedure goto11;
+procedure goto12;
+procedure goto13;
+procedure goto14;
+procedure goto15;
+procedure goto16;
+procedure goto16b;
+procedure goto17;
+procedure goto18;
+procedure goto19;
+procedure goto20;
+procedure goto20b;
+procedure goto21;
+procedure anger;
+procedure gotoend;
+procedure gotostory;
+procedure grenades;
+procedure grenadesGive;
+procedure grenadesGiveLowInt;
+procedure grenadesFail;
+
+procedure gotoDownReact;
+
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+#define LVAR_Herebefore          (4)
+
+variable tmp_hostile;
+variable Pick;
+variable Only_Once := 1;
+variable message;
+variable Item := 0;
+variable ch := 0;
+
+procedure start begin
+   if Only_Once then begin
+      Only_Once := 0;
+      set_self_team(TEAM_BROTHERHOOD);
+      set_self_ai(AI_BROTHERHOOD_SCRIBE);
+   end
+end
+
+procedure combat begin
+   tmp_hostile := 1;
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+   if REP_ENEMY_BOS then begin
+      tmp_hostile := 1;
+   end
+   if (tile_distance_objs(self_obj, dude_obj) > 12) then begin
+      tmp_hostile := 0;
+   end
+   if (tmp_hostile) then begin
+      set_global_var(GVAR_ENEMY_BROTHERHOOD, 1);
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+end
+
+procedure pickup_p_proc begin
+   if source_is_dude then begin
+      tmp_hostile := 1;
+   end
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   set_tma_data_generic(TMA_MSG_BOS);
+
+   dude_look_at_self;
+   get_reaction
+   start_gdialog(319, self_obj, 4, -1, -1);
+   gsay_start;
+   if global_var(GVAR_MICHAEL_SOPHIA_GRENADES) == 1 then begin
+      call grenades;
+   end
+   else begin
+   if (local_var(LVAR_Herebefore)) then begin
+      if bad_critter_reaction then begin
+         call goto20;
+      end
+      else begin
+         call goto16;
+      end
+   end
+   else begin
+      set_local_var(LVAR_Herebefore, 1);
+      if (map_var(0) == 1) then begin
+         call goto14;
+      end
+      else begin
+         call goto00;
+      end
+   end
+   end
+   gsay_end;
+   end_dialogue;
+end
+
+procedure destroy_p_proc begin
+   set_global_var(GVAR_ENEMY_BROTHERHOOD, 1);
+   inc_good_critter
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure goto00 begin
+   Reply(301);
+   NOption(900, NodeRecruit, 4);
+   NLowOption(302, goto01);
+   NOption(303, goto02, 4);
+   NOption(304, goto03, 4);
+   NOption(305, goto02, 4);
+   BOption(306, anger, 4);
+end
+
+procedure goto01 begin
+   BMessage(307);
+end
+
+procedure goto02 begin
+   Reply(308);
+   NOption(900, NodeRecruit, 4);
+   if (global_var(GVAR_NECROP_WATER_CHIP_TAKEN) != 1) then begin
+      NOption(309, goto04, 4);
+   end
+   NOption(310, goto05, 4);
+   NOption(311, goto06, 4);
+   NOption("Join me.", NodeRecruit, 4);
+   NOption(312, gotoend, 4);
+   if (has_rep_berserker) then begin
+      BOption(313, anger, 4);
+   end
+end
+
+procedure goto03 begin
+   Reply(314);
+   NOption(900, NodeRecruit, 4);
+   NOption(315, gotoend, 4);
+   NOption(316, goto07, 4);
+end
+
+procedure goto04 begin
+   Reply(317);
+   NOption(900, NodeRecruit, 4);
+   NOption(318, goto07, 4);
+   NOption(319, goto06, 4);
+   BOption(320, anger, 4);
+   NOption(321, gotoend, 4);
+end
+
+procedure goto05 begin
+   Reply(322);
+   NOption(900, NodeRecruit, 4);
+   NOption(323, gotoend, 4);
+   NOption(324, goto08, 4);
+   NOption(325, goto09, 4);
+end
+
+procedure goto06 begin
+   Reply(326);
+   NOption(900, NodeRecruit, 4);
+   NOption(327, goto11, 4);
+   NOption(328, goto11, 4);
+   if (local_var(6) != 1) then begin
+      NOption(329, goto12, 4);
+   end
+   NOption(330, goto07, 4);
+end
+
+procedure goto07 begin
+   Reply(331);
+   NOption(900, NodeRecruit, 4);
+   if (local_var(6) != 1) then begin
+      NOption(332, goto12, 4);
+   end
+   NOption(333, goto09, 4);
+   if (has_rep_berserker) then begin
+      BOption(334, goto01, 4);
+   end
+   NOption(335, goto05, 4);
+end
+
+procedure goto08 begin
+   NMessage(336);
+end
+
+procedure goto09 begin
+   Reply(337);
+   NOption(900, NodeRecruit, 4);
+   if (local_var(6) != 1) then begin
+      GOption(338, goto12, 4);
+   end
+   BOption(339, gotoDownReact, 4);
+   BOption(341, goto01, 4);
+   NOption(342, goto10, 4);
+end
+
+procedure gotoDownReact begin
+   DownReact
+end
+
+procedure goto10 begin
+   NMessage(343);
+end
+
+procedure goto11 begin
+   Reply(344);
+   NOption(900, NodeRecruit, 4);
+   NOption(345, gotoend, 4);
+   NOption(346, goto13, 4);
+   BOption(347, gotoDownReact, 4);
+end
+
+procedure goto12 begin
+   set_local_var(6, 1);
+
+   Item := create_object(PID_BOS_HISTORY_HOLODISK, 0, 0);
+   add_obj_to_inven(dude_obj, Item);
+
+   Reply(348);
+   NOption(900, NodeRecruit, 4);
+   NOption(349, gotoend, 4);
+   BOption(350, gotoDownReact, 4);
+end
+
+procedure goto13 begin
+   Reply(351);
+   NOption(900, NodeRecruit, 4);
+   if (local_var(6) != 1) then begin
+      GOption(352, goto12, 4);
+   end
+   NOption("Join me.", NodeRecruit, 4);
+   NOption(349, gotoend, 4);
+   BOption(353, anger, 4);
+end
+
+procedure goto14 begin
+   Reply(301);
+   NOption(900, NodeRecruit, 4);
+   NLowOption(302, goto01);
+   NOption(303, goto02, 4);
+   NOption(330, goto15, 4);
+   BOption(306, anger, 4);
+end
+
+procedure goto15 begin
+   Reply(359);
+   NOption(900, NodeRecruit, 4);
+   NOption(360, goto07, 4);
+   BOption(361, anger, 4);
+   BOption(362, gotoDownReact, 4);
+end
+
+procedure goto16 begin
+   Reply(364);
+   NOption(900, NodeRecruit, 4);
+   NOption(365, goto17, 4);
+   NOption(366, goto16b, 4);
+   NOption(367, gotoend, 4);
+   NLowOption(302, goto01);
+end
+
+procedure goto16b begin
+   if (local_var(6) != 1) then begin
+      call goto12;
+   end
+   else begin
+      call goto18;
+   end
+end
+
+procedure goto17 begin
+   Reply(368);
+   NOption(900, NodeRecruit, 4);
+   NOption(369, gotoend, 4);
+   NOption(316, goto07, 4);
+end
+
+procedure goto18 begin
+   Reply(374);
+   NOption(900, NodeRecruit, 4);
+   NOption(369, gotoend, 4);
+   BOption(350, gotoDownReact, 4);
+end
+
+procedure goto19 begin
+   Reply(374);
+   NOption(900, NodeRecruit, 4);
+   NOption(369, gotoend, 4);
+   BOption(350, gotoDownReact, 4);
+end
+
+procedure goto20 begin
+   Reply(377);
+   NOption(900, NodeRecruit, 4);
+   NOption(378, gotoend, 4);
+   GOption(379, goto20b, 4);
+   NLowOption(302, goto01);
+end
+
+procedure goto20b begin
+   if (dude_skill_success(SKILL_SPEECH, -10)) then begin
+      call goto21;
+   end
+   else begin
+      call goto01;
+   end
+end
+
+procedure goto21 begin
+   UpReact
+   Reply(380);
+   NOption(900, NodeRecruit, 4);
+   NOption(381, goto17, 4);
+   NOption(382, goto16b, 4);
+   NOption(383, gotoend, 4);
+end
+
+procedure grenades begin
+   Reply(201);
+   NOption(900, NodeRecruit, 4);
+   if (dude_item_count(PID_PULSE_GRENADE) >= 3) then begin
+      NOption(202, grenadesGive, 4);
+      NLowOption(205, grenadesGiveLowInt);
+   end
+   NOption("Join me.", NodeRecruit, 4);
+   NOption(203, gotoend, 5);
+   NOption(204, grenadesFail, 4);
+end
+
+procedure grenadesGive begin
+   remove_pid_qty(dude_obj, PID_PULSE_GRENADE, 3);
+   Item := create_object(PID_PULSE_GRENADE, 0, 0);
+   add_mult_objs_to_inven(self_obj, Item, 3);
+
+   UpReact
+   NMessage(206);
+
+   ch := dude_charisma > 5;
+   if ch and dude_stat_success(STAT_ch, 0) then begin
+      //quest ok + bonus
+      GMessage(208);
+      set_global_var(GVAR_MICHAEL_SOPHIA_GRENADES, 4);
+   end
+   else begin
+      //quest ok
+      set_global_var(GVAR_MICHAEL_SOPHIA_GRENADES, 3);
+   end
+end
+
+procedure grenadesGiveLowInt begin
+   UpReact
+   Reply(207);
+   set_global_var(GVAR_MICHAEL_SOPHIA_GRENADES, 3); //quest ok
+   remove_pid_qty(dude_obj, PID_PULSE_GRENADE, 3);
+end
+
+procedure grenadesFail begin
+   DownReact
+   Reply(115);
+   set_global_var(GVAR_MICHAEL_SOPHIA_GRENADES, 2); //quest fail
+end
+
+procedure anger begin
+   DownReact
+   call goto01;
+end
+
+procedure gotoend begin
+end
+
+procedure gotostory begin
+end
+
+procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg(obj_name(self_obj) + " joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end

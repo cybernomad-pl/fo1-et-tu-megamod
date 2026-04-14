@@ -143,21 +143,7 @@ procedure gamemode_handler begin
     variable obj;
     LOG("gamemode", "fired", cur_map_index);
 
-    // Patch existing Tandi instances on the current map by writing FID
-    // directly to the object data field. set_object_data(OBJ_DATA_FID)
-    // bypasses the metarule cache that breaks art_change_fid_num.
-    lst := list_begin(LIST_CRITTERS);
-    obj := list_next(lst);
-    while (obj) do begin
-        if (obj != 0) then begin
-            if (obj_pid(obj) == PID_TANDI) then begin
-                set_object_data(obj, OBJ_DATA_FID, FID_HFPRIM_FULL);
-                LOG("gamemode", "tandi_swapped", 1);
-            end
-        end
-        obj := list_next(lst);
-    end
-    list_end(lst);
+    // Tandi sprite swap moved to gl_mod_tandi.ssl -- no duplication here
 
     if (dude_item_count(PID_WATER_CHIP) > 0) then begin
         if (global_var(GVAR_VAULT_WATER) < 1) then begin

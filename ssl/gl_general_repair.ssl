@@ -52,6 +52,10 @@ procedure start begin
             save_array("megamod_repair_scen", dismantled_scenery);
         end
         register_hook_proc(HOOK_USESKILLON, repair_skill_handler);
+
+        // Junk weighs almost nothing -- it's small parts, screws, wires
+        set_proto_data(PID_JUNK, PROTO_IT_WEIGHT, 0);
+
         set_ini_setting("megamod.ini|repair_start|loaded", 1);
     end
 end
@@ -87,14 +91,10 @@ procedure add_junk(variable count) begin
     end
 end
 
+// Skill check DISABLED for now -- always succeeds.
+// TODO: re-enable with balancing when upgrades are tested.
 procedure repair_skill_check(variable threshold) begin
-    variable skill_val;
-    variable roll;
-    skill_val := has_skill(dude_obj, SKILL_REPAIR);
-    if (skill_val < threshold) then return -1;
-    roll := random(1, 100);
-    if (roll <= skill_val) then return 1;
-    return 0;
+    return 1;
 end
 
 procedure is_ammo(variable pid) begin
@@ -113,6 +113,7 @@ procedure is_upgradeable_weapon(variable pid) begin
     if (pid == PID_10MM_PISTOL or pid == PID_SHOTGUN or pid == PID_COMBAT_SHOTGUN) then return 1;
     if (pid == PID_10MM_SMG or pid == PID_HUNTING_RIFLE or pid == PID_SNIPER_RIFLE) then return 1;
     if (pid == PID_LASER_PISTOL or pid == PID_DESERT_EAGLE) then return 1;
+    // TODO: Level 2 upgrades (upgrade an already-upgraded weapon)
     return 0;
 end
 
@@ -194,7 +195,7 @@ procedure try_ammo_conversion(variable ammo_obj) begin
     pid := obj_pid(ammo_obj);
 
     if not(has_junk_count(1)) then begin
-        display_msg("You don't have the needed junk.");
+        display_msg("You need 1 more part(s).");
         return;
     end
 
@@ -206,30 +207,13 @@ procedure try_ammo_conversion(variable ammo_obj) begin
     else if (pid == PID_5MM_AP) then target_pid := PID_5MM_JHP;
     else return;
 
-    result := repair_skill_check(30);
-
-    if (result == -1) then begin
-        display_msg("This is beyond your skill level. More Repair training needed.");
-        give_exp_points(XP_FAIL);
-        display_msg("[Repair] +" + XP_FAIL + " XP");
-        return;
-    end
-
     destroy_object(ammo_obj);
     call remove_junk(1);
-
-    if (result == 0) then begin
-        display_msg("Didn't work. Steady hands next time.");
-        give_exp_points(XP_FAIL);
-        display_msg("[Repair] +" + XP_FAIL + " XP");
-        return;
-    end
 
     item := create_object(target_pid, 0, 0);
     add_obj_to_inven(dude_obj, item);
     display_msg("You carefully rework the round. One converted.");
     give_exp_points(XP_AMMO);
-    display_msg("[Repair] +" + XP_AMMO + " XP");
 end
 
 // ============================================================
@@ -261,66 +245,105 @@ end
 // ============================================================
 // WEAPON UPGRADE -- Repair skill on weapon on ground
 // ============================================================
+// Weapon upgrade via set_proto_data -- modifies weapon STATS directly.
+// NOTE: set_proto_data changes ALL instances of this weapon type globally.
+// Design: 2x same weapon + junk -> consume spare, modify proto.
+//
+//   10mm Pistol:    add burst mode (attack mode 2 = BURST)
+//   Shotgun:        double barrel (2x max damage)
+//   Combat Shotgun: double barrel (2x max damage)
+//   SMG:            hair trigger (-1 AP on mode 1)
+//   Hunting Rifle:  precision mode (-1 AP on mode 1)
+//   Sniper Rifle:   precision mode (-1 AP on mode 1)
+//   Laser Pistol:   fast reload (-1 AP on mode 1)
+//   Desert Eagle:   light action (-1 AP on mode 1)
 procedure try_weapon_upgrade(variable weapon_obj) begin
     variable pid;
     variable junk_needed;
-    variable result;
     variable name;
     variable inven_weapon;
+    variable flags;
+    variable ap;
+    variable dmg;
 
     pid := obj_pid(weapon_obj);
     name := obj_name(weapon_obj);
 
     inven_weapon := obj_carrying_pid_obj(dude_obj, pid);
     if (inven_weapon == 0) then begin
-        display_msg("You need a " + name + " in your inventory to upgrade.");
+        display_msg("You need a " + name + " in your inventory as spare parts.");
         return;
     end
 
     junk_needed := 3;
-
     if not(has_junk_count(junk_needed)) then begin
-        display_msg("You don't have the needed junk. Need " + junk_needed + ".");
+        display_msg("You need " + junk_needed + " more part(s).");
         return;
     end
 
-    result := repair_skill_check(60);
-
-    if (result == -1) then begin
-        display_msg("This modification is beyond your current Repair skill.");
-        give_exp_points(XP_FAIL);
-        display_msg("[Repair] +" + XP_FAIL + " XP");
-        return;
-    end
-
-    destroy_object(weapon_obj);
+    // Consume spare weapon from inventory + junk (ground weapon stays)
+    rm_obj_from_inven(dude_obj, inven_weapon);
+    destroy_object(inven_weapon);
     call remove_junk(junk_needed);
 
-    if (result == 0) then begin
-        display_msg("The modification failed. You lost the spare " + name + " and " + junk_needed + " junk.");
-        give_exp_points(XP_FAIL);
-        display_msg("[Repair] +" + XP_FAIL + " XP");
+    // === APPLY UPGRADE via set_proto_data ===
+
+    if (pid == PID_10MM_PISTOL) then begin
+        // Add burst mode: set attack mode 2 to BURST (7)
+        flags := get_proto_data(pid, PROTO_FLAG_EXT);
+        flags := (flags bwand 0xFFFFFF0F) bwor (ATTACK_MODE_BURST * 0x10);
+        set_proto_data(pid, PROTO_FLAG_EXT, flags);
+        // Set burst count
+        set_proto_data(pid, PROTO_WP_BURST, 3);
+        display_msg("You jury-rig a burst mechanism. " + name + " now has burst fire.");
+    end
+
+    else if (pid == PID_SHOTGUN or pid == PID_COMBAT_SHOTGUN) then begin
+        // Double barrel: 2x max damage
+        dmg := get_proto_data(pid, PROTO_WP_DMG_MAX);
+        set_proto_data(pid, PROTO_WP_DMG_MAX, dmg * 2);
+        display_msg("You weld the barrels together. " + name + " hits twice as hard.");
+    end
+
+    else if (pid == PID_10MM_SMG) then begin
+        // Hair trigger: -1 AP on mode 1
+        ap := get_proto_data(pid, PROTO_WP_APCOST_1);
+        if (ap > 2) then
+            set_proto_data(pid, PROTO_WP_APCOST_1, ap - 1);
+        display_msg("You file down the trigger. " + name + " fires faster.");
+    end
+
+    else if (pid == PID_HUNTING_RIFLE or pid == PID_SNIPER_RIFLE) then begin
+        // Precision: -1 AP on mode 1
+        ap := get_proto_data(pid, PROTO_WP_APCOST_1);
+        if (ap > 2) then
+            set_proto_data(pid, PROTO_WP_APCOST_1, ap - 1);
+        display_msg("You calibrate the sights. " + name + " -- precision mode.");
+    end
+
+    else if (pid == PID_LASER_PISTOL) then begin
+        // Fast reload: -1 AP on mode 1
+        ap := get_proto_data(pid, PROTO_WP_APCOST_1);
+        if (ap > 2) then
+            set_proto_data(pid, PROTO_WP_APCOST_1, ap - 1);
+        display_msg("You swap in a faster capacitor. " + name + " reloads quicker.");
+    end
+
+    else if (pid == PID_DESERT_EAGLE) then begin
+        // Light action: -1 AP on mode 1
+        ap := get_proto_data(pid, PROTO_WP_APCOST_1);
+        if (ap > 2) then
+            set_proto_data(pid, PROTO_WP_APCOST_1, ap - 1);
+        display_msg("You lighten the action. " + name + " fires faster.");
+    end
+
+    else begin
+        display_msg("You can't figure out how to improve " + name + ".");
+        // Refund (shouldn't reach here due to is_upgradeable_weapon check)
         return;
     end
 
-    // TODO: Actually modify weapon stats via sfall
-    if (pid == PID_10MM_PISTOL) then
-        display_msg("You jury-rig a burst mechanism from the spare parts. " + name + " now has burst mode.");
-    else if (pid == PID_SHOTGUN or pid == PID_COMBAT_SHOTGUN) then
-        display_msg("You weld the barrels together. Double barrel -- twice the punch.");
-    else if (pid == PID_10MM_SMG) then
-        display_msg("You file down the trigger mechanism. Hair trigger -- faster now.");
-    else if (pid == PID_HUNTING_RIFLE or pid == PID_SNIPER_RIFLE) then
-        display_msg("You calibrate the sights from the spare. Precision mode unlocked.");
-    else if (pid == PID_LASER_PISTOL) then
-        display_msg("You swap in the capacitor from the spare. Reloads almost instantly.");
-    else if (pid == PID_DESERT_EAGLE) then
-        display_msg("You lighten the action with parts from the spare. Faster to fire.");
-    else
-        display_msg("You modify " + name + " using parts from the spare.");
-
     give_exp_points(XP_UPGRADE_L1);
-    display_msg("[Repair] +" + XP_UPGRADE_L1 + " XP");
 end
 
 // ============================================================
@@ -331,10 +354,7 @@ procedure try_dismantle_scenery(variable target) begin
     variable obj_id;
     variable proto;
     variable junk_count;
-    variable loot_pid;
-    variable loot_name;
     variable caps_bonus;
-    variable i;
     variable item;
 
     pid := obj_pid(target);
@@ -354,39 +374,62 @@ procedure try_dismantle_scenery(variable target) begin
     save_array("megamod_repair_scen", dismantled_scenery);
 
     caps_bonus := 0;
-    junk_count := random(1, 3);
+    junk_count := 0;
 
-    // Electronics -> small energy cells
+    // Electronics (computers, monitors, terminals)
     if (proto == 9 or proto == 11 or proto == 12 or (proto >= 13 and proto <= 17) or (proto >= 43 and proto <= 48) or proto == 25 or proto == 26 or proto == 158 or proto == 159) then begin
-        loot_pid := PID_SMALL_ENERGY_CELL;
-        loot_name := "Small Energy Cell";
-        junk_count := random(1, 2);
+        junk_count := random(1, 3);
     end
+    // Big electronics (generators, VDUs)
     else if (proto == 55 or proto == 56 or proto == 656) then begin
-        loot_pid := PID_MICRO_FUSION_CELL;
-        loot_name := "Micro Fusion Cell";
-        junk_count := random(1, 2);
+        junk_count := random(2, 4);
     end
+    // Vents, pipes, metal objects
+    else if (proto == 20 or proto == 21 or proto == 28 or proto == 29 or proto == 32 or proto == 33 or proto == 50) then begin
+        junk_count := random(2, 4);
+    end
+    // Slot machines, vending machines
     else if (proto == 907 or proto == 908) then begin
-        loot_pid := PID_JUNK;
-        loot_name := "Junk";
+        junk_count := random(1, 3);
         caps_bonus := random(5, 25);
         item_caps_adjust(dude_obj, caps_bonus);
     end
+    // Car wrecks
+    else if (proto == 224 or proto == 225 or proto == 226 or proto == 227 or proto == 228) then begin
+        junk_count := random(3, 6);
+    end
+    // Rocks -> pick up rocks (same as gl_rocks but via repair skill)
+    else if (proto == 72 or proto == 73 or proto == 74 or proto == 75 or proto == 78
+          or proto == 79 or proto == 80 or proto == 81
+          or (proto >= 90 and proto <= 93)
+          or (proto >= 278 and proto <= 280)
+          or (proto >= 428 and proto <= 435)) then begin
+        variable rock_count;
+        rock_count := random(1, 3);
+        variable r;
+        for (r := 0; r < rock_count; r++) begin
+            item := create_object(PID_ROCK, 0, 0);
+            add_obj_to_inven(dude_obj, item);
+        end
+        display_msg("You pick through the rocks. " + rock_count + " usable stone(s).");
+        give_exp_points(3);
+        set_ini_setting("megamod.ini|dismantle|done", 1);
+        return;
+    end
+    // Nothing useful (bushes, trees, grass, etc.)
     else begin
-        loot_pid := PID_JUNK;
-        loot_name := "Junk";
+        display_msg("Nothing useful to salvage here.");
+        dismantled_scenery[obj_id] := 0;
+        save_array("megamod_repair_scen", dismantled_scenery);
+        return;
     end
 
-    for (i := 0; i < junk_count; i++) begin
-        item := create_object(loot_pid, 0, 0);
-        add_obj_to_inven(dude_obj, item);
-    end
+    call add_junk(junk_count);
 
     if (caps_bonus > 0) then
-        display_msg("You salvage " + junk_count + "x " + loot_name + " + " + caps_bonus + " caps.");
+        display_msg("You salvage " + junk_count + " part(s) + " + caps_bonus + " caps.");
     else
-        display_msg("You salvage " + junk_count + "x " + loot_name + ".");
+        display_msg("You salvage " + junk_count + " part(s).");
 
     give_exp_points(25);
     set_ini_setting("megamod.ini|dismantle|done", 1);

@@ -1,0 +1,264 @@
+/*
+
+   Hub - the missing Brotherhood initiate
+
+*/
+
+/* Include Files */
+#include "define.h"
+//#include "area/hub.h"
+
+#define NAME                    SCRIPT_MISSBRO
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_HUB)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure map_enter_p_proc;
+procedure critter_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+
+procedure Brother00;
+procedure Brother01;
+procedure Brother02;
+procedure Brother03;
+procedure Brother04;
+procedure Brother05;
+procedure Brother06;
+procedure Brother07;
+procedure Brother08;
+procedure Brother09;
+procedure Brother10;
+procedure Brother11;
+procedure Brother12;
+procedure BrotherEnd;
+
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+#define LVAR_Herebefore          (4)
+#define LVAR_LeaveArea           (5)
+
+variable tmp_hostile;
+variable Only_Once := 1;
+
+procedure start begin
+   if Only_Once then begin
+      Only_Once := 0;
+      set_self_team(TEAM_BROTHERHOOD);
+      set_self_ai(AI_BROTHERHOOD_INITIATE);
+   end
+end
+
+procedure map_enter_p_proc begin
+   if ((local_var(LVAR_LeaveArea) == 1) and not(is_loading_game)) then begin
+      set_self_invisible;
+   end
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   if (local_var(LVAR_LeaveArea) == 1) then begin
+      if (self_tile != 17145) then begin
+         self_walk_to_tile(17145);
+      end
+   end
+end
+
+procedure pickup_p_proc begin
+   if source_is_dude then begin
+      tmp_hostile := 1;
+   end
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   set_tma_data(NAME, 1000, -1, -1, 980, 981);
+
+   dude_look_at_self;
+   get_reaction
+   if (local_var(LVAR_Herebefore) == 1) then begin
+      float_msg(self_obj, mstr(random(134, 136)), FLOAT_MSG_RED);
+   end
+   else begin
+      set_local_var(LVAR_Herebefore, 1);
+      start_dialog_at_node(Brother00);
+   end
+   self_walk_to_tile(17145);
+   set_local_var(LVAR_LeaveArea, 1);
+end
+
+procedure destroy_p_proc begin
+   set_global_var(GVAR_QUEST_BROHOOD_2_FIND_LOST, 5);
+   inc_good_critter
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure Brother00 begin
+   Reply(101);
+   NOption(900, NodeRecruit, 4);
+   if not(brotherhood_visible_on_map) then begin
+      NOption(102, Brother01, 4);
+   end
+   else if (global_var(GVAR_QUEST_BROHOOD_2_FIND_LOST) == 0) then begin
+      NOption(103, Brother03, 4);
+      NOption(104, Brother04, 4);
+   end
+   else begin
+      NOption(105, Brother02, 4);
+   end
+   NOption(106, Brother03, 4);
+   NOption("Join me.", NodeRecruit, 4);
+   NLowOption(107, BrotherEnd);
+   set_global_var(GVAR_QUEST_BROHOOD_2_FIND_LOST, 2);
+end
+
+procedure Brother01 begin
+   Reply(108);
+   mark_on_map(AREA_BROTHERHOOD)
+
+   call Brother08;
+end
+
+procedure Brother02 begin
+   Reply(109);
+   NOption(110, Brother05, 4);
+   NOption(111, Brother11, 4);
+   NOption(112, Brother12, 4);
+end
+
+procedure Brother03 begin
+   NMessage(113);
+end
+
+procedure Brother04 begin
+   NMessage(114);
+end
+
+procedure Brother05 begin
+   Reply(115);
+   NOption(116, Brother07, 4);
+   NOption(117, Brother06, 4);
+   NOption(118, Brother10, 4);
+   NOption(119, Brother09, 4);
+end
+
+procedure Brother06 begin
+   Reply(120);
+   call Brother08;
+end
+
+procedure Brother07 begin
+   Reply(121);
+   call Brother08;
+end
+
+procedure Brother08 begin
+   NOption(122, Brother03, 4);
+   NOption(123, Brother04, 4);
+end
+
+procedure Brother09 begin
+   NMessage(124);
+end
+
+procedure Brother10 begin
+   NMessage(125);
+end
+
+procedure Brother11 begin
+   Reply(126);
+   NOption(127, Brother05, 4);
+   NOption(128, Brother03, 4);
+   NOption(129, Brother04, 4);
+end
+
+procedure Brother12 begin
+   Reply(130);
+   NOption(131, Brother05, 4);
+   NOption(132, Brother03, 4);
+   NOption(133, Brother04, 4);
+end
+
+procedure BrotherEnd begin
+end
+
+procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg(obj_name(self_obj) + " joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end

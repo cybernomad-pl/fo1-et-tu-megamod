@@ -323,6 +323,7 @@ procedure Theresa08 begin
    line := 10;
    exp_flag := 1;
    Reply(122);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(123, TheresaEnd, 4);
 end
 
@@ -338,6 +339,7 @@ end
 procedure Theresa11 begin
    DownReact
    Reply(126);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(127, TheresaEnd, 4);
    NOption(128, Theresa02a, 6);
 end
@@ -368,6 +370,7 @@ procedure Theresa15 begin
    BOption(135, Theresa16, 4);
    NOption(136, Theresa17, 4);
    NOption(137, Theresa18, 6);
+   NOption("Join me.", NodeRecruit, 4);
    NLowOption(138, TheresaEnd);
 end
 
@@ -375,6 +378,7 @@ procedure Theresa16 begin
    DownReact
    Reply(139);
    NOption(140, Theresa20, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(141, TheresaEnd, 4);
 end
 
@@ -393,6 +397,7 @@ end
 procedure Theresa19 begin
    Reply(148);
    BOption(149, TheresaCombat, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(150, TheresaEnd, 4);
 end
 
@@ -417,6 +422,7 @@ procedure Theresa21 begin
       else begin
          Reply(155);
          BOption(156, TheresaCombat, 4);
+         NOption("Join me.", NodeRecruit, 4);
          NOption(157, TheresaEnd, 4);
       end
    end
@@ -427,11 +433,13 @@ procedure Theresa22 begin
    line := 10;
    exp_flag := 1;
    Reply(158);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(159, TheresaEnd, 4);
 end
 
 procedure Theresa23 begin
    Reply(170);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(171, TheresaEnd, 4);
    NLowOption(138, TheresaEnd);
 end
@@ -457,9 +465,13 @@ procedure TheresaCombat begin
 end
 
 procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
    party_add(self_obj);
    set_team(self_obj, TEAM_PLAYER);
-   display_msg("Theresa joins your party.");
+   display_msg(obj_name(self_obj) + " joins your party.");
 end
 
 procedure NodePartyMain begin

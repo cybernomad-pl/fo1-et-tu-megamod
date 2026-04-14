@@ -178,6 +178,7 @@ procedure Citizen02 begin
    Reply(DisplayMessage);
    NOption(106, Citizen03, 4);
    NOption(107, Citizen04, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(g_bye, CitizenEnd, 1);
 end
 
@@ -195,8 +196,8 @@ procedure CitizenEnd begin
 end
 
 procedure NodeRecruit begin
-   if (party_member_count(0) >= 5) then begin
-      display_msg("Your party is full.");
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
       return;
    end
    party_add(self_obj);

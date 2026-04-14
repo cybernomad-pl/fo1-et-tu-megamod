@@ -426,8 +426,8 @@ procedure NodeGreet begin
 end
 
 procedure NodeRecruit begin
-   if (party_member_count(0) >= 5) then begin
-      display_msg("Your party is full.");
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
       return;
    end
    party_add(self_obj);

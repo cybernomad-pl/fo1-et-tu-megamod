@@ -1,0 +1,816 @@
+/*
+
+   Brotherhood - Cabbot, the door guard
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "area/brotherhood.h"
+
+#define NAME                    SCRIPT_CABBOT
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_BOS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure talk_p_proc;
+procedure damage_p_proc;
+procedure critter_p_proc;
+procedure pickup_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+procedure timed_event_p_proc;
+
+procedure cabbot01;
+procedure cabbot02;
+procedure cabbot04;
+procedure cabbot05;
+procedure cabbot05a;
+procedure cabbot06;
+procedure cabbot07;
+procedure cabbot09;
+procedure cabbot10;
+procedure cabbot12;
+procedure cabbot16;
+procedure cabbot17;
+procedure cabbot18;
+procedure cabbot19;
+procedure cabbot20;
+procedure cabbot21;
+procedure cabbot21_1;
+procedure cabbot22;
+procedure cabbot23;
+procedure cabbot24;
+procedure cabbot25;
+procedure cabbot27;
+procedure cabbot28;
+procedure cabbot31;
+procedure cabbot32;
+procedure cabbot33;
+procedure cabbot34;
+procedure cabbot35;
+procedure cabbot36;
+procedure cabbot37;
+procedure cabbot38;
+procedure cabbot39;
+procedure cabbot40;
+procedure cabbot41;
+procedure cabbot42;
+procedure cabbot43;
+procedure cabbot44;
+procedure cabbot45;
+procedure cabbot46;
+procedure cabbot47;
+procedure cabbot48;
+procedure cabbot06a;
+procedure cabbot07a;
+procedure cabbot16a;
+procedure cabbot19a;
+procedure cabbot23a;
+procedure cabbot33a;
+procedure cabbotx;
+procedure cabbotx1;
+procedure cabbotx3;
+procedure cabbotx6;
+procedure cabbotx7;
+procedure cabbotx8;
+procedure cabbot35a;
+procedure cabbot49;
+procedure cabbot50;
+procedure cabbot51;
+procedure cabbot52;
+procedure cabbot53;
+procedure cabbot54;
+procedure cabbot55;
+procedure cabbot56;
+procedure cabbot57;
+procedure cabbot58;
+procedure cabbot59;
+procedure cabbot60;
+procedure cabbot61;
+procedure cabbot62;
+procedure cabbot63;
+procedure cabbot64;
+procedure cabbot65;
+procedure cabbot66;
+procedure cabbot67;
+procedure cabbot68;
+procedure cabbot69;
+procedure cabbotend;
+procedure cabbotopen;
+procedure combat;
+
+procedure cheat_1;
+
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+#define LVAR_Herebefore             (4)
+#define LVAR_ReturnToHomeTile       (5)
+#define LVAR_AskedToJoin            (6)
+#define LVAR_BecomeInititate        (7)
+
+import variable Door_ptr;
+import variable Cabbot_Ptr;
+
+variable VATS;
+variable MALE;
+variable SEXY;
+variable tmp_hostile;
+variable ILLEGAL;
+variable Only_Once := 1;
+variable temp;
+
+procedure start begin
+   if Only_Once then begin
+      Only_Once := 0;
+      Cabbot_Ptr := self_obj;
+      set_self_team(TEAM_BROTHERHOOD);
+      set_self_ai(AI_BROTHERHOOD_KNIGHT);
+   end
+end
+
+procedure damage_p_proc begin
+   set_global_var(GVAR_ENEMY_BROTHERHOOD, 1);
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+   if local_var(LVAR_BecomeInititate) == 1 then begin
+      set_local_var(LVAR_BecomeInititate, 2);
+      inc_general_rep(1);
+      give_xp_msg(EXP_BECOME_INITITAT, mstr(232));
+   end
+   if REP_ENEMY_BOS then begin
+      tmp_hostile := 1;
+   end
+   if (tile_distance_objs(self_obj, dude_obj) > 12) then begin
+      tmp_hostile := 0;
+   end
+   if (tmp_hostile) then begin
+      set_global_var(GVAR_ENEMY_BROTHERHOOD, 1);
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   else begin
+      if (local_var(LVAR_ReturnToHomeTile) == 0) then begin
+         if joined_bos then begin
+            add_timer_event(self_obj, game_ticks(1), 1);
+         end
+      end
+      else if (local_var(LVAR_ReturnToHomeTile) == 1) then begin
+         if (self_tile == 20706) then begin
+            set_local_var(LVAR_ReturnToHomeTile, 2);
+            self_rotate(2);
+         end
+         else begin
+            self_walk_to_tile(20706);
+         end
+      end
+   end
+end
+
+procedure pickup_p_proc begin
+   if source_is_dude then begin
+      tmp_hostile := 1;
+   end
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   set_tma_data(NAME, 1000, -1, -1, TMA_MSG_DONTKNOW_START, TMA_MSG_DONTKNOW_END);
+
+   dude_look_at_self;
+   if (global_var(GVAR_QUEST_BROHOOD_1_JOIN_THEM) == 5) then begin
+      float_msg(self_obj, mstr(233), FLOAT_MSG_RED);
+   end
+   else begin
+      get_reaction
+      start_gdialog(NAME, self_obj, 4, HEAD_CABBOT, BACKGROUND_BHOOD);
+      gsay_start;
+      if (local_var(LVAR_Herebefore) == 1) then begin
+         if (global_var(GVAR_QUEST_BROHOOD_1_JOIN_THEM) == 1) then begin
+            call cabbot24;
+         end
+         else if joined_bos then begin
+            call cabbot36;
+         end
+         else if (global_var(GVAR_WITH_CARAVAN) == 1) then begin // TODO : Wrong gvar???? Does this make sense here????
+            call cabbot33;
+         end
+         else begin
+            if (local_var(LVAR_reaction) >= BASE_REACTION) then begin
+               call cabbot19;
+            end
+            else begin
+               call cabbot21;
+            end
+         end
+      end
+      else begin
+         call cabbot01;
+      end
+      gsay_end;
+      end_dialogue;
+   end
+end
+
+procedure destroy_p_proc begin
+   if obj_in_party(source_obj) then begin
+      set_global_var(GVAR_ENEMY_BROTHERHOOD, 1);
+   end
+   inc_good_critter
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure timed_event_p_proc begin
+   set_local_var(LVAR_ReturnToHomeTile, 1);
+   use_obj(Door_ptr);
+end
+
+procedure cabbot01 begin
+   set_local_var(LVAR_Herebefore, 1);
+   Reply(101);
+   NOption(900, NodeRecruit, 4);
+   NOption(103, cabbot17, 4);
+   NOption(105, cabbot04, 4);
+   NOption(106, cabbot12, 4);
+   NOption(107, cabbot10, 4);
+   NOption(102, cabbot02, 4);
+   NLowOption(104, cabbot46);
+
+   if (debug_mode) then begin
+      NOption("*** Cheat : Let me in! ***", cheat_1, 004);
+   end
+end
+
+procedure cheat_1 begin
+   set_global_var(GVAR_ARTIFACT_DISK_FOUND_GIVEN, 2);
+   set_joined_bos;
+   TopReact
+   call cabbot27;
+end
+
+procedure cabbot02 begin
+   Reply(108);
+   NOption(900, NodeRecruit, 4);
+   NOption(109, cabbot17, 5);
+   NOption(110, cabbot16, 4);
+   NOption(111, cabbot04, 5);
+   NOption(112, cabbot12, 4);
+   NOption(113, cabbot10, 4);
+end
+
+procedure cabbot04 begin
+   NMessage(114);
+   gfade_out(1);
+   game_time_advance(game_ticks(600));
+   gfade_in(1);
+   call cabbot05;
+end
+
+procedure cabbot05 begin
+   set_local_var(LVAR_AskedToJoin, 1);
+
+   Reply(115);
+   NOption(900, NodeRecruit, 4);
+   NOption(116, cabbot06, 4);
+   NOption(117, cabbot10, 4);
+   NOption(118, cabbot05a, 6);
+end
+
+procedure cabbot05a begin
+   Reply(119);
+   NOption(900, NodeRecruit, 4);
+   NOption(120, cabbot06, 4);
+   NOption(121, cabbot17, 6);
+   NOption(122, cabbot10, 4);
+end
+
+procedure cabbot06 begin
+   Reply(123);
+   mark_on_map(AREA_GLOW)
+
+   NOption(900, NodeRecruit, 4);
+   NOption(124, cabbot07, 7);
+   if ((global_var(GVAR_ARTIFACT_HOLODISK_USED) > 0) or party_has_item(PID_BOS_HOLODISK) or (global_var(GVAR_ARTIFACT_DISK_FOUND_GIVEN) > 0)) and (global_var(GVAR_QUEST_BROHOOD_1_JOIN_THEM) != 2) then begin// ARTIFACT_HOLODISK_USED, ARTIFACT_HOLODISK_POINTER, ARTIFACT_DISK_FOUND_GIVEN
+      set_global_var(GVAR_QUEST_BROHOOD_1_JOIN_THEM, 1);
+      UpReactLevel
+      NOption(234, cabbotx3, 4);
+   end
+   else begin
+      NOption(125, cabbot09, 4);
+   end
+   BOption(126, cabbot06a, 4);
+end
+
+procedure cabbot07 begin
+   Reply(127);
+   NOption(900, NodeRecruit, 4);
+   if ((global_var(GVAR_ARTIFACT_HOLODISK_USED) > 0) or party_has_item(PID_BOS_HOLODISK) or (global_var(GVAR_ARTIFACT_DISK_FOUND_GIVEN) > 0)) and (global_var(GVAR_QUEST_BROHOOD_1_JOIN_THEM) != 2) then begin// ARTIFACT_HOLODISK_USED, ARTIFACT_HOLODISK_POINTER, ARTIFACT_DISK_FOUND_GIVEN
+      set_global_var(GVAR_QUEST_BROHOOD_1_JOIN_THEM, 1);
+      UpReactLevel
+      NOption(234, cabbotx3, 4);
+   end
+   else begin
+      NOption(128, cabbot09, 4);
+   end
+   BOption(129, cabbot07a, 4);
+end
+
+procedure cabbot09 begin
+   GMessage(130);
+   set_global_var(GVAR_QUEST_BROHOOD_1_JOIN_THEM, 1);
+   UpReactLevel
+   call cabbotx;
+end
+
+procedure cabbot10 begin
+   NMessage(131);
+end
+
+procedure cabbot12 begin
+   Reply(132);
+   NOption(900, NodeRecruit, 4);
+   NOption(133, cabbot04, 5);
+   NOption(134, cabbot10, 4);
+   NOption(135, cabbot17, 5);
+end
+
+procedure cabbot16 begin
+   Reply(136);
+   NOption(900, NodeRecruit, 4);
+   NOption(137, cabbot17, 5);
+   NOption(138, cabbot04, 5);
+   BOption(139, cabbot16a, 4);
+   NOption(140, cabbot10, 4);
+end
+
+procedure cabbot17 begin
+   BMessage(141);
+   call cabbotx;
+end
+
+procedure cabbot18 begin
+   BMessage(142);
+   call cabbotx;
+end
+
+procedure cabbot19 begin
+   if good_critter_reaction then begin
+      Reply(143);
+   end
+   else begin
+      Reply(144);
+   end
+   NOption(900, NodeRecruit, 4);
+   if (local_var(LVAR_AskedToJoin) == 0) then
+      NOption(105, cabbot04, 5);
+   else
+      NOption(145, cabbot05, 5);
+   NOption(146, cabbot17, 5);
+   BOption(147, cabbot19a, 4);
+   NLowOption(104, cabbot46);
+end
+
+procedure cabbot20 begin
+   NMessage(148);
+   call cabbotx;
+end
+
+procedure cabbot21 begin
+   Reply(149);
+   NOption(900, NodeRecruit, 4);
+   NOption(150, cabbot21_1, 5);
+   NOption(151, cabbotx, 4);
+end
+
+procedure cabbot21_1 begin
+   if (dude_is_male) then begin
+      if (dude_skill_success(SKILL_SPEECH, 0)) then begin
+         call cabbot23;
+      end
+      else begin
+         call cabbot22;
+      end
+   end
+   else begin
+      call cabbot23;
+   end
+end
+
+procedure cabbot22 begin
+   NMessage(152);
+   call cabbotx;
+end
+
+procedure cabbot23 begin
+   if bad_critter_reaction then begin
+      set_local_var(LVAR_reaction_level, NEUTRAL);
+      LevelToReact
+   end
+   Reply(153);
+   NOption(900, NodeRecruit, 4);
+   if (local_var(LVAR_AskedToJoin) == 0) then
+      NOption(105, cabbot04, 5);
+   else
+      NOption(154, cabbot05, 5);
+   NOption(155, cabbot17, 5);
+   BOption(156, cabbot23a, 4);
+end
+
+procedure cabbot24 begin
+   Reply(157);
+   NOption(900, NodeRecruit, 4);
+   NOption(158, cabbot25, 4);
+   NOption(159, cabbot32, 4);
+end
+
+procedure cabbot25 begin
+   Reply(160);
+   NOption(900, NodeRecruit, 4);
+   NOption(161, cabbotx3, 4);
+   NOption(162, cabbot32, 4);
+end
+
+procedure cabbot27 begin
+   Reply(163);
+   NOption(900, NodeRecruit, 4);
+   NOption(164, cabbotopen, 4);
+end
+
+procedure cabbot28 begin
+   Reply(165);
+   NOption(900, NodeRecruit, 4);
+   NOption(166, cabbot31, 4);
+end
+
+procedure cabbot31 begin
+   NMessage(168);
+   call cabbotx;
+end
+
+procedure cabbot32 begin
+   NMessage(169);
+   call cabbotx;
+end
+
+procedure cabbot33 begin
+   if good_critter_reaction then begin
+      Reply(170);
+   end
+   else if bad_critter_reaction then begin
+      Reply(171);
+   end
+   else begin
+      Reply(172);
+   end
+   NOption(900, NodeRecruit, 4);
+   NOption(173, cabbot34, 4);
+   BOption(174, cabbot33a, 4);
+end
+
+procedure cabbot34 begin
+   if good_critter_reaction then begin
+      GMessage(175);
+   end
+   else if bad_critter_reaction then begin
+      BMessage(176);
+   end
+   else begin
+      NMessage(177);
+   end
+   call cabbotx6;
+end
+
+procedure cabbot35 begin
+   NOption(178, cabbot38, 5);
+   NOption(179, cabbot42, 5);
+   NOption(180, cabbot37, 4);
+end
+
+procedure cabbot36 begin
+   if good_critter_reaction then begin
+      Reply(182);
+   end
+   else if bad_critter_reaction then begin
+      Reply(183);
+   end
+   else begin
+      Reply(184);
+   end
+   NOption(900, NodeRecruit, 4);
+   NOption(185, cabbot35a, 5);
+   NOption(186, cabbot37, 4);
+end
+
+procedure cabbot37 begin
+   NMessage(187);
+   call cabbotx7;
+end
+
+procedure cabbot38 begin
+   Reply(188);
+   NOption(900, NodeRecruit, 4);
+   NOption(189, cabbot39, 5);
+   NOption(190, cabbot40, 5);
+end
+
+procedure cabbot39 begin
+   Reply(191);
+   NOption(900, NodeRecruit, 4);
+   NOption(192, cabbot35a, 5);
+   NOption(193, cabbot37, 4);
+end
+
+procedure cabbot40 begin
+   Reply(194);
+   NOption(900, NodeRecruit, 4);
+   NOption(195, cabbot41, 6);
+   NOption(196, cabbot35a, 5);
+   NOption(197, cabbot37, 4);
+end
+
+procedure cabbot41 begin
+   Reply(198);
+   NOption(900, NodeRecruit, 4);
+   NOption(199, cabbot35a, 4);
+   NOption(200, cabbot37, 4);
+end
+
+procedure cabbot42 begin
+   Reply(201);
+   NOption(900, NodeRecruit, 4);
+   NOption(202, cabbot39, 4);
+   NOption(203, cabbot35a, 5);
+   NOption(204, cabbot37, 4);
+end
+
+procedure cabbot43 begin
+   DownReactLevel
+   ILLEGAL := 1;
+   float_msg(self_obj, mstr(205), FLOAT_MSG_RED);
+end
+
+procedure cabbot44 begin
+   DownReactLevel
+   ILLEGAL := 1;
+   float_msg(self_obj, mstr(206), FLOAT_MSG_RED);
+   call cabbotx8;
+end
+
+procedure cabbot45 begin
+   DownReactLevel
+   ILLEGAL := 1;
+   float_msg(self_obj, mstr(207), FLOAT_MSG_RED);
+end
+
+procedure cabbot46 begin
+   NMessage(208);
+   call cabbotx;
+end
+
+procedure cabbot47 begin
+   NMessage(209);
+end
+
+procedure cabbot48 begin
+   NMessage(210);
+end
+
+procedure cabbot06a begin
+   DownReactLevel
+   call cabbot10;
+end
+
+procedure cabbot07a begin
+   DownReactLevel
+   LevelToReact
+   call cabbot10;
+end
+
+procedure cabbot16a begin
+   BottomReact
+   call cabbot18;
+end
+
+procedure cabbot19a begin
+   DownReactLevel
+   LevelToReact
+   call cabbot20;
+end
+
+procedure cabbot23a begin
+   DownReactLevel
+   call cabbot20;
+end
+
+procedure cabbot33a begin
+   DownReactLevel
+   call cabbot34;
+end
+
+procedure cabbotx begin
+end
+
+procedure cabbotx1 begin
+   call cabbot05;
+end
+
+procedure cabbotx3 begin
+   if party_has_item(PID_BOS_HOLODISK) then begin
+      if local_var(LVAR_BecomeInititate) == 0 then begin
+         set_local_var(LVAR_BecomeInititate, 1);
+      end
+      set_global_var(GVAR_ARTIFACT_DISK_FOUND_GIVEN, 2);
+      set_joined_bos;
+      party_remove_item(PID_BOS_HOLODISK);
+      TopReact
+      call cabbot27;
+   end
+   else begin
+      call cabbot31;
+   end
+end
+
+procedure cabbotx6 begin
+end
+
+procedure cabbotx7 begin
+end
+
+procedure cabbotx8 begin
+end
+
+procedure cabbot35a begin
+   NMessage(181);
+   call cabbot35;
+end
+
+procedure cabbot49 begin
+   NMessage(211);
+end
+
+procedure cabbot50 begin
+   NMessage(212);
+end
+
+procedure cabbot51 begin
+   NMessage(213);
+end
+
+procedure cabbot52 begin
+   NMessage(214);
+end
+
+procedure cabbot53 begin
+   NMessage(215);
+end
+
+procedure cabbot54 begin
+   NMessage(216);
+end
+
+procedure cabbot55 begin
+   NMessage(217);
+end
+
+procedure cabbot56 begin
+   NMessage(218);
+end
+
+procedure cabbot57 begin
+   NMessage(219);
+end
+
+procedure cabbot58 begin
+   NMessage(220);
+end
+
+procedure cabbot59 begin
+   NMessage(221);
+end
+
+procedure cabbot60 begin
+   NMessage(222);
+end
+
+procedure cabbot61 begin
+   NMessage(223);
+end
+
+procedure cabbot62 begin
+   NMessage(224);
+end
+
+procedure cabbot63 begin
+   NMessage(225);
+end
+
+procedure cabbot64 begin
+   NMessage(226);
+end
+
+procedure cabbot65 begin
+   NMessage(227);
+end
+
+procedure cabbot66 begin
+   NMessage(228);
+end
+
+procedure cabbot67 begin
+   NMessage(229);
+end
+
+procedure cabbot68 begin
+   NMessage(230);
+end
+
+procedure cabbot69 begin
+   NMessage(231);
+end
+
+procedure cabbotend begin
+end
+
+procedure cabbotopen begin
+end
+
+procedure combat begin
+   tmp_hostile := 1;
+end
+
+procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg(obj_name(self_obj) + " joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end

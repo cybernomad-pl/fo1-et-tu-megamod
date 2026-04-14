@@ -1,0 +1,202 @@
+/*
+    Faction Travel -- respawns summoned faction NPCs on each map enter.
+    Works together with gl_radio.ssl. Uses string keys in the
+    "megamod_factions_summoned" array set by gl_radio.ssl.
+*/
+
+#include "define.h"
+#include "command.h"
+#include "global.h"
+#include "artfid.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
+#include "sfall/lib.arrays.h"
+
+#define LOG(s, k, v) set_ini_setting("megamod.ini|" + s + "|" + k, v)
+
+variable summoned_factions;
+variable last_map_index;
+
+procedure start;
+procedure gamemode_handler;
+procedure spawn_in_radius(variable pid);
+procedure respawn_baldie;
+procedure respawn_brotherhood;
+procedure respawn_khans;
+procedure respawn_skullz;
+procedure respawn_blades;
+procedure respawn_gunrunners;
+procedure respawn_razlo;
+procedure respawn_zax;
+
+procedure start begin
+    if game_loaded then begin
+        register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
+        last_map_index := -1;
+        LOG("faction_travel", "loaded", 1);
+    end
+end
+
+procedure gamemode_handler begin
+    // Guard: only respawn when ACTUAL map changes (not combat/dialog transitions)
+    if (cur_map_index == last_map_index) then return;
+    last_map_index := cur_map_index;
+
+    // Load summoned factions tracker
+    summoned_factions := load_array("megamod_factions_summoned");
+    if (summoned_factions == 0) then return;
+
+    LOG("faction_travel", "map_enter", cur_map_index);
+
+    // Respawn each summoned faction at player location
+    if (summoned_factions["baldie"] == 1) then call respawn_baldie;
+    if (summoned_factions["brotherhood"] == 1) then call respawn_brotherhood;
+    if (summoned_factions["khans"] == 1) then call respawn_khans;
+    if (summoned_factions["skullz"] == 1) then call respawn_skullz;
+    if (summoned_factions["blades"] == 1) then call respawn_blades;
+    if (summoned_factions["gunrunners"] == 1) then call respawn_gunrunners;
+    if (summoned_factions["razlo"] == 1) then call respawn_razlo;
+    if (summoned_factions["zax"] == 1) then call respawn_zax;
+end
+
+// Helper -- spawn a critter in a radius of 3-5 tiles around the player.
+procedure spawn_in_radius(variable pid) begin
+    variable npc;
+    variable player_tile;
+    player_tile := tile_num(dude_obj);
+    npc := create_object(pid, tile_num_in_direction(player_tile, random(0, 5), random(3, 5)), dude_elevation);
+    set_team(npc, TEAM_PLAYER);
+    return npc;
+end
+
+// === BALDIE'S GANG ===
+procedure respawn_baldie begin
+    variable npc;
+
+    npc := spawn_in_radius(PID_GUARD);
+    art_change_fid_num(npc, FID_HMCMBT);
+    add_obj_to_inven(npc, create_object(PID_SHOTGUN, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_SHOTGUN_SHELLS, 0, 0), 20);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+
+    npc := spawn_in_radius(PID_GUARD);
+    art_change_fid_num(npc, FID_HMBJMP);
+    add_obj_to_inven(npc, create_object(PID_10MM_SMG, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_10MM_AP, 0, 0), 50);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+
+    npc := spawn_in_radius(PID_GUARD);
+    art_change_fid_num(npc, FID_HFMAXX);
+    add_obj_to_inven(npc, create_object(PID_SHOTGUN, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_SHOTGUN_SHELLS, 0, 0), 20);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+end
+
+// === BROTHERHOOD PALADINS ===
+procedure respawn_brotherhood begin
+    variable npc;
+
+    npc := spawn_in_radius(PID_MALE_GUARD_METAL_BLACK);
+    add_obj_to_inven(npc, create_object(PID_ROCKET_LAUNCHER, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_EXPLOSIVE_ROCKET, 0, 0), 10);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+
+    npc := spawn_in_radius(PID_MALE_GUARD_METAL_BLACK);
+    add_obj_to_inven(npc, create_object(PID_MINIGUN, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_5MM_AP, 0, 0), 200);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+
+    npc := spawn_in_radius(PID_MALE_GUARD_METAL_BLACK);
+    add_obj_to_inven(npc, create_object(PID_MINIGUN, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_5MM_AP, 0, 0), 200);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 3);
+
+    npc := spawn_in_radius(PID_MALE_GUARD_METAL_BLACK);
+    art_change_fid_num(npc, FID_HMCMBT);
+    add_obj_to_inven(npc, create_object(PID_LASER_RIFLE, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_MICRO_FUSION_CELL, 0, 0), 20);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 5);
+end
+
+// === KHANS / RAIDERS ===
+procedure respawn_khans begin
+    variable npc;
+    variable i;
+
+    for (i := 0; i < 6; i++) begin
+        npc := spawn_in_radius(PID_RAIDER_GUARD);
+        add_obj_to_inven(npc, create_object(PID_SAWED_OFF_SHOTGUN, 0, 0));
+        add_mult_objs_to_inven(npc, create_object(PID_SHOTGUN_SHELLS, 0, 0), 15);
+        add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 2);
+    end
+end
+
+// === SKULLZ GANG ===
+procedure respawn_skullz begin
+    variable npc;
+    variable i;
+
+    for (i := 0; i < 5; i++) begin
+        npc := spawn_in_radius(PID_GUARD);
+        add_obj_to_inven(npc, create_object(PID_KNIFE, 0, 0));
+        add_obj_to_inven(npc, create_object(PID_10MM_SMG, 0, 0));
+        add_mult_objs_to_inven(npc, create_object(PID_10MM_AP, 0, 0), 30);
+        add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 2);
+    end
+end
+
+// === BLADES ===
+procedure respawn_blades begin
+    variable npc;
+    variable i;
+
+    for (i := 0; i < 4; i++) begin
+        npc := spawn_in_radius(PID_GUARD);
+        add_obj_to_inven(npc, create_object(PID_COMBAT_KNIFE, 0, 0));
+        add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 2);
+    end
+end
+
+// === GUNRUNNERS ===
+procedure respawn_gunrunners begin
+    variable npc;
+
+    npc := spawn_in_radius(PID_MERCHANT);
+    add_mult_objs_to_inven(npc, create_object(PID_ASSAULT_RIFLE, 0, 0), 3);
+    add_obj_to_inven(npc, create_object(PID_MINIGUN, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_LASER_RIFLE, 0, 0), 2);
+    add_obj_to_inven(npc, create_object(PID_ROCKET_LAUNCHER, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_5MM_AP, 0, 0), 500);
+    add_mult_objs_to_inven(npc, create_object(PID_EXPLOSIVE_ROCKET, 0, 0), 20);
+    add_mult_objs_to_inven(npc, create_object(PID_COMBAT_ARMOR, 0, 0), 2);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 20);
+
+    npc := spawn_in_radius(PID_MERCHANT_2);
+    add_obj_to_inven(npc, create_object(PID_ASSAULT_RIFLE, 0, 0));
+
+    npc := spawn_in_radius(PID_MERCHANT_2);
+    add_obj_to_inven(npc, create_object(PID_ASSAULT_RIFLE, 0, 0));
+end
+
+// === RAZLO MEDIC ===
+procedure respawn_razlo begin
+    variable npc;
+
+    npc := spawn_in_radius(PID_GUARD);
+    art_change_fid_num(npc, FID_HMBJMP);
+    add_obj_to_inven(npc, create_object(PID_DOCTORS_BAG, 0, 0));
+    add_obj_to_inven(npc, create_object(PID_FIRST_AID_KIT, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 20);
+    add_mult_objs_to_inven(npc, create_object(PID_SUPER_STIMPAK, 0, 0), 5);
+end
+
+// === ZAX -- remote-controlled Robobrain ===
+procedure respawn_zax begin
+    variable npc;
+
+    npc := spawn_in_radius(PID_ROBOBRAIN);
+    add_obj_to_inven(npc, create_object(PID_LASER_RIFLE, 0, 0));
+    add_mult_objs_to_inven(npc, create_object(PID_MICRO_FUSION_CELL, 0, 0), 30);
+    add_mult_objs_to_inven(npc, create_object(PID_STIMPAK, 0, 0), 5);
+end

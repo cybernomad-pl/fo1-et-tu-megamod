@@ -83,6 +83,7 @@ end
 procedure tolya01 begin
    Reply(106);
    NOption(107, tolya04, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(108, tolyaend, 4);
    NOption(109, tolya05, 4);
 end
@@ -100,6 +101,7 @@ end
 procedure tolya04 begin
    Reply(115);
    NOption(116, tolya06, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(117, tolyaend, 4);
 end
 
@@ -259,9 +261,13 @@ procedure destroy_p_proc begin
 end
 
 procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
    party_add(self_obj);
    set_team(self_obj, TEAM_PLAYER);
-   display_msg("Tolya joins your party.");
+   display_msg(obj_name(self_obj) + " joins your party.");
 end
 
 procedure NodePartyMain begin

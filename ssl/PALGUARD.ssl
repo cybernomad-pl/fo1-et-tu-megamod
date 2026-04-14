@@ -1,0 +1,253 @@
+/*
+
+   Brotherhood - Paladin Guard
+
+*/
+
+/* Include Files */
+#include "define.h"
+//#include "area/necropolis.h"
+
+#define NAME                    SCRIPT_PALGUARD
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_BOS)
+
+#include "command.h"
+#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure look_at_p_proc;
+procedure description_p_proc;
+procedure timed_event_p_proc;
+procedure critter_p_proc;
+procedure talk_p_proc;
+procedure destroy_p_proc;
+
+procedure PalGuard01;
+procedure PalGuard02;
+
+procedure NodeIntro;
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
+
+variable line;
+variable Only_Once;
+
+procedure start begin
+   if (Only_Once == 0) then begin
+      Only_Once := 1;
+      set_self_team(TEAM_BROTHERHOOD);
+      set_self_ai(AI_BROTHERHOOD_PALADIN);
+   end
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure description_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure timed_event_p_proc begin
+   attack(dude_obj);
+end
+
+procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      party_follow_dude_point(5, 3)
+      return;
+   end
+end
+
+procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+   dude_look_at_self;
+   get_reaction
+   start_gdialog(NAME, self_obj, 4, -1, -1);
+   gSay_Start;
+   call NodeIntro;
+   gSay_End;
+   end_dialogue;
+end
+
+procedure destroy_p_proc begin
+   inc_good_critter
+end
+
+procedure PalGuard01 begin
+   if (not(line)) then begin
+      line := random(1, 9);
+   end
+   else begin
+      line := line + 1;
+   end
+   if (line > 9) then begin
+      line := 1;
+   end
+   if (line == 1) then begin
+      float_msg(self_obj, mstr(101), FLOAT_MSG_RED);
+   end
+   else if (line == 2) then begin
+      float_msg(self_obj, mstr(102), FLOAT_MSG_RED);
+   end
+   else if (line == 3) then begin
+      float_msg(self_obj, mstr(103), FLOAT_MSG_RED);
+   end
+   else if (line == 4) then begin
+      float_msg(self_obj, mstr(104), FLOAT_MSG_RED);
+   end
+   else if (line == 5) then begin
+      float_msg(self_obj, mstr(105), FLOAT_MSG_RED);
+   end
+   else if (line == 6) then begin
+      if (dude_is_female) then begin
+         float_msg(self_obj, mstr(106), FLOAT_MSG_RED);
+      end
+      else begin
+         line := line + 1;
+      end
+   end
+   else if (line == 7) then begin
+      if joined_bos then begin
+         float_msg(self_obj, mstr(107), FLOAT_MSG_RED);
+      end
+      else begin
+         line := line + 1;
+      end
+   end
+   else if (line == 8) then begin
+      if (global_var(GVAR_QUEST_BROHOOD_1_JOIN_THEM) < 2) then begin
+         float_msg(self_obj, mstr(108), FLOAT_MSG_RED);
+      end
+      else begin
+         line := line + 1;
+      end
+   end
+   else if (line == 9) then begin
+      if (global_var(GVAR_QUEST_BROHOOD_1_JOIN_THEM) < 2) then begin
+         float_msg(self_obj, mstr(109), FLOAT_MSG_RED);
+      end
+      else begin
+         line := 1;
+         float_msg(self_obj, mstr(110), FLOAT_MSG_RED);
+      end
+   end
+end
+
+procedure PalGuard02 begin
+   if (not(line)) then begin
+      line := random(1, 10);
+   end
+   else begin
+      line := line + 1;
+   end
+
+   if (line > 8) then begin
+      line := 1;
+   end
+
+   if (line == 1) then begin
+      float_msg(self_obj, mstr(111), FLOAT_MSG_RED);
+   end
+   else if (line == 2) then begin
+      float_msg(self_obj, mstr(112), FLOAT_MSG_RED);
+   end
+   else if (line == 3) then begin
+      float_msg(self_obj, mstr(113), FLOAT_MSG_RED);
+   end
+   else if (line == 4) then begin
+      float_msg(self_obj, mstr(114), FLOAT_MSG_RED);
+   end
+   else if (line == 5) then begin
+      float_msg(self_obj, mstr(115), FLOAT_MSG_RED);
+   end
+   else if (line == 7) then begin
+      if joined_bos then begin
+         float_msg(self_obj, mstr(116), FLOAT_MSG_RED);
+      end
+      else begin
+         float_msg(self_obj, mstr(117), FLOAT_MSG_RED);
+      end
+   end
+   else if (line == 8) then begin
+      if joined_bos then begin
+         float_msg(self_obj, mstr(118), FLOAT_MSG_RED);
+      end
+      else begin
+         float_msg(self_obj, mstr(119), FLOAT_MSG_RED);
+      end
+   end
+end
+
+procedure NodeIntro begin
+   Reply(120);
+   NOption(900, NodeRecruit, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg(obj_name(self_obj) + " joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply(901);
+   NOption(902, NodePartyFollow, 4);
+   NOption(903, NodePartyWait, 4);
+   NOption(904, NodePartyHolster, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply(906);
+   NOption(907, NodePartyClose, 4);
+   NOption(908, NodePartyMedium, 4);
+   NOption(909, NodePartyFar, 4);
+   NOption(905, NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
+end

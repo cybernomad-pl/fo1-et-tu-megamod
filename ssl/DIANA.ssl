@@ -75,6 +75,7 @@ procedure Diana00 begin
    if (tandi_quest_active and (global_var(GVAR_TANDI_TALKED_ABOUT) == 1)) then begin
       NOption(102, Diana01, 4);
    end
+   NOption("Join me.", NodeRecruit, 4);
    NOption(103, Dianaend, 4);
    if (dude_is_male) then begin
       NOption(104, Diana02, 4);
@@ -88,6 +89,7 @@ end
 
 procedure Diana01 begin
    Reply(108);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(109, Dianaend, 4);
    NOption(110, Diana03, 4);
 end
@@ -264,9 +266,13 @@ procedure look_at_p_proc begin
 end
 
 procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
    party_add(self_obj);
    set_team(self_obj, TEAM_PLAYER);
-   display_msg("Diana joins your party.");
+   display_msg(obj_name(self_obj) + " joins your party.");
 end
 
 procedure NodePartyMain begin

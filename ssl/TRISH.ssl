@@ -355,6 +355,7 @@ end
 
 procedure Trish13 begin
    Reply(132);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(133, TrishEnd, 5);
 end
 
@@ -381,6 +382,7 @@ end
 procedure Trish18 begin
    set_local_var(8, 1);
    Reply(140);
+   NOption("Join me.", NodeRecruit, 4);
    NLowOption(141, TrishEnd);
    NOption(142, TrishEnd, 4);
    NOption(143, Trish19, 6);
@@ -395,6 +397,7 @@ procedure Trish19 begin
    if ((local_var(LVAR_Asked_WhoIsSaul) == 0) and get_trish_state(TRISH_SCREAMED_SAUL) and not(get_trish_state(RELATIONSHIP_SAVED)) and not(saul_is_dead)) then begin
       NOption(147, Trish22, 6);
    end
+   NOption("Join me.", NodeRecruit, 4);
    NOption(148, TrishEnd, 6);
 end
 
@@ -444,6 +447,7 @@ procedure Trish24 begin
    if ((local_var(LVAR_Asked_WhoIsSaul) == 0) and get_trish_state(TRISH_SCREAMED_SAUL) and not(get_trish_state(RELATIONSHIP_SAVED)) and not(saul_is_dead)) then begin
       NOption(147, Trish22, 6);
    end
+   NOption("Join me.", NodeRecruit, 4);
    NOption(148, TrishEnd, 6);
 end
 
@@ -460,6 +464,7 @@ procedure Trish25 begin
       else
          NOption(110, Trish4, 5);
    end
+   NOption("Join me.", NodeRecruit, 4);
    NOption(153, TrishEnd, 4);
    NLowOption(170, Trish28);
    gsay_end;
@@ -471,6 +476,7 @@ procedure Trish26 begin
    NOption(164, TrishCola, 4);
    NOption(165, TrishBeer, 4);
    NOption(166, TrishBooze, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(153, TrishEnd, 4);
 end
 
@@ -540,9 +546,13 @@ procedure TrishBooze begin
 end
 
 procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
    party_add(self_obj);
    set_team(self_obj, TEAM_PLAYER);
-   display_msg("Trish joins your party.");
+   display_msg(obj_name(self_obj) + " joins your party.");
 end
 
 procedure TrishSleeping begin
