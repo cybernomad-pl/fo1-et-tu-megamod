@@ -196,13 +196,13 @@ procedure gamemode_handler begin
     // Always run pending bedroll cleanup (only for current map -- safe).
     call cleanup_pending_bedrolls;
 
-    // Map change: reset WAIT state if we had a camp on the old map
+    // Map change: reset follow state if we had a camp on the old map
     // (prevents party from staying frozen after travel away from camp map).
     if (cur_map_index != last_map_idx) then begin
         old_map_key := "" + last_map_idx;
         old_sleepers := sleepers_map[old_map_key];
         if (old_sleepers != 0) then begin
-            end_party_waiting;
+            set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
             // abandoned-camp cleanup: drop sleepers + pending for old map
             // (bedrolls/firepit stay on disk but are no longer tracked).
             free_array(old_sleepers);
@@ -294,8 +294,12 @@ procedure handle_shovel_on_firepit begin
         save_array("campfire_sleepers", sleepers_map);
     end
 
-    // 3. Release WAIT state -- party follows dude again.
-    end_party_waiting;
+    // 3. Release follow state -- party follows dude again.
+    // NOTE: set_party_waiting macro uses LVAR_WAITING (per-NPC local),
+    // so in a global script we use GVAR_PARTY_NO_FOLLOW (same var
+    // the party_hotkeys mod toggles). Side effect: shovel clears the
+    // manual HOLD POSITION hotkey too.
+    set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
 
     // 4. Mark bedrolls for deferred cleanup (after wake anim plays).
     now_ticks := game_time;
@@ -329,7 +333,7 @@ procedure cleanup_pending_bedrolls begin
     variable obj;
 
     if (pending_cleanup == 0) then return;
-    keys := get_array_keys(pending_cleanup);
+    keys := array_keys(pending_cleanup);
     if (keys == 0) then return;
     if (len_array(keys) == 0) then begin
         free_array(keys);
@@ -543,9 +547,10 @@ procedure create_campfire_adjacent begin
     end
     list_end(lst);
 
-    // Global WAIT state -- party stops following dude until shovel on fire.
+    // Global no-follow -- party stops running to dude until shovel on fire.
+    // Uses same GVAR as party_hotkeys mod (vanilla party.h reads it).
     if (had_any_sleeper) then begin
-        set_party_waiting;
+        set_global_var(GVAR_PARTY_NO_FOLLOW, 1);
     end
 
     tile_refresh_display;
