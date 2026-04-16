@@ -1,0 +1,464 @@
+================================================================================
+ FALLOUT ET TU -- MEGAMOD DIAGRAMS (2026-04-17)
+ Workspace: C:\Users\boris\Desktop\KLAUDIA\Klaudia1\fo1-et-tu-megamod
+ Deploy:    C:\Program Files (x86)\GOG Galaxy\Games\Fallout 2\Fallout1in2\mods\
+================================================================================
+
+
+================================================================================
+  mods_order.txt -- kolejność ładowania (od góry do dołu)
+================================================================================
+
+  fo1_base                      \
+  fo1_interface                  \
+  Anim_ImprovedSMutantDeath       \
+  fo1_alternative_Junktown_Endings \
+  fo1_alternative_forcefields       \ 16x vanilla Et Tu mods
+  fo1_barter_formula                 /
+  fo1_ShadyTrader                   /
+  fo1_KenjiRearmed                 /
+  InterfaceUpscaled               /
+  fo1_footprints                 /
+  fo1_tycho_as_ranger           /
+  fo1_maps_mountains           /
+  fo2tweaks                   /
+  party_orders               /
+  InventoryFilter.dat       /
+  F2MechanicsMiniRework    /
+  ─────────────────────
+  fo1_mod_invasion_fix          ← nasze (nadpisania vanilla NPC)
+  fo1_mod_spare_water_chip      ← nasze (item proto)
+  fo1_mod_party_hotkeys         ← nasze (klawisz "0" = hold)
+  fo1_mod_new_start_plus        ← nasze (starter kit)
+  fo1_mod_outdoorsman           ← nasze (camping)
+
+
+================================================================================
+  MOD #1:  fo1_mod_invasion_fix
+================================================================================
+
+  CO: 66 vanilla NPC scripts (.int) recompilowanych z naszym headerem
+      który zamienia invasion_kill_critter na noop.
+
+  ŹRÓDŁO: megamod-build/ssl/source/[A-Z]*.ssl (wielkie litery = vanilla)
+  DEPLOY: mods/fo1_mod_invasion_fix/scripts/*.int
+
+  KONTEKST BUGA VANILLA:
+     Vanilla FO1 Et Tu ma w NPC scripts map_enter_p_proc taką logikę:
+
+         if (invasion_kill_critter == 1) then destroy_object(self_obj)
+
+     Engine ustawia invasion_kill_critter=1 gdy NPC ma zostać usunięty
+     (np. invasion map event). Problem: czasem to się wywołuje
+     niezamierzenie, party members znikali z mapy.
+
+  NASZ FIX:
+     W naszym nagłówku (w megamod-build/ssl/headers/):
+
+         #define invasion_kill_critter (0)   // noop, nigdy nie wykona
+
+     Gdy rekompilujemy oryginalne NPC scripts z tym define, ich check:
+
+         if (invasion_kill_critter == 1) then destroy_object(self_obj)
+
+     staje się zawsze false → NPC NIE jest destructed.
+
+  LISTA 66 NPC (skrót): AGATHA, ALYA, ARADESH, BARTER, BGUARD, BRAHMIN,
+     CABBOT, CHILD, CINDY, CITIZEN, COOK, CURTIS, DARREL, DIANA, DOG,
+     DOG2, GARL, GENGHOUL, GENRAIDR, GENVAULT, GHREFUGE, GWEN, HAROLD,
+     HOTGHOUL, IAN, IAN_REFERENCE, ISMARC, JARVIS, LENORE, LORENZO,
+     MARKVEND, MARLENE, MICHAEL, MORLIS, NECGHOUL, PETROX, RAIDER,
+     RAIDERS, RAIDGRD, RAIDPRIS, SET, SETH, SHADY, SLAVE, STEIN, TANDI,
+     THERESA, THOMAS, TOLYA, ... (pełna lista: scripts/ folder).
+
+  HOOKS: żadne globalne. Per-NPC procedury vanilla.
+  ARRAYS: żadne (vanilla saves).
+
+
+================================================================================
+  MOD #2:  fo1_mod_spare_water_chip
+================================================================================
+
+  CO: Item proto -- dodaje spare water chip jako backup questowy.
+      Szczegółów kodu nie mam (1 plik .int w scripts/, prawdopodobnie
+      timer-based item grant albo craft recipe z existing materials).
+
+  DEPLOY: mods/fo1_mod_spare_water_chip/scripts/
+
+  UWAGA: ten mod NIE jest przez nas napisany. Źródła nieobecne w
+         workspace. Testowy komponent, do researchu jeśli potrzeba.
+
+
+================================================================================
+  MOD #3:  fo1_mod_new_start_plus  (gl_megamod_init.ssl)
+================================================================================
+
+  CO: Starter kit -- raz per save-load sprawdza flagę "megamod_kit[given]"
+      i jeśli brak, dodaje 6 itemów do inventory gracza.
+
+  HOOK: start (game_loaded flag check)
+  ARRAY: megamod_kit { "given": 0|1 }
+
+  ┌─────────────────────── FLOW ─────────────────────────┐
+  │                                                       │
+  │  start()  [on every game_loaded event]                │
+  │    │                                                  │
+  │    ▼                                                  │
+  │  kit_given := load_array("megamod_kit")               │
+  │    │                                                  │
+  │    ├── brak array → create_array_map + save           │
+  │    │                                                  │
+  │    ▼                                                  │
+  │  if (kit_given["given"] != 1):                        │
+  │     call give_starting_kit                            │
+  │                                                       │
+  │  give_starting_kit:                                   │
+  │     for each PID in [LIGHTER, ROPE, SHOVEL,           │
+  │                      WATER_CHIP, ELEC_LOCKPICKS,      │
+  │                      RADIO]:                          │
+  │        if (gracz jeszcze nie ma):                     │
+  │           create_object(PID) + add_obj_to_inven       │
+  │     kit_given["given"] := 1                           │
+  │     save_array                                        │
+  │     display_msg("You check your pack. Lighter, rope,  │
+  │                  shovel. The basics.")                │
+  └───────────────────────────────────────────────────────┘
+
+  ITEMY STARTER KIT:
+     PID_LIGHTER                 (obsługiwany przez outdoorsman)
+     PID_ROPE                    (bez handlera -- tools wyłączone)
+     PID_SHOVEL                  (obsługiwany przez outdoorsman)
+     PID_WATER_CHIP              (vanilla quest item)
+     PID_ELECTRONIC_LOCKPICKS    (vanilla engine)
+     PID_RADIO                   (bez handlera -- radio wyłączone)
+
+  BRAKI/TODO:
+     ■ Rope/Radio to martwe itemy (bez handlera). Decyzja: usunąć
+       ze starter kit albo dodać handler.
+
+
+================================================================================
+  MOD #4:  fo1_mod_party_hotkeys  (gl_party_hotkeys.ssl)
+================================================================================
+
+  CO: Klawisz "0" (top-row, DX scancode 11) toggluje vanilla
+      GVAR_PARTY_NO_FOLLOW. Flaga resetuje się na map enter.
+      Vanilla party.h macro party_member_follow_dude automatycznie
+      sprawdza ten global -- jeśli = 1, NPC NIE biegnie za graczem.
+
+  HOOKS: HOOK_KEYPRESS, HOOK_GAMEMODECHANGE
+  ARRAYS: none (używa globala natywnego)
+  VARIABLE: last_map_index (dla detekcji map change)
+
+  ┌───────────────────── FLOW ────────────────────────────┐
+  │                                                        │
+  │  start()                                               │
+  │    ├── last_map_index := cur_map_index                 │
+  │    ├── register HOOK_KEYPRESS → keypress_handler       │
+  │    ├── register HOOK_GAMEMODECHANGE → gamemode_handler │
+  │    └── set_global_var(GVAR_PARTY_NO_FOLLOW, 0)         │
+  │                                                        │
+  │  keypress_handler(pressed, key)                        │
+  │    ├── if (pressed == 0) return                        │
+  │    ├── if (key != 11) return      ← DX scancode "0"    │
+  │    ├── if (get_game_mode != 0) return  ← nie w dialog  │
+  │    └── toggle GVAR_PARTY_NO_FOLLOW:                    │
+  │           0 → 1 : display "Party: HOLD POSITION"       │
+  │           1 → 0 : display "Party: FOLLOW"              │
+  │                                                        │
+  │  gamemode_handler()                                    │
+  │    ├── if (cur_map_index == last_map_index) return     │
+  │    ├── last_map_index := cur_map_index                 │
+  │    └── if (GVAR_PARTY_NO_FOLLOW != 0):                 │
+  │           set_global_var(GVAR_PARTY_NO_FOLLOW, 0)      │
+  │           ← NPC znów follow na nowej mapie             │
+  └────────────────────────────────────────────────────────┘
+
+  MECHANIZM VANILLA KTÓRY WYKORZYSTUJEMY:
+     (z party.h)
+     #define party_no_follow (global_var(GVAR_PARTY_NO_FOLLOW) != 0)
+     #define party_member_follow_dude  \
+        if ((party_is_waiting == false) and (party_no_follow == false)) \
+           then begin                                                    \
+              party_follow_dude_point(...)                               \
+           end
+
+     Każdy NPC w swoim critter_p_proc ma wywołanie
+     party_member_follow_dude -- nasz toggle flagi blokuje to globalnie.
+
+
+================================================================================
+  MOD #5:  fo1_mod_outdoorsman  (gl_mod_outdoorsman.ssl) -- v4
+================================================================================
+
+  CO ROBI (logic flow):
+     LIGHTER USE z inventory:
+       ├ w dziczy + brak campu + poza combat → stwórz camp
+       └ poza dziczą → tylko toggle płomienia na zapalniczce
+     SHOVEL USE ON tracked firepit:
+       └ wake party + gaszenie + odroczony cleanup bedrolli
+     GAMEMODECHANGE tick:
+       ├ cleanup bedrolli które czekały >= 2s po shovel
+       └ przy zmianie mapy → dump PID/FID wszystkich critterów
+
+  HOOKI: HOOK_USEOBJ (lighter), HOOK_USEOBJON (shovel),
+         HOOK_GAMEMODECHANGE (cleanup + debug dump)
+
+  ARRAYS (persistent):
+     outdoorsman_lighter    { lit: 0|1 }
+     campfire_map           { "<map>": fire_tile }
+     campfire_firepit_obj   { "<map>": fire_obj_id }
+     campfire_bedrolls      { "<map>": [obj_id ...] }
+     campfire_sleepers      { "<map>": [obj_id ...] }
+     campfire_pending       { "<map>": deadline_ticks }
+
+  ─── LIGHTER FLOW ─────────────────────────────────────────
+     USE lighter z inventory
+        │
+        ▼
+     toggle lighter_lit (0↔1); set OBJ_DATA_LIGHT na item
+        │
+        ├ lighter_lit=1 AND is_wilderness
+        │      AND map_has_campfire==0
+        │      AND not combat:
+        │         → create_campfire_adjacent
+        │
+        └ w przeciwnym razie: tylko komunikat + save stanu
+
+  ─── CREATE CAMP ─────────────────────────────────────────
+     gfade_out → game_time_advance(600s)
+        │
+     fire_tile := adjacent do gracza (dir 0, fallback 1..5)
+        │
+     create FIRE_PIT na fire_tile; set LIGHT dist=15
+        │
+     PLAYER BEDROLL w ring 0, dir 0, dist 5 od fire
+        │
+     SPIRAL NPC BEDROLLS (po team==PLAYER, not dead):
+        slot := 1, 2, 3, ...
+        ring := slot / 6
+        dir  := slot % 6
+        dist := 5 + ring * 3    ← RING_START_DIST + ring*RING_STEP
+        │
+        → create PID_BED_1/2 (alternate)
+        → move_to(npc, tile)
+        → reg_anim(npc, ANIM_fall_back_sf, -1)
+        → track w bedrolls_arr + sleepers_arr
+        │
+     set_party_waiting   ← vanilla macro, jedna flaga dla całej party
+        │
+     gfade_in; save 5 map arrays; XP +15
+
+  ─── SHOVEL ON FIRE ─────────────────────────────────────
+     HOOK_USEOBJON (user=dude, item=SHOVEL, target=FIRE_PIT)
+        │
+     sprawdź: target == firepit_obj_map[cur_map]
+              (odrzuca random firepity z mapy)
+        │
+     gfade_out
+        │
+     destroy_object(tracked firepit)
+        │
+     for each sleeper: reg_anim(ANIM_back_to_standing)
+        │
+     end_party_waiting    ← party znów podąża za dude
+        │
+     pending_cleanup[map] := game_time + 20 ticks (~2s)
+        │
+     clear firepit + campfire_map refs; save; gfade_in; XP +10
+        │
+     ─ bedrolle NIE znikają tu! ─
+
+  ─── DEFERRED BEDROLL CLEANUP ────────────────────────────
+     HOOK_GAMEMODECHANGE (każdy tick trybu)
+        │
+     cleanup_pending_bedrolls:
+        for each map_key w pending_cleanup:
+          if game_time >= deadline:
+            destroy każdy obj w bedrolls_arr
+            clear bedroll_map[map] + pending_cleanup[map]
+            save
+        │
+     → bedroll widoczny pod crittera dopóki nie wstanie.
+
+  ─── DEBUG PID/FID DUMP ──────────────────────────────────
+     HOOK_GAMEMODECHANGE + (cur_map != last_map):
+        iteruj LIST_CRITTERS:
+          outdoorsman.ini | [pidfid_<map_idx>] |
+             <i>_pid, <i>_fid, <i>_team, <i>_dead
+        │
+     → służy do wypełniania party_armor.ini dla custom NPC
+       (Theresa, GWEN, ALYA, DIANA, PETROX, TOLYA itd.)
+
+  ─── is_wilderness ────────────────────────────────────────
+     return map_is_encounter
+       (tylko random encounter maps: desert/mountain/coast/
+        city_ruins. NIE miasta/vaults/caves/crypts)
+
+  STAŁE:
+     XP_CAMPFIRE_LIGHT     = 15
+     XP_CAMPFIRE_SMOTHER   = 10
+     CAMPFIRE_NEAR_RANGE   = 3   (unused -- USE ON zastąpił radius)
+     CLEANUP_DELAY_TICKS   = 20  (~2s, 10 ticks/s)
+     RING_START_DIST       = 5   (pierwszy ring)
+     RING_STEP             = 3   (każdy outer ring +3)
+     FIRE_PIT light: dist=15, intensity=65536
+     Fade: 600 (half second)
+     Time advance: 600s game time
+
+  ZMIANY v3 → v4:
+     ─ party_remove/add USUNIĘTE → set_party_waiting (vanilla macro)
+     ─ shovel USE (inventory) USUNIĘTE → USE ON firepit (HOOK_USEOBJON)
+     ─ Player bedroll: dir 3 dist 2 od gracza → dir 0 dist 5 od fire
+       (w tym samym ringu co NPC)
+     ─ NPC ring fixed dist 5 → spiral (ring, dir, dist skalujące)
+     ─ Bedroll destroy immediate → deferred 2s (anim stand-up time)
+     ─ HOOK_GAMEMODECHANGE dodany (cleanup + PID/FID dump)
+
+  POST-REVIEW FIXY (v4.1):
+     ─ end_party_waiting + drop sleepers gdy gracz opuści mapę z campem
+       (WAIT flag nie zostaje zamarznięta na worldmap/travel)
+     ─ cleanup_pending_bedrolls destroyuje obj TYLKO na cur_map_index
+       (obj_id na innej mapie = stale, destroy_object unsafe)
+     ─ useobjon: silent return gdy tracked_fire==0 (nie wkurzamy gracza
+       komunikatem przy shovel na vanilla firepit w Hub/Junktown)
+     ─ NPC sleep tylko gdy bedroll stworzony (gdy tile blocked,
+       NPC zostaje stojący w follow -- nie kładzie się bez bedrolla)
+
+  ZNANE OGRANICZENIA (v4.1):
+     ─ obj_id firepit/bedroll może być invalid po save/load
+       (engine przebudowuje id). Miting: system działa tylko dla
+       encounter maps gdzie engine despawnuje całą mapę przy wyjściu.
+     ─ dump_critter_pid_fid nie czyści starych entries (stale klucze
+       pozostają w ini). Polegaj na _count zamiast enumerować wszystkie.
+     ─ set_object_data LIGHT na lighter w inventory może nie świecić
+       (light source bazuje na flag w proto, nie runtime obj_data).
+
+
+================================================================================
+  SHARED RESOURCES
+================================================================================
+
+  PROTO FLAGS (set_proto_data, globalne):
+     PID_LIGHTER += ITEM_ACTION_USE   (outdoorsman)
+     PID_SHOVEL  += ITEM_ACTION_USE   (outdoorsman)
+
+  GLOBAL VARS (vanilla FO1, używane przez nas):
+     GVAR_PARTY_NO_FOLLOW   (toggled przez party_hotkeys, czytane
+                             przez vanilla party.h macros)
+
+  PERSISTENT ARRAYS (save_array):
+     megamod_kit                 (new_start_plus)
+     outdoorsman_lighter         (outdoorsman)
+     campfire_map                (outdoorsman)
+     campfire_bedrolls           (outdoorsman)
+     campfire_sleepers           (outdoorsman)
+
+  INI LOGGING (debug):
+     megamod.ini   (new_start_plus, party_hotkeys)
+     outdoorsman.ini (outdoorsman)
+
+
+================================================================================
+  ARMOR APPEARANCE (NIE NASZE, Et Tu NATYWNIE)
+================================================================================
+
+  PLIK: Fallout1in2/config/party_armor.ini
+  OBSŁUGA: Et Tu engine (sfall-based, nie nasz kod)
+
+  FORMAT:
+     [ArmorTypes]          ← mapping typ -> PID armor itemów
+       Jacket    = 74,265
+       Leather   = 1,379
+       Metal     = 2,240,380
+       Power     = 3,232
+       AdvPower  = 348,349
+       Combat    = 17,381
+       Robe      = 113
+       VSuit     = 536
+       CombatBLK = 239
+       SRobe     = 524
+
+     [Default]             ← domyślne FID gdy brak per-NPC override
+       Power    = 16777217 (FID_HMMAXX -- power z hełmem, mężczyzna)
+       AdvPower = 16777303 (adv power -- bez hełmu, kobieta)
+       Robe     = 16777218
+       SRobe    = 16777321
+
+     [<PartySlot>]         ← per NPC sekcja, slot number jako klucz
+       PID=<FID_base>
+       WeaponAnims=<kody broni>
+       Default=<FID naked>
+       Leather=<FID>
+       Metal=<FID>
+       Jacket=<FID>
+       Combat=<FID>
+       VSuit=<FID>
+       CombatBLK=<FID>
+
+  OBECNIE ZDEFINIOWANE NPC:
+     [1] Ian     PID=16777292 (FID_HMIANR?)
+     [3] Katja   PID=16777518
+     [4] Tandi   PID=16777279
+     [5] Vasquez PID=16777563
+
+  BRAKI (TODO do dodania):
+     Theresa (vault dweller) -- PID?
+     Gwen (raiderka)         -- PID?
+     Alya (raiderka)         -- PID?
+     Diana (raiderka)        -- PID?
+     Petrox, Tolya           -- PID?
+
+     Researcher task: jak Et Tu przydziela slot numer custom NPC
+     dodanych przez dialog_based recruit (party_add). Jeśli
+     engine sam przydziela, musimy znać slot. Jeśli my musimy
+     przypisać -- jest to w NPC script w start/init.
+
+
+================================================================================
+  RECRUIT (ZAWSZE PRZEZ DIALOG)
+================================================================================
+
+  MECHANIZM: każdy recruit-owy NPC ma w swoim .ssl scripcie:
+     ─ procedure NodeRecruit        (opcja "Join me" w dialogu)
+     ─ procedure NodePartyMain      (sub-menu komendy party)
+     ─ procedure NodePartyWait
+     ─ procedure NodePartyFollow
+     ─ procedure NodePartyClose/Medium/Far (distance preferences)
+     ─ procedure NodePartyHolster   (weapon behaviour)
+     ─ procedure NodePartyDone
+
+  NPC Z REKRUTACJĄ PRZEZ DIALOG (workspace ssl/):
+     GWEN.ssl, ALYA.ssl, DIANA.ssl       (raiderki w Khan camp)
+     THERESA.ssl                         (vault dweller)
+     AGATHA.ssl, CURTIS.ssl              (potencjalnie)
+     CABBOT.ssl                          (potencjalnie)
+
+  USUNIĘTE (ex-gl_mod_recruit):
+     ■ HOOK_USESKILLON + SKILL_SPEECH -- deprecated, wywalony
+     ■ HOOK_ONDEATH heal 9999 rescue  -- DEAD IS DEAD
+     ■ HOOK_GAMEMODECHANGE refresh    -- redundant (engine robi)
+     ■ HOOK_INVENWIELD armor swap     -- DUPLIKAT Et Tu native
+
+
+================================================================================
+  CURRENT STATE SUMMARY
+================================================================================
+
+  AKTYWNE nasze mody:        5
+  HOOKI (nasze):             3 (USEOBJ, KEYPRESS, GAMEMODECHANGE)
+  PERSISTENT ARRAYS:         5 (kit, lighter, map, bedrolls, sleepers)
+  GLOBAL VARS używane:       1 (GVAR_PARTY_NO_FOLLOW vanilla)
+  NPC invasion_fix:          66 recompilowane
+  PROTO FLAGS modyfikowane:  2 (LIGHTER, SHOVEL -- ITEM_ACTION_USE)
+  INI debug logs:            2 (megamod.ini, outdoorsman.ini)
+
+  LINIE KODU (SSL source):
+     gl_megamod_init.ssl        70
+     gl_party_hotkeys.ssl       60
+     gl_mod_outdoorsman.ssl    280
+     (invasion_fix NPC         66x vanilla scripts, nie liczymy)
+
+================================================================================
+  END OF DIAGRAMS
+================================================================================

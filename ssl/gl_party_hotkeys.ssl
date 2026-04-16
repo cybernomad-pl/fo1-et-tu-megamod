@@ -1,0 +1,60 @@
+/*
+    Party Hold Position Hotkey -- fo1-et-tu-megamod
+    Key "0" (top-row, DX scancode 11) toggles vanilla GVAR_PARTY_NO_FOLLOW.
+    When set: vanilla party.h macro party_member_follow_dude skips the
+    follow block, so NPCs stop running to the player and stay in place.
+    Flag is RESET on every map enter (new map = new follow defaults).
+*/
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
+
+procedure start;
+procedure keypress_handler;
+procedure gamemode_handler;
+
+variable last_map_index;
+
+procedure start begin
+    if game_loaded then begin
+        last_map_index := cur_map_index;
+        register_hook_proc(HOOK_KEYPRESS, keypress_handler);
+        register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
+        // Start with party following (fresh state)
+        set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
+    end
+end
+
+procedure keypress_handler begin
+    variable pressed;
+    variable key;
+    variable current;
+
+    pressed := get_sfall_arg;
+    key := get_sfall_arg;
+
+    if (pressed == 0) then return;
+    // Top-row "0" = DX scancode 11 (avoid TAB=15 vanilla automap hotkey)
+    if (key != 11) then return;
+    if (get_game_mode != 0) then return;
+
+    current := global_var(GVAR_PARTY_NO_FOLLOW);
+    if (current) then begin
+        set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
+        display_msg("Party: FOLLOW");
+    end else begin
+        set_global_var(GVAR_PARTY_NO_FOLLOW, 1);
+        display_msg("Party: HOLD POSITION");
+    end
+end
+
+// Reset on map change -- hold flag should not persist across maps.
+procedure gamemode_handler begin
+    if (cur_map_index == last_map_index) then return;
+    last_map_index := cur_map_index;
+    if (global_var(GVAR_PARTY_NO_FOLLOW) != 0) then begin
+        set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
+    end
+end

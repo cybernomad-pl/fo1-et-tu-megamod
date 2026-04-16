@@ -1,0 +1,550 @@
+================================================================================
+ fo1-et-tu-megamod  --  GIGA SUMMARY  (2026-04-17, v4.1)
+================================================================================
+
+ Aktywne mody (mods_order.txt, naszej produkcji):
+
+   1. fo1_mod_invasion_fix        -- wylacza invasion_kill_critter
+   2. fo1_mod_spare_water_chip    -- (zewnetrzny, skompilowany, bez source)
+   3. fo1_mod_party_hotkeys       -- klawisz 0 = HOLD POSITION
+   4. fo1_mod_new_start_plus      -- starter kit (lighter/rope/shovel/chip/...)
+   5. fo1_mod_outdoorsman         -- camping + debug PID/FID dump
+
+ Zewnetrzne, z ktorymi wspolpracujemy (NIE nasze):
+   fo1_base, fo1_interface, InterfaceUpscaled, Anim_ImprovedSMutantDeath,
+   fo1_alternative_Junktown_Endings, fo1_alternative_forcefields,
+   fo1_barter_formula, fo1_ShadyTrader, fo1_KenjiRearmed, fo1_footprints,
+   fo1_tycho_as_ranger, fo1_maps_mountains, fo2tweaks, party_orders,
+   InventoryFilter, F2MechanicsMiniRework
+
+
+================================================================================
+ MOD #1:  fo1_mod_invasion_fix
+================================================================================
+
+ CO ROBI:
+   Przy koncu gry vanilla FO1 odpala "inwazje Mrocznych" ktora masakrzuje
+   caly Vault 13 + shady sands + szereg postaci przez invasion_kill_critter.
+   Nasz fix recompiluje te skrypty zeby invasion_kill_critter bylo no-op.
+   NPC pozostaja zywi niezaleznie od konca glownego questa.
+
+ TYP: 66 plikow .int (per-NPC), bez globalnego skryptu.
+
+ DEPLOY:  mods/fo1_mod_invasion_fix/scripts/<NPC>.int
+
+ SKAD ZMIANA:
+   Source: Klaudia1/fo1-et-tu-megamod/ssl/<NPC>.ssl
+   Orig:   vanilla FO1 scripts (BGforgeNet/Fallout2_Restoration_Project)
+   Zmiana: wszystkie wystapienia
+            invasion_kill_critter      -> noop
+            invasion_kill_critter_V13  -> noop
+           (macro przedefiniowane w header albo inline edit)
+
+   ┌──────────── INVASION FIX  (per NPC) ────────────┐
+   │                                                  │
+   │   Vanilla NPC script                             │
+   │      │                                           │
+   │      ├─ main event                               │
+   │      ├─ map_update                               │
+   │      └─ talk_p_proc                              │
+   │           │                                      │
+   │           │  [vanilla]                           │
+   │           │   if (invasion_cond)                 │
+   │           │      invasion_kill_critter(self)     │
+   │           │                                      │
+   │           ▼  [nasz fix]                          │
+   │           if (invasion_cond)                     │
+   │              /* noop -- NPC stays alive */       │
+   │                                                  │
+   └──────────────────────────────────────────────────┘
+
+ AKTYWOWANE NPC (66 skryptow, alfabetycznie):
+   AGATHA, ALYA, ARADESH, BARTER, BGUARD, BRAHMIN, CABBOT, CHILD,
+   CINDY, CITIZEN, COOK, CURTIS, DARREL, DIANA, DOG, DOG2, GARL,
+   GENGHOUL, GENRAIDR, GENVAULT, GHREFUGE, GWEN, HAROLD, HOTGHOUL,
+   IAN, ISMARC, JARVIS, LENORE, LORENZO, LORRAINE, LOSER, LOXLEY,
+   LYLE, MANAGER, MARCELLE, MEDIC, MICHAEL, MISSBRO, OFFICER,
+   PALGUARD, PETROX, PLEASANT, RAIDGRD, RAIDPRIS, RAZLO, REBEL,
+   SETH, SETH2, SINTHIA, SOPHIA, SSGUIDE, TALUS, TANDI, TGUARD,
+   THERESA, TOLYA, TRISH, V13COMP, VALTCTZN, VALTCUPL, VASQUEZ,
+   WIFE, WOMEN, WORKBNCH, WTRGRD, WTRTHIEF
+
+ HOOKI:  brak (per-NPC script)
+ STATE:  brak (static binary patch)
+
+
+================================================================================
+ MOD #2:  fo1_mod_spare_water_chip
+================================================================================
+
+ CO ROBI (inferred z nazwy + kontekstu):
+   Daje graczowi dodatkowy water chip na start lub w Vault 13
+   (duplicate zapasowy na wypadek utraty/sabotazu). Easy Main Quest path.
+
+ !!! SOURCE NIE JEST W WORKSPACE !!!
+   Tylko .int w mods/fo1_mod_spare_water_chip/scripts/gl_mod_spare_water_chip.int
+   Jest tez dubel w gl_megamod_init.ssl ktory dodaje PID_WATER_CHIP do kitu.
+
+ DEPLOY:  mods/fo1_mod_spare_water_chip/scripts/gl_mod_spare_water_chip.int
+
+   ┌───────── SPARE WATER CHIP  (inferred) ─────────┐
+   │                                                 │
+   │   start (game_loaded)                           │
+   │      │                                          │
+   │      └─ (prawdopodobnie)                        │
+   │         if (!player_has_water_chip)             │
+   │             create PID_WATER_CHIP               │
+   │             add_obj_to_inven(dude_obj)          │
+   │                                                 │
+   │   ALTERNATYWNIE:                                │
+   │      moze spawnuje chip w Vault 13 gdzies       │
+   │      albo dodaje do overseer dialog option      │
+   │                                                 │
+   └─────────────────────────────────────────────────┘
+
+ OVERLAP:  gl_megamod_init tez daje PID_WATER_CHIP w starter kit.
+           Gdy oba aktywne -- gracz moze miec 2 chipy. Do sprawdzenia
+           w praniu.
+
+
+================================================================================
+ MOD #3:  fo1_mod_party_hotkeys   (gl_party_hotkeys.ssl)
+================================================================================
+
+ CO ROBI:
+   Klawisz "0" (top-row, DX=11) togluje GVAR_PARTY_NO_FOLLOW.
+   Gdy flag=1, vanilla party.h macro party_member_follow_dude przerywa
+   petle follow -- wszyscy party NPC staja w miejscu (HOLD POSITION).
+   Toggle jest glewnie toggle; state resetuje sie na kazde wejscie
+   na nowa mape (zeby nie zostac "zamrozonym" po travel).
+
+ HOOKI:  HOOK_KEYPRESS,  HOOK_GAMEMODECHANGE
+
+ STATE:  last_map_index (runtime)
+         GVAR_PARTY_NO_FOLLOW (vanilla global var)
+
+                    [game_loaded]
+                         │
+         ┌───────────────┴───────────────────────┐
+         │  START                                 │
+         │  ─ last_map_index := cur_map_index     │
+         │  ─ GVAR_PARTY_NO_FOLLOW := 0           │
+         │  ─ register HOOK_KEYPRESS              │
+         │  ─ register HOOK_GAMEMODECHANGE        │
+         └───────┬───────────────────────┬────────┘
+                 │                       │
+                 ▼                       ▼
+   ┌──── HOOK_KEYPRESS ────┐  ┌── HOOK_GAMEMODECHANGE ──┐
+   │                        │  │                         │
+   │ pressed == 1? (down)   │  │ cur_map_index !=        │
+   │      │                 │  │ last_map_index?         │
+   │      ▼                 │  │      │ YES              │
+   │ key == 11 (zero)?      │  │      ▼                  │
+   │      │                 │  │ last_map_index :=       │
+   │      ▼                 │  │    cur_map_index        │
+   │ game_mode == 0?        │  │      │                  │
+   │ (world/explore only)   │  │      ▼                  │
+   │      │                 │  │ GVAR_PARTY_NO_FOLLOW    │
+   │      ▼                 │  │    := 0                 │
+   │ toggle                 │  │ (reset na map change)   │
+   │ GVAR_PARTY_NO_FOLLOW   │  │                         │
+   │      │                 │  └─────────────────────────┘
+   │      ▼                 │
+   │ display_msg:           │
+   │   "Party: FOLLOW"      │
+   │   lub                  │
+   │   "Party: HOLD         │
+   │    POSITION"           │
+   │                        │
+   └────────────────────────┘
+
+ MECHANIKA (dlaczego dziala):
+    Vanilla party.h:
+       #define party_no_follow  (global_var(GVAR_PARTY_NO_FOLLOW) != 0)
+       #define party_member_follow_dude \
+           if ((party_is_waiting == false) \
+                and (party_no_follow == false)) ...
+
+    Czyli gdy ustawimy GVAR_PARTY_NO_FOLLOW=1, kazdy NPC ktory
+    woła party_member_follow_dude w swoim map_update ominie blok
+    biegnij-do-dude. Dziala globalnie dla calej party bez touch
+    pojedynczych NPC.
+
+ GOTCHA:
+   ─ TAB (15) to vanilla automap -- dlatego uzywamy 0 (11).
+   ─ game_mode check wylacza toggle podczas combat/pipboy/dialog.
+   ─ Reset na map change = zero state leakage przez travel.
+
+
+================================================================================
+ MOD #4:  fo1_mod_new_start_plus   (gl_megamod_init.ssl)
+================================================================================
+
+ CO ROBI:
+   Dodaje do inwentarza gracza STARTER KIT przy pierwszym loadzie
+   nowej gry. Kit: lighter, rope, shovel, water chip (easy main
+   quest), electronic lockpicks, radio.
+   Jednorazowo -- flaga "given" w persistent array.
+
+ HOOKI:  brak (tylko game_loaded check w start)
+
+ STATE:  persistent array "megamod_kit" { given: 0|1 }
+
+                    [game_loaded]
+                         │
+         ┌───────────────▼───────────────┐
+         │  START                         │
+         │                                │
+         │  kit_given := load_array       │
+         │              ("megamod_kit")   │
+         │       │                        │
+         │       ▼                        │
+         │  kit_given == 0?               │
+         │       │ YES (first run)        │
+         │       ▼                        │
+         │  kit_given := create_array_map │
+         │  save_array                    │
+         │                                │
+         │       │                        │
+         │       ▼                        │
+         │  kit_given["given"] != 1?      │
+         │       │ YES                    │
+         │       ▼                        │
+         │  give_starting_kit()           │
+         └────────┬───────────────────────┘
+                  │
+                  ▼
+       ┌─── give_starting_kit ───┐
+       │                          │
+       │  for each starter PID:   │
+       │    if dude nie niesie:   │
+       │       create_object      │
+       │       add_obj_to_inven   │
+       │                          │
+       │  PIDS dodawane:          │
+       │   - PID_LIGHTER          │
+       │   - PID_ROPE             │
+       │   - PID_SHOVEL           │
+       │   - PID_WATER_CHIP       │
+       │     (easy main quest)    │
+       │   - PID_ELECTRONIC_      │
+       │     LOCKPICKS            │
+       │   - PID_RADIO            │
+       │                          │
+       │  kit_given["given"] := 1 │
+       │  save_array              │
+       │                          │
+       │  display_msg:            │
+       │   "You check your pack.  │
+       │    Lighter, rope, shovel.│
+       │    The basics."          │
+       │                          │
+       └──────────────────────────┘
+
+ GOTCHA:
+   ─ "Every load check" -- start() odpala sie przy KAZDYM loadzie
+     ale obj_is_carrying_obj_pid zapobiega duplikatom.
+   ─ Flaga "given" jest persistent, wiec po pierwszym danniu
+     kit nie bedzie ponownie wczytywany, ale sprawdzenie idzie
+     na drugi warunek (brak itemu).
+
+
+================================================================================
+ MOD #5:  fo1_mod_outdoorsman   (gl_mod_outdoorsman.ssl)   v4.1
+================================================================================
+
+ CO ROBI:
+   Camping mechanics:
+     USE lighter w dziczy     -> rozbicie obozu (jedno ognisko na mape)
+     USE ON shovel na ognisko -> gaszenie + wake party + cleanup
+   Wraz z debug PID/FID dump na mapach dla party_armor.ini authoring.
+
+ HOOKI:
+   HOOK_USEOBJ          (lighter)
+   HOOK_USEOBJON        (shovel on firepit)
+   HOOK_GAMEMODECHANGE  (deferred cleanup + debug dump + WAIT unfreeze)
+
+ STATE (persistent, save_array):
+   campfire_lighter       { lit: 0|1 }
+   campfire_map           { "<map>": fire_tile }
+   campfire_firepit_obj   { "<map>": fire_obj_id }
+   campfire_bedrolls      { "<map>": [obj_id...] }
+   campfire_sleepers      { "<map>": [obj_id...] }
+   campfire_pending       { "<map>": deadline_ticks }
+
+ STATE (runtime):
+   lighter_lit, last_map_idx
+
+                    [game_loaded]
+                         │
+         ┌───────────────┴─────────────────┐
+         │  START                           │
+         │  ─ load 6 arrays                 │
+         │  ─ PID_LIGHTER += USE            │
+         │  ─ register 3 hooks              │
+         │  ─ last_map_idx := cur_map_index │
+         └───┬──────────┬──────────┬────────┘
+             │          │          │
+             ▼          ▼          ▼
+        USEOBJ     USEOBJON    GAMEMODECHANGE
+
+ ─── HOOK_USEOBJ  (lighter) ────────────────────────────────────
+   dude + PID_LIGHTER
+         │
+         ▼
+   map_has_campfire?  ← v4.1 FIX: one campfire per map
+         │ YES
+         ▼
+   "A campfire already burns. Shovel it out first."  return
+         │ NO
+         ▼
+   lighter_lit == 0?
+     YES: lit=1, swiatlo on, komunikat
+          │
+          ▼
+      is_wilderness AND not combat?
+          │ YES
+          ▼
+      create_campfire_adjacent()
+     NO:  lit=0, swiatlo off, komunikat
+
+ ─── HOOK_USEOBJON  (shovel on fire) ───────────────────────────
+   dude + SHOVEL + FIRE_PIT
+         │
+         ▼
+   tracked_fire := firepit_obj_map[cur_map]
+         │
+   ┌─────┴───────────┬───────────────────┐
+   │ ==0             │ != target         │ OK
+   │ SILENT return   │ "not part of your │
+   │ (engine default │  camp" return     │
+   │  vanilla fire)  │                   │
+   │                 ▼                   ▼
+   │             combat?                 │
+   │                 │                   │
+   │            ┌────┴────┐               │
+   │           YES       NO                │
+   │          "no        handle_shovel_on
+   │           time"     _firepit()
+   │           return        │
+   │                         ▼
+   │                    gfade_out
+   │                    destroy firepit
+   │                    wake anim sleepers
+   │                    end_party_waiting
+   │                    pending[map]=now+20
+   │                    clear firepit refs
+   │                    gfade_in; XP+10
+
+ ─── HOOK_GAMEMODECHANGE  (every mode tick) ────────────────────
+   cleanup_pending_bedrolls:
+     for each map_key in pending:
+       deadline passed?
+         YES + map_key == cur_map: destroy bedrolls
+         YES + map_key != cur_map: silent drop tracking (stale ids)
+         clear pending[map_key]
+
+   cur_map_index != last_map_idx?  (map change)
+         YES
+         ▼
+   old_sleepers := sleepers_map[OLD]
+         │
+   old_sleepers != 0?  (we had camp on old map)
+         YES
+         ▼
+   end_party_waiting   ← FIX: unfreeze party on travel
+   drop old sleepers tracking
+         │
+         ▼
+   last_map_idx := cur_map_index
+   dump_critter_pid_fid  (debug dump)
+
+ ─── create_campfire_adjacent ──────────────────────────────────
+   gfade_out -> game_time_advance(600s)
+         │
+         ▼
+   create PID_FIRE_PIT adjacent dude (dir 0, fallback 1..5)
+   fail? "No room" + gfade_in + return
+         │
+         ▼
+   set fire LIGHT dist=15, int=65536
+         │
+         ▼
+   PLAYER BEDROLL  @ (fire, dir=0, dist=5)   [ring 0, slot 0]
+         │
+         ▼
+   SPIRAL NPC LOOP:
+     idx := 1
+     for each critter in LIST_CRITTERS:
+       team == PLAYER, !dead, != dude ?
+           slot := idx
+           ring := slot / 6
+           dir  := slot % 6
+           dist := 5 + ring*3
+           bedroll_tile := @(fire, dir, dist)
+           bedroll := create PID_BED_1/2 (alternate)
+           bedroll != 0?
+               YES: push bedroll; move_to(npc,tile);
+                    reg_anim ANIM_fall_back_sf(-1);
+                    push sleepers; had_any_sleeper=1
+               NO:  skip NPC (tile blocked)
+           idx++
+         │
+         ▼
+   had_any_sleeper? -> set_party_waiting
+         │
+         ▼
+   save 5 arrays; gfade_in; XP+15
+
+ ─── handle_shovel_on_firepit ──────────────────────────────────
+   gfade_out
+         │
+   destroy tracked firepit
+         │
+   for each sleeper: reg_anim ANIM_back_to_standing(-1)
+         │
+   end_party_waiting
+         │
+   pending_cleanup[map] := game_time + 20 ticks (~2s)
+         │
+   clear campfire_map + firepit_obj refs
+         │
+   gfade_in; XP+10
+   (bedrolle NIE znikaja teraz -- GAMEMODECHANGE za ~2s je sprzatnie)
+
+ ─── CAMP LIFECYCLE (timeline) ─────────────────────────────────
+   t=0      USE lighter (wilderness)
+   t=0.1    fade_out, time+600s
+   t=0.3    firepit + player bedroll + NPC bedrolls
+   t=0.4    reg_anim ANIM_fall_back_sf
+   t=0.4    set_party_waiting
+   t=0.5    fade_in -- kamp ustawiony
+
+   ... gracz odpoczywa / rozmowy / restover ...
+
+   t=T      USE ON shovel na ognisko
+   t=T+0.1  fade_out, destroy firepit
+   t=T+0.2  reg_anim ANIM_back_to_standing
+   t=T+0.3  end_party_waiting
+   t=T+0.3  pending[map] = now + 2s
+   t=T+0.5  fade_in -- NPC wstaja
+   t=T+2.0  GAMEMODECHANGE: deadline passed -> destroy bedrolle
+
+   [ABANDON SCENARIO -- gracz wyjdzie zanim shovel:]
+   t=T      klik worldmap
+   t=T+ε    GAMEMODECHANGE cur_map != last_map
+             -> end_party_waiting
+             -> drop old sleepers tracking
+             (bedrolle/firepit fizycznie zostaja na starej
+              mapie, ale juz nie sledzone)
+
+ ─── ZMIANY v3 -> v4 -> v4.1 ───────────────────────────────────
+   v4:
+     ─ party_remove/add -> set_party_waiting
+     ─ shovel USE -> USE ON firepit
+     ─ Player bedroll w ringu zamiast przy graczu
+     ─ Spiralne ringi dla >5 party members
+     ─ Deferred bedroll cleanup (2s dla wake anim)
+     ─ HOOK_GAMEMODECHANGE dodany
+   v4.1 POST-REVIEW:
+     ─ end_party_waiting na map change (unfreeze po travel)
+     ─ cleanup_pending destroy TYLKO dla cur_map_index
+     ─ silent return dla vanilla firepit (no camp on map)
+     ─ NPC sleep tylko gdy bedroll stworzony
+     ─ ONE CAMPFIRE PER MAP -- lighter blokowany gdy camp istnieje
+
+ ─── KNOWN ISSUES ──────────────────────────────────────────────
+   ─ obj_id firepit/bedroll moze byc invalid po save/load
+     (engine przebudowuje id). Akceptowalne bo use case =
+     encounter maps (engine despawnuje calosc przy wyjsciu).
+   ─ dump_critter_pid_fid nie czysci starych entries
+     -- polegaj na _count zamiast enumerowac kazdy klucz.
+   ─ set_object_data LIGHT na lighter w inventory moze nie
+     swiecic (vanilla uses proto flag, nie runtime obj_data).
+
+ ─── STAŁE ──────────────────────────────────────────────────────
+   XP_CAMPFIRE_LIGHT     = 15
+   XP_CAMPFIRE_SMOTHER   = 10
+   CLEANUP_DELAY_TICKS   = 20  (2s @ 10 ticks/s)
+   RING_START_DIST       = 5
+   RING_STEP             = 3
+   FIRE_PIT light: dist=15, int=65536
+   Fade: 600ms
+   Time advance at camp: 600s game time (10 min)
+
+
+================================================================================
+ SHARED / CROSS-MOD DEPENDENCIES
+================================================================================
+
+ PERSISTENT ARRAYS (save_array):
+   megamod_kit              (new_start_plus)
+   campfire_lighter         (outdoorsman)
+   campfire_map             (outdoorsman)
+   campfire_firepit_obj     (outdoorsman)
+   campfire_bedrolls        (outdoorsman)
+   campfire_sleepers        (outdoorsman)
+   campfire_pending         (outdoorsman)
+
+ GLOBAL VARS (vanilla FO1, read/write):
+   GVAR_PARTY_NO_FOLLOW     (party_hotkeys toggle;
+                             vanilla party.h reads)
+   party_is_waiting / WAIT  (outdoorsman set/end via
+                             set_party_waiting / end_party_waiting
+                             vanilla macros)
+
+ PROTO FLAGS (set_proto_data, globalne):
+   PID_LIGHTER += ITEM_ACTION_USE   (outdoorsman start)
+
+ DEBUG INI OUTPUT:
+   outdoorsman.ini
+     [start]         loaded
+     [camp]          lit_tile, lit_map, bedrolls, bedroll_npc_pid/fid
+     [pidfid_<map>]  <i>_pid, <i>_fid, <i>_team, <i>_dead, _count
+   megamod.ini       (new_start_plus, party_hotkeys -- jesli logujemy)
+
+ HOOKI PER-MOD:
+   party_hotkeys:   KEYPRESS, GAMEMODECHANGE
+   outdoorsman:     USEOBJ, USEOBJON, GAMEMODECHANGE
+   new_start_plus:  (brak -- tylko start proc)
+   invasion_fix:    (brak -- static .int patch)
+
+ INTERAKCJE:
+   ─ Party_hotkeys (GVAR_PARTY_NO_FOLLOW) i Outdoorsman
+     (set_party_waiting) to DWA OSOBNE mechanizmy -- obie flagi
+     blokuja follow, ale niezaleznie. Gracz moze np. manualnie
+     HOLD POSITION (hotkey) + rozbic obóz -- dwie flagi aktywne.
+     Shovel resetuje tylko WAIT, hotkey flag zostaje.
+
+   ─ Outdoorsman i party_hotkeys OBYDWA uzywaja HOOK_GAMEMODECHANGE.
+     Kolejnosc wykonania: sfall odpala handlers w kolejnosci
+     rejestracji (ze wzgledu na mods_order.txt, party_hotkeys
+     odpala sie przed outdoorsman). Oba ignoruja tryby
+     nie-mapowe (pipboy/dialog/combat).
+
+   ─ Starter kit (new_start_plus) daje PID_LIGHTER + PID_SHOVEL
+     ktore outdoorsman wykorzystuje. Zaleznosc miekka --
+     outdoorsman dziala tez gdy gracz znajdzie te itemy gdzie
+     indziej.
+
+
+================================================================================
+ CO DALEJ (TODO)
+================================================================================
+
+ [ ] party_armor.ini: custom NPC mapping (Theresa, GWEN, ALYA,
+     DIANA, PETROX, TOLYA). Zrobic po pierwszym runie --
+     debug dump da PID-y/FID-y ktore trzeba wpisac.
+
+ [ ] Power armor loot protect -- tylko jesli Borys potwierdzi
+     wymaganie (chce chronic PA po smierci gracza/NPC przed
+     vaporize critical crit).
+
+ [ ] Worldmap camp marker -- zablokowane, brak sfall API
+     do runtime area position change. Deeper research w
+     engine internal CAR_OUT_OF_FUEL mechanism.
+
+
+================================================================================
+ EOF
+================================================================================

@@ -1,0 +1,571 @@
+/*
+    Outdoorsman Mod v4 -- camping + debug PID/FID dump
+
+    === LIGHTER (USE from inventory) ===
+    USE lighter in WILDERNESS (random encounter map) and no camp yet:
+      -> gfade_out, create PID_FIRE_PIT on tile adjacent to player
+      -> place empty player bedroll in the ring around fire (dir 0, dist 5)
+      -> place each party NPC's bedroll in the same ring (dir idx, dist 5)
+      -> move NPC onto bedroll, lock in ANIM_fall_back_sf lying pose
+      -> set_party_waiting (vanilla macro) so NPCs do NOT follow dude
+      -> gfade_in
+    Outside wilderness: lighter just toggles its own flame (no camp).
+
+    === SHOVEL (USE ON firepit) ===
+    USE shovel ON the campfire (HOOK_USEOBJON, target = tracked firepit):
+      -> gfade_out, destroy tracked firepit
+      -> reg_anim_animate each sleeper with ANIM_back_to_standing (wake)
+      -> end_party_waiting (party follows dude again)
+      -> mark bedrolls for deferred cleanup (destroyed after wake anim)
+      -> gfade_in
+
+    === BEDROLL DEFERRED CLEANUP ===
+    Bedrolls are NOT destroyed immediately. They are removed on the next
+    HOOK_GAMEMODECHANGE tick that fires at least CLEANUP_DELAY_TICKS after
+    the shovel action (20 ticks = ~2s). This gives ANIM_back_to_standing
+    time to play so the bedroll stays visible under the critter until they
+    finish standing up.
+
+    === DEBUG PID/FID DUMP (HOOK_GAMEMODECHANGE) ===
+    On every map index change, walks LIST_CRITTERS and dumps PID + FID
+    (art fid) of every critter to outdoorsman.ini so we can see party
+    member PIDs / base FIDs for party_armor.ini authoring.
+
+    Standalone mod. Hooks: HOOK_USEOBJ (lighter), HOOK_USEOBJON (shovel),
+    HOOK_GAMEMODECHANGE (bedroll cleanup + PID/FID dump).
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
+#include "sfall/lib.arrays.h"
+
+#define LOG(s, k, v) set_ini_setting("outdoorsman.ini|" + s + "|" + k, v)
+
+#define XP_CAMPFIRE_LIGHT    (15)
+#define XP_CAMPFIRE_SMOTHER  (10)
+#define CAMPFIRE_NEAR_RANGE  (3)
+#define CLEANUP_DELAY_TICKS  (20)  // 2s (10 ticks/s) -- wait for ANIM_back_to_standing
+#define RING_START_DIST      (5)   // first ring distance from fire
+#define RING_STEP            (3)   // extra distance per outer ring
+
+variable lighter_lit;
+variable campfire_map;       // "<map_idx>" -> fire tile
+variable firepit_obj_map;    // "<map_idx>" -> firepit obj_id (for USE ON match)
+variable bedroll_map;        // "<map_idx>" -> list of bedroll obj_ids
+variable sleepers_map;       // "<map_idx>" -> list of npc obj_ids put to sleep
+variable pending_cleanup;    // map_key -> cleanup_deadline (game_time ticks)
+variable last_map_idx;       // for map-change detection
+
+procedure start;
+procedure useobj_handler;
+procedure useobjon_handler;
+procedure gamemode_handler;
+procedure handle_lighter(variable item);
+procedure handle_shovel_on_firepit;
+procedure is_wilderness;
+procedure map_has_campfire;
+procedure create_campfire_adjacent;
+procedure cleanup_pending_bedrolls;
+procedure dump_critter_pid_fid;
+
+procedure start begin
+    if game_loaded then begin
+        variable saved;
+        saved := load_array("campfire_lighter");
+        if (saved != 0) then begin
+            lighter_lit := saved["lit"];
+        end
+        else begin
+            lighter_lit := 0;
+        end
+
+        campfire_map := load_array("campfire_map");
+        if (campfire_map == 0) then begin
+            campfire_map := create_array_map;
+            save_array("campfire_map", campfire_map);
+        end
+
+        firepit_obj_map := load_array("campfire_firepit_obj");
+        if (firepit_obj_map == 0) then begin
+            firepit_obj_map := create_array_map;
+            save_array("campfire_firepit_obj", firepit_obj_map);
+        end
+
+        bedroll_map := load_array("campfire_bedrolls");
+        if (bedroll_map == 0) then begin
+            bedroll_map := create_array_map;
+            save_array("campfire_bedrolls", bedroll_map);
+        end
+
+        sleepers_map := load_array("campfire_sleepers");
+        if (sleepers_map == 0) then begin
+            sleepers_map := create_array_map;
+            save_array("campfire_sleepers", sleepers_map);
+        end
+
+        pending_cleanup := load_array("campfire_pending");
+        if (pending_cleanup == 0) then begin
+            pending_cleanup := create_array_map;
+            save_array("campfire_pending", pending_cleanup);
+        end
+
+        last_map_idx := cur_map_index;
+
+        // Enable USE action on lighter
+        set_proto_data(PID_LIGHTER, PROTO_IT_FLAGS,
+            get_proto_data(PID_LIGHTER, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+        // Shovel already has USE_ON via other mods (gl_shovel.ssl)
+
+        register_hook_proc(HOOK_USEOBJ, useobj_handler);
+        register_hook_proc(HOOK_USEOBJON, useobjon_handler);
+        register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
+        LOG("start", "loaded", 1);
+    end
+end
+
+// ============================================================
+// HOOK_USEOBJ -- lighter only (shovel handled via USE ON)
+// ============================================================
+procedure useobj_handler begin
+    variable user;
+    variable item;
+
+    user := get_sfall_arg;
+    item := get_sfall_arg;
+
+    if (user != dude_obj) then return;
+    if (item == 0) then return;
+
+    if (obj_pid(item) == PID_LIGHTER) then begin
+        call handle_lighter(item);
+    end
+end
+
+// ============================================================
+// HOOK_USEOBJON -- shovel on tracked firepit
+// ============================================================
+procedure useobjon_handler begin
+    variable user;
+    variable item;
+    variable target;
+    variable map_key;
+    variable tracked_fire;
+
+    // HOOK_USEOBJON arg order: (user, used_item, target)
+    user := get_sfall_arg;
+    item := get_sfall_arg;
+    target := get_sfall_arg;
+
+    if (user != dude_obj) then return;
+    if (item == 0 or target == 0) then return;
+    if (obj_pid(item) != PID_SHOVEL) then return;
+    if (obj_pid(target) != PID_FIRE_PIT) then return;
+
+    // Must be OUR tracked campfire (not random firepit from map).
+    map_key := "" + cur_map_index;
+    tracked_fire := firepit_obj_map[map_key];
+
+    // No camp on this map -- silent pass, let engine handle vanilla firepit.
+    if (tracked_fire == 0) then return;
+
+    // Camp exists but player hit a different firepit (shouldn't happen often).
+    if (target != tracked_fire) then begin
+        display_msg("This fire isn't part of your camp.");
+        return;
+    end
+
+    if (combat_is_initialized) then begin
+        display_msg("No time to put out the fire right now.");
+        return;
+    end
+
+    call handle_shovel_on_firepit;
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// HOOK_GAMEMODECHANGE -- bedroll cleanup + PID/FID dump on map change
+// ============================================================
+procedure gamemode_handler begin
+    variable old_map_key;
+    variable old_sleepers;
+
+    // Always run pending bedroll cleanup (only for current map -- safe).
+    call cleanup_pending_bedrolls;
+
+    // Map change: reset WAIT state if we had a camp on the old map
+    // (prevents party from staying frozen after travel away from camp map).
+    if (cur_map_index != last_map_idx) then begin
+        old_map_key := "" + last_map_idx;
+        old_sleepers := sleepers_map[old_map_key];
+        if (old_sleepers != 0) then begin
+            end_party_waiting;
+            // abandoned-camp cleanup: drop sleepers + pending for old map
+            // (bedrolls/firepit stay on disk but are no longer tracked).
+            free_array(old_sleepers);
+            sleepers_map[old_map_key] := 0;
+            save_array("campfire_sleepers", sleepers_map);
+        end
+
+        last_map_idx := cur_map_index;
+        call dump_critter_pid_fid;
+    end
+end
+
+// ============================================================
+// LIGHTER -- toggle flame + make camp (wilderness only)
+// ============================================================
+procedure handle_lighter(variable item) begin
+    variable arr;
+
+    // One campfire per map rule: if we already have a camp here,
+    // the lighter does NOTHING. Player must shovel it out to reset.
+    if (map_has_campfire) then begin
+        display_msg("A campfire already burns nearby. Put it out with a shovel first.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    if (lighter_lit == 0) then begin
+        lighter_lit := 1;
+        set_object_data(item, OBJ_DATA_LIGHT_DISTANCE, 5);
+        set_object_data(item, OBJ_DATA_LIGHT_INTENSITY, 65536);
+        display_msg("You flick the lighter open. A small flame pushes back the dark.");
+
+        // In wilderness: light a real campfire + camp the party.
+        // Anywhere else: lighter just toggles its own flame.
+        if (is_wilderness) then begin
+            if not(combat_is_initialized) then begin
+                call create_campfire_adjacent;
+            end
+        end
+    end
+    else begin
+        lighter_lit := 0;
+        set_object_data(item, OBJ_DATA_LIGHT_DISTANCE, 0);
+        set_object_data(item, OBJ_DATA_LIGHT_INTENSITY, 0);
+        display_msg("You snap the lighter shut. Darkness closes in.");
+    end
+
+    tile_refresh_display;
+
+    arr := create_array_map;
+    arr["lit"] := lighter_lit;
+    save_array("campfire_lighter", arr);
+
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// SHOVEL ON FIREPIT -- wake party, destroy firepit, defer bedroll cleanup
+// ============================================================
+procedure handle_shovel_on_firepit begin
+    variable map_key;
+    variable fire_obj;
+    variable sleepers;
+    variable i;
+    variable obj;
+    variable now_ticks;
+
+    map_key := "" + cur_map_index;
+
+    gfade_out(600);
+
+    // 1. Destroy tracked firepit
+    fire_obj := firepit_obj_map[map_key];
+    if (fire_obj != 0) then destroy_object(fire_obj);
+
+    // 2. Wake tracked sleepers (animation only -- bedrolls stay)
+    sleepers := sleepers_map[map_key];
+    if (sleepers != 0) then begin
+        for (i := 0; i < len_array(sleepers); i++) begin
+            obj := sleepers[i];
+            if (obj != 0 and not(is_critter_dead(obj))) then begin
+                reg_anim_begin();
+                reg_anim_animate(obj, ANIM_back_to_standing, -1);
+                reg_anim_end();
+            end
+        end
+        free_array(sleepers);
+        sleepers_map[map_key] := 0;
+        save_array("campfire_sleepers", sleepers_map);
+    end
+
+    // 3. Release WAIT state -- party follows dude again.
+    end_party_waiting;
+
+    // 4. Mark bedrolls for deferred cleanup (after wake anim plays).
+    now_ticks := game_time;
+    pending_cleanup[map_key] := now_ticks + CLEANUP_DELAY_TICKS;
+    save_array("campfire_pending", pending_cleanup);
+
+    // 5. Clear campfire tile + firepit obj refs (bedrolls still tracked in bedroll_map).
+    campfire_map[map_key] := 0;
+    firepit_obj_map[map_key] := 0;
+    save_array("campfire_map", campfire_map);
+    save_array("campfire_firepit_obj", firepit_obj_map);
+
+    tile_refresh_display;
+    gfade_in(600);
+
+    display_msg("You shovel dirt onto the fire. The flames die out.");
+    give_exp_points(XP_CAMPFIRE_SMOTHER);
+end
+
+// ============================================================
+// DEFERRED BEDROLL CLEANUP -- runs on every HOOK_GAMEMODECHANGE tick
+// ============================================================
+procedure cleanup_pending_bedrolls begin
+    variable keys;
+    variable i;
+    variable map_key;
+    variable deadline;
+    variable now_ticks;
+    variable bedrolls;
+    variable j;
+    variable obj;
+
+    if (pending_cleanup == 0) then return;
+    keys := get_array_keys(pending_cleanup);
+    if (keys == 0) then return;
+    if (len_array(keys) == 0) then begin
+        free_array(keys);
+        return;
+    end
+
+    now_ticks := game_time;
+
+    for (i := 0; i < len_array(keys); i++) begin
+        map_key := keys[i];
+        deadline := pending_cleanup[map_key];
+        if (deadline > 0 and now_ticks >= deadline) then begin
+            // SAFETY: only destroy bedrolls for the CURRENT map.
+            // Objects from other maps have been despawned by the engine;
+            // their obj_ids are stale and destroy_object would be unsafe.
+            if (map_key == ("" + cur_map_index)) then begin
+                bedrolls := bedroll_map[map_key];
+                if (bedrolls != 0) then begin
+                    for (j := 0; j < len_array(bedrolls); j++) begin
+                        obj := bedrolls[j];
+                        if (obj != 0) then destroy_object(obj);
+                    end
+                    free_array(bedrolls);
+                    bedroll_map[map_key] := 0;
+                    save_array("campfire_bedrolls", bedroll_map);
+                end
+                tile_refresh_display;
+            end
+            else begin
+                // Stale pending entry for another map -- just drop tracking
+                // (objects there are already gone; don't call destroy_object).
+                bedrolls := bedroll_map[map_key];
+                if (bedrolls != 0) then begin
+                    free_array(bedrolls);
+                    bedroll_map[map_key] := 0;
+                    save_array("campfire_bedrolls", bedroll_map);
+                end
+            end
+            pending_cleanup[map_key] := 0;
+            save_array("campfire_pending", pending_cleanup);
+        end
+    end
+
+    free_array(keys);
+end
+
+// ============================================================
+// DEBUG PID/FID DUMP
+// Walks all critters on current map and logs PID + FID (obj_art_fid).
+// Output goes to outdoorsman.ini under [pidfid_<map_idx>].
+// Used for authoring party_armor.ini (need PID of each custom NPC).
+// ============================================================
+procedure dump_critter_pid_fid begin
+    variable lst;
+    variable obj;
+    variable section;
+    variable idx;
+    variable key_prefix;
+
+    section := "pidfid_" + cur_map_index;
+    idx := 0;
+
+    // Clear previous dump for this map (overwrite next entries; old stays in ini but tagged by idx).
+    LOG(section, "_map_name", cur_map_index);
+
+    lst := list_begin(LIST_CRITTERS);
+    obj := list_next(lst);
+    while (obj) do begin
+        if (obj != 0) then begin
+            key_prefix := "" + idx;
+            set_ini_setting("outdoorsman.ini|" + section + "|" + key_prefix + "_pid",
+                obj_pid(obj));
+            set_ini_setting("outdoorsman.ini|" + section + "|" + key_prefix + "_fid",
+                obj_art_fid(obj));
+            set_ini_setting("outdoorsman.ini|" + section + "|" + key_prefix + "_team",
+                get_team(obj));
+            set_ini_setting("outdoorsman.ini|" + section + "|" + key_prefix + "_dead",
+                is_critter_dead(obj));
+            idx := idx + 1;
+        end
+        obj := list_next(lst);
+    end
+    list_end(lst);
+
+    LOG(section, "_count", idx);
+end
+
+// ============================================================
+// HELPERS
+// ============================================================
+procedure is_wilderness begin
+    if (map_is_encounter) then return 1;
+    return 0;
+end
+
+procedure map_has_campfire begin
+    variable map_key;
+    variable campfire_tile;
+    map_key := "" + cur_map_index;
+    campfire_tile := campfire_map[map_key];
+    if (campfire_tile > 0) then return 1;
+    return 0;
+end
+
+procedure create_campfire_adjacent begin
+    variable player_tile;
+    variable fire_tile;
+    variable fire;
+    variable map_key;
+    variable lst;
+    variable npc;
+    variable idx;
+    variable bedroll_tile;
+    variable bedroll;
+    variable bedroll_pid;
+    variable dir_idx;
+    variable bedrolls_arr;
+    variable sleepers_arr;
+    variable dir;
+    variable player_bedroll_tile;
+    variable player_bedroll;
+    variable had_any_sleeper;
+    variable ring;
+    variable slot;
+
+    player_tile := tile_num(dude_obj);
+    fire_tile := tile_num_in_direction(player_tile, 0, 1);
+
+    gfade_out(600);
+    game_time_advance(600);
+
+    fire := create_object(PID_FIRE_PIT, fire_tile, dude_elevation);
+    if (fire == 0) then begin
+        for (dir := 1; dir < 6; dir++) begin
+            fire_tile := tile_num_in_direction(player_tile, dir, 1);
+            fire := create_object(PID_FIRE_PIT, fire_tile, dude_elevation);
+            if (fire != 0) then break;
+        end
+    end
+
+    if (fire == 0) then begin
+        gfade_in(600);
+        display_msg("No room to make a fire here.");
+        return;
+    end
+
+    set_object_data(fire, OBJ_DATA_LIGHT_DISTANCE, 15);
+    set_object_data(fire, OBJ_DATA_LIGHT_INTENSITY, 65536);
+
+    bedrolls_arr := create_array(0, 4);
+    sleepers_arr := create_array(0, 4);
+    had_any_sleeper := 0;
+
+    // === SPIRAL BEDROLL PLACEMENT ===
+    // Slot 0 = empty player bedroll (ring 0, dir 0).
+    // Slot 1..5 = party NPC ring 0 (dist 5).
+    // Slot 6..11 = ring 1 (dist 8).
+    // Slot 12..17 = ring 2 (dist 11). etc.
+    // ring = slot / 6, dir = slot % 6, dist = RING_START_DIST + ring*RING_STEP.
+
+    // Player bedroll: slot 0 (ring 0, dir 0) -- same ring/step system as NPCs.
+    player_bedroll_tile := tile_num_in_direction(fire_tile, 0, RING_START_DIST);
+    player_bedroll := create_object(PID_BED_1, player_bedroll_tile, dude_elevation);
+    if (player_bedroll != 0) then begin
+        resize_array(bedrolls_arr, len_array(bedrolls_arr) + 1);
+        bedrolls_arr[len_array(bedrolls_arr) - 1] := player_bedroll;
+    end
+
+    // Party NPCs: slot 1, 2, 3, ... (each slot -> ring and direction via spiral).
+    idx := 1;
+    lst := list_begin(LIST_CRITTERS);
+    npc := list_next(lst);
+    while (npc) do begin
+        if (npc != 0 and npc != dude_obj) then begin
+            if (get_team(npc) == TEAM_PLAYER and not(is_critter_dead(npc))) then begin
+                slot := idx;
+                ring := slot / 6;
+                dir_idx := slot % 6;
+                bedroll_tile := tile_num_in_direction(fire_tile, dir_idx,
+                    RING_START_DIST + ring * RING_STEP);
+
+                if ((idx % 2) == 0) then
+                    bedroll_pid := PID_BED_1;
+                else
+                    bedroll_pid := PID_BED_2;
+
+                bedroll := create_object(bedroll_pid, bedroll_tile, dude_elevation);
+                // Only put NPC to sleep if their bedroll actually materialized.
+                // If tile was blocked (bedroll==0), skip this NPC (stays standing,
+                // stays in party follow) -- spiral will retry next slot.
+                if (bedroll != 0) then begin
+                    resize_array(bedrolls_arr, len_array(bedrolls_arr) + 1);
+                    bedrolls_arr[len_array(bedrolls_arr) - 1] := bedroll;
+
+                    move_to(npc, bedroll_tile, dude_elevation);
+                    reg_anim_begin();
+                    reg_anim_animate(npc, ANIM_fall_back_sf, -1);
+                    reg_anim_end();
+
+                    resize_array(sleepers_arr, len_array(sleepers_arr) + 1);
+                    sleepers_arr[len_array(sleepers_arr) - 1] := npc;
+                    had_any_sleeper := 1;
+
+                    LOG("camp", "bedroll_npc_pid", obj_pid(npc));
+                    LOG("camp", "bedroll_npc_fid", obj_art_fid(npc));
+                end
+                idx := idx + 1;
+            end
+        end
+        npc := list_next(lst);
+    end
+    list_end(lst);
+
+    // Global WAIT state -- party stops following dude until shovel on fire.
+    if (had_any_sleeper) then begin
+        set_party_waiting;
+    end
+
+    tile_refresh_display;
+    gfade_in(600);
+
+    map_key := "" + cur_map_index;
+    campfire_map[map_key] := fire_tile;
+    firepit_obj_map[map_key] := fire;
+    save_array("campfire_map", campfire_map);
+    save_array("campfire_firepit_obj", firepit_obj_map);
+
+    bedroll_map[map_key] := bedrolls_arr;
+    save_array("campfire_bedrolls", bedroll_map);
+
+    sleepers_map[map_key] := sleepers_arr;
+    save_array("campfire_sleepers", sleepers_map);
+
+    display_msg("You make camp. The fire crackles. The party settles in for the night.");
+    give_exp_points(XP_CAMPFIRE_LIGHT);
+    LOG("camp", "lit_tile", fire_tile);
+    LOG("camp", "lit_map", cur_map_index);
+    LOG("camp", "bedrolls", idx - 1);
+end
