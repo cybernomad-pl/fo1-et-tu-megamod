@@ -359,6 +359,23 @@
    last_map_idx := cur_map_index
    dump_critter_pid_fid  (debug dump)
 
+ ─── FOLLOW-BLOCK MECHANICS (v4.2) ────────────────────────────
+   PROBLEM:
+     GVAR_PARTY_NO_FOLLOW (vanilla) dziala TYLKO dla NPCs ktorzy
+     wolaja party_member_follow_dude macro w map_update. Tandi,
+     Dogmeat, wiekszosc Et Tu NPCs -- NIE wolaja tego. Silnik
+     robi auto-follow party members niezaleznie od flagi.
+
+   ROZWIAZANIE:
+     party_remove(npc) = fizyczne usuniecie z party list. Engine
+     auto-follow ignoruje NPCs spoza party. Wake = party_add +
+     set_team(TEAM_PLAYER).
+
+   FLOW W OUTDOORSMAN:
+     camp start:  reg_anim fall_back_sf  -> party_remove(npc)
+     camp end:    reg_anim back_to_stand -> party_add(npc)
+                                         -> set_team(npc, TEAM_PLAYER)
+
  ─── create_campfire_adjacent ──────────────────────────────────
    gfade_out -> game_time_advance(600s)
          │
@@ -438,7 +455,7 @@
              (bedrolle/firepit fizycznie zostaja na starej
               mapie, ale juz nie sledzone)
 
- ─── ZMIANY v3 -> v4 -> v4.1 ───────────────────────────────────
+ ─── ZMIANY v3 -> v4 -> v4.1 -> v4.2 ───────────────────────────
    v4:
      ─ party_remove/add -> set_party_waiting
      ─ shovel USE -> USE ON firepit
@@ -447,13 +464,25 @@
      ─ Deferred bedroll cleanup (2s dla wake anim)
      ─ HOOK_GAMEMODECHANGE dodany
    v4.1 POST-REVIEW:
-     ─ end_party_waiting na map change (unfreeze po travel)
      ─ cleanup_pending destroy TYLKO dla cur_map_index
      ─ silent return dla vanilla firepit (no camp on map)
      ─ NPC sleep tylko gdy bedroll stworzony
      ─ ONE CAMPFIRE PER MAP -- lighter blokowany gdy camp istnieje
+   v4.2 FOLLOW-BLOCK FIX:
+     ─ Odkryto: GVAR_PARTY_NO_FOLLOW nie dziala dla Tandi/Dog/wielu
+       NPC bo nie wolaja party_member_follow_dude macro w map_update.
+       Engine auto-follow ignoruje flage.
+     ─ Wrocilem do party_remove(npc) przy sleep + party_add(npc)
+       przy wake + set_team(TEAM_PLAYER).
+     ─ Compile fix: set_party_waiting/end_party_waiting uzywaja
+       LVAR_WAITING per-NPC (nie dostepne z global script).
+     ─ Compile fix: sfall helper to array_keys(), nie get_array_keys().
 
  ─── KNOWN ISSUES ──────────────────────────────────────────────
+   ─ ABANDON CAMP: gracz wychodzi z mapy BEZ shovel przed
+     zgaszeniem -> NPC zostaje party_remove'd PERMANENTNIE na
+     tamtej mapie. Brak mechanizmu re-add z innej mapy
+     (obj_id invalid). Mitigation: zawsze shovel przed travel.
    ─ obj_id firepit/bedroll moze byc invalid po save/load
      (engine przebudowuje id). Akceptowalne bo use case =
      encounter maps (engine despawnuje calosc przy wyjsciu).
