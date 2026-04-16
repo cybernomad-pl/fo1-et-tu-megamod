@@ -196,15 +196,15 @@ procedure gamemode_handler begin
     // Always run pending bedroll cleanup (only for current map -- safe).
     call cleanup_pending_bedrolls;
 
-    // Map change: reset follow state if we had a camp on the old map
-    // (prevents party from staying frozen after travel away from camp map).
+    // Map change: drop stale sleepers tracking for abandoned camp.
+    // (bedrolls/firepit stay on disk but are no longer tracked.
+    //  party_remove was permanent -- NPCs who wake up via stand-anim
+    //  won't auto-rejoin unless player re-recruits via dialog. Abandoned
+    //  camp NPCs stay in party_remove'd state on the old map.)
     if (cur_map_index != last_map_idx) then begin
         old_map_key := "" + last_map_idx;
         old_sleepers := sleepers_map[old_map_key];
         if (old_sleepers != 0) then begin
-            set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
-            // abandoned-camp cleanup: drop sleepers + pending for old map
-            // (bedrolls/firepit stay on disk but are no longer tracked).
             free_array(old_sleepers);
             sleepers_map[old_map_key] := 0;
             save_array("campfire_sleepers", sleepers_map);
@@ -278,7 +278,10 @@ procedure handle_shovel_on_firepit begin
     fire_obj := firepit_obj_map[map_key];
     if (fire_obj != 0) then destroy_object(fire_obj);
 
-    // 2. Wake tracked sleepers (animation only -- bedrolls stay)
+    // 2. Wake tracked sleepers: play stand-up anim AND re-add to party.
+    //    (party_remove was the only way to block engine auto-follow for
+    //     NPCs that don't use party_member_follow_dude macro -- Tandi,
+    //     Dogmeat, etc. party_add restores follow.)
     sleepers := sleepers_map[map_key];
     if (sleepers != 0) then begin
         for (i := 0; i < len_array(sleepers); i++) begin
@@ -287,19 +290,14 @@ procedure handle_shovel_on_firepit begin
                 reg_anim_begin();
                 reg_anim_animate(obj, ANIM_back_to_standing, -1);
                 reg_anim_end();
+                party_add(obj);
+                set_team(obj, TEAM_PLAYER);
             end
         end
         free_array(sleepers);
         sleepers_map[map_key] := 0;
         save_array("campfire_sleepers", sleepers_map);
     end
-
-    // 3. Release follow state -- party follows dude again.
-    // NOTE: set_party_waiting macro uses LVAR_WAITING (per-NPC local),
-    // so in a global script we use GVAR_PARTY_NO_FOLLOW (same var
-    // the party_hotkeys mod toggles). Side effect: shovel clears the
-    // manual HOLD POSITION hotkey too.
-    set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
 
     // 4. Mark bedrolls for deferred cleanup (after wake anim plays).
     now_ticks := game_time;
@@ -533,6 +531,10 @@ procedure create_campfire_adjacent begin
                     reg_anim_animate(npc, ANIM_fall_back_sf, -1);
                     reg_anim_end();
 
+                    // party_remove = true follow block (engine-level).
+                    // party.h macros alone don't stop Tandi/Dogmeat/etc.
+                    party_remove(npc);
+
                     resize_array(sleepers_arr, len_array(sleepers_arr) + 1);
                     sleepers_arr[len_array(sleepers_arr) - 1] := npc;
                     had_any_sleeper := 1;
@@ -547,11 +549,9 @@ procedure create_campfire_adjacent begin
     end
     list_end(lst);
 
-    // Global no-follow -- party stops running to dude until shovel on fire.
-    // Uses same GVAR as party_hotkeys mod (vanilla party.h reads it).
-    if (had_any_sleeper) then begin
-        set_global_var(GVAR_PARTY_NO_FOLLOW, 1);
-    end
+    // Follow is already blocked per-NPC via party_remove above.
+    // No need for GVAR_PARTY_NO_FOLLOW (doesn't work for NPCs that
+    // don't use party_member_follow_dude macro).
 
     tile_refresh_display;
     gfade_in(600);
