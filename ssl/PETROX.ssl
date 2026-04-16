@@ -34,6 +34,15 @@ procedure petrox09;
 procedure petrox10;
 procedure petroxend;
 procedure combat;
+procedure NodeRecruit;
+procedure NodePartyMain;
+procedure NodePartyWait;
+procedure NodePartyFollow;
+procedure NodePartyClose;
+procedure NodePartyMedium;
+procedure NodePartyFar;
+procedure NodePartyHolster;
+procedure NodePartyDone;
 
 variable tmp_hostile;
 variable Only_Once := 1;
@@ -65,6 +74,7 @@ end
 
 procedure petrox00 begin
    Reply(101);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(mstr(102) + dude_name + mstr(103), petrox01, 4);
    NOption(104, petrox02, 5);
    NLowOption(105, petrox03);
@@ -132,6 +142,15 @@ procedure petroxend begin
 end
 
 procedure talk_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+
    set_tma_data_generic(TMA_MSG_RAIDERS);
 
    dude_look_at_self;
@@ -163,6 +182,11 @@ procedure combat begin
 end
 
 procedure critter_p_proc begin
+   if (self_team == TEAM_PLAYER) then begin
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0) then party_follow_dude_point(5, 3)
+      return;
+   end
+
    variable LVar0 := 0;
    rndz := random(0, 500);
 // set_local_var(10, game_time);
@@ -226,4 +250,54 @@ procedure destroy_p_proc begin
       inc_raiders_rep(REP_BONUS_KILLED_RAIDER);
    //end
    inc_inv_evil_crit
+end
+
+procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   display_msg(obj_name(self_obj) + " joins your party.");
+end
+
+procedure NodePartyMain begin
+   Reply_Blank;
+   NOption("Follow me.", NodePartyFollow, 4);
+   NOption("Wait here.", NodePartyWait, 4);
+   NOption("Holster weapon.", NodePartyHolster, 4);
+   NOption("[Done]", NodePartyDone, 4);
+end
+
+procedure NodePartyWait begin
+   display_msg(obj_name(self_obj) + " waits here.");
+end
+
+procedure NodePartyFollow begin
+   Reply_Blank;
+   NOption("Stay close.", NodePartyClose, 4);
+   NOption("Keep moderate distance.", NodePartyMedium, 4);
+   NOption("Hang back.", NodePartyFar, 4);
+   NOption("[Done]", NodePartyDone, 4);
+end
+
+procedure NodePartyClose begin
+   display_msg(obj_name(self_obj) + " stays close.");
+end
+
+procedure NodePartyMedium begin
+   display_msg(obj_name(self_obj) + " keeps moderate distance.");
+end
+
+procedure NodePartyFar begin
+   display_msg(obj_name(self_obj) + " hangs back.");
+end
+
+procedure NodePartyHolster begin
+   inven_unwield(self_obj);
+   display_msg(obj_name(self_obj) + " holsters weapon.");
+end
+
+procedure NodePartyDone begin
 end

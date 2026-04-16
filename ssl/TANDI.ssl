@@ -727,6 +727,10 @@ procedure critter_p_proc begin
       attack(dude_obj);
    end
    else begin
+      // Party follow -- respects GVAR_PARTY_NO_FOLLOW (camp/hotkey).
+      if Tandi_In_Party then begin
+         party_member_follow_dude
+      end
       /**************************************
          TANDI AT KHANS
       **************************************/

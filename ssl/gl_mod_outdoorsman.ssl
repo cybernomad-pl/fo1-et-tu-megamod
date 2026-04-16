@@ -278,10 +278,9 @@ procedure handle_shovel_on_firepit begin
     fire_obj := firepit_obj_map[map_key];
     if (fire_obj != 0) then destroy_object(fire_obj);
 
-    // 2. Wake tracked sleepers: play stand-up anim AND re-add to party.
-    //    (party_remove was the only way to block engine auto-follow for
-    //     NPCs that don't use party_member_follow_dude macro -- Tandi,
-    //     Dogmeat, etc. party_add restores follow.)
+    // 2. Wake tracked sleepers: just play stand-up anim.
+    //    No party_remove -- follow is blocked via GVAR_PARTY_NO_FOLLOW
+    //    which we clear below.
     sleepers := sleepers_map[map_key];
     if (sleepers != 0) then begin
         for (i := 0; i < len_array(sleepers); i++) begin
@@ -290,14 +289,15 @@ procedure handle_shovel_on_firepit begin
                 reg_anim_begin();
                 reg_anim_animate(obj, ANIM_back_to_standing, -1);
                 reg_anim_end();
-                party_add(obj);
-                set_team(obj, TEAM_PLAYER);
             end
         end
         free_array(sleepers);
         sleepers_map[map_key] := 0;
         save_array("campfire_sleepers", sleepers_map);
     end
+
+    // 2b. Release no-follow -- party follows dude again.
+    set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
 
     // 4. Mark bedrolls for deferred cleanup (after wake anim plays).
     now_ticks := game_time;
@@ -531,10 +531,6 @@ procedure create_campfire_adjacent begin
                     reg_anim_animate(npc, ANIM_fall_back_sf, -1);
                     reg_anim_end();
 
-                    // party_remove = true follow block (engine-level).
-                    // party.h macros alone don't stop Tandi/Dogmeat/etc.
-                    party_remove(npc);
-
                     resize_array(sleepers_arr, len_array(sleepers_arr) + 1);
                     sleepers_arr[len_array(sleepers_arr) - 1] := npc;
                     had_any_sleeper := 1;
@@ -549,9 +545,12 @@ procedure create_campfire_adjacent begin
     end
     list_end(lst);
 
-    // Follow is already blocked per-NPC via party_remove above.
-    // No need for GVAR_PARTY_NO_FOLLOW (doesn't work for NPCs that
-    // don't use party_member_follow_dude macro).
+    // Block follow globally via GVAR. Works for NPCs that call
+    // party_member_follow_dude in critter_p_proc. NPCs without
+    // this macro (TANDI, DOG) get it added in invasion_fix mod SSL.
+    if (had_any_sleeper) then begin
+        set_global_var(GVAR_PARTY_NO_FOLLOW, 1);
+    end
 
     tile_refresh_display;
     gfade_in(600);
