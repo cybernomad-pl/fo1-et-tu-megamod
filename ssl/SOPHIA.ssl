@@ -90,7 +90,7 @@ end
 
 procedure critter_p_proc begin
    if (self_team == TEAM_PLAYER) then begin
-      party_follow_dude_point(5, 3)
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0) then party_follow_dude_point(5, 3)
       return;
    end
    if REP_ENEMY_BOS then begin
@@ -165,7 +165,7 @@ end
 
 procedure goto00 begin
    Reply(301);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NLowOption(302, goto01);
    NOption(303, goto02, 4);
    NOption(304, goto03, 4);
@@ -179,7 +179,7 @@ end
 
 procedure goto02 begin
    Reply(308);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    if (global_var(GVAR_NECROP_WATER_CHIP_TAKEN) != 1) then begin
       NOption(309, goto04, 4);
    end
@@ -194,14 +194,14 @@ end
 
 procedure goto03 begin
    Reply(314);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(315, gotoend, 4);
    NOption(316, goto07, 4);
 end
 
 procedure goto04 begin
    Reply(317);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(318, goto07, 4);
    NOption(319, goto06, 4);
    BOption(320, anger, 4);
@@ -210,7 +210,7 @@ end
 
 procedure goto05 begin
    Reply(322);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(323, gotoend, 4);
    NOption(324, goto08, 4);
    NOption(325, goto09, 4);
@@ -218,7 +218,7 @@ end
 
 procedure goto06 begin
    Reply(326);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(327, goto11, 4);
    NOption(328, goto11, 4);
    if (local_var(6) != 1) then begin
@@ -229,7 +229,7 @@ end
 
 procedure goto07 begin
    Reply(331);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    if (local_var(6) != 1) then begin
       NOption(332, goto12, 4);
    end
@@ -246,7 +246,7 @@ end
 
 procedure goto09 begin
    Reply(337);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    if (local_var(6) != 1) then begin
       GOption(338, goto12, 4);
    end
@@ -265,7 +265,7 @@ end
 
 procedure goto11 begin
    Reply(344);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(345, gotoend, 4);
    NOption(346, goto13, 4);
    BOption(347, gotoDownReact, 4);
@@ -278,14 +278,14 @@ procedure goto12 begin
    add_obj_to_inven(dude_obj, Item);
 
    Reply(348);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(349, gotoend, 4);
    BOption(350, gotoDownReact, 4);
 end
 
 procedure goto13 begin
    Reply(351);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    if (local_var(6) != 1) then begin
       GOption(352, goto12, 4);
    end
@@ -296,7 +296,7 @@ end
 
 procedure goto14 begin
    Reply(301);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NLowOption(302, goto01);
    NOption(303, goto02, 4);
    NOption(330, goto15, 4);
@@ -305,7 +305,7 @@ end
 
 procedure goto15 begin
    Reply(359);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(360, goto07, 4);
    BOption(361, anger, 4);
    BOption(362, gotoDownReact, 4);
@@ -313,7 +313,7 @@ end
 
 procedure goto16 begin
    Reply(364);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(365, goto17, 4);
    NOption(366, goto16b, 4);
    NOption(367, gotoend, 4);
@@ -331,28 +331,28 @@ end
 
 procedure goto17 begin
    Reply(368);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(369, gotoend, 4);
    NOption(316, goto07, 4);
 end
 
 procedure goto18 begin
    Reply(374);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(369, gotoend, 4);
    BOption(350, gotoDownReact, 4);
 end
 
 procedure goto19 begin
    Reply(374);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(369, gotoend, 4);
    BOption(350, gotoDownReact, 4);
 end
 
 procedure goto20 begin
    Reply(377);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(378, gotoend, 4);
    GOption(379, goto20b, 4);
    NLowOption(302, goto01);
@@ -370,7 +370,7 @@ end
 procedure goto21 begin
    UpReact
    Reply(380);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(381, goto17, 4);
    NOption(382, goto16b, 4);
    NOption(383, gotoend, 4);
@@ -378,7 +378,7 @@ end
 
 procedure grenades begin
    Reply(201);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    if (dude_item_count(PID_PULSE_GRENADE) >= 3) then begin
       NOption(202, grenadesGive, 4);
       NLowOption(205, grenadesGiveLowInt);
@@ -443,11 +443,11 @@ procedure NodeRecruit begin
 end
 
 procedure NodePartyMain begin
-   Reply(901);
-   NOption(902, NodePartyFollow, 4);
-   NOption(903, NodePartyWait, 4);
-   NOption(904, NodePartyHolster, 4);
-   NOption(905, NodePartyDone, 4);
+   Reply_Blank;
+   NOption("Follow me.", NodePartyFollow, 4);
+   NOption("Wait here.", NodePartyWait, 4);
+   NOption("Holster weapon.", NodePartyHolster, 4);
+   NOption("[Done]", NodePartyDone, 4);
 end
 
 procedure NodePartyWait begin
@@ -455,11 +455,11 @@ procedure NodePartyWait begin
 end
 
 procedure NodePartyFollow begin
-   Reply(906);
-   NOption(907, NodePartyClose, 4);
-   NOption(908, NodePartyMedium, 4);
-   NOption(909, NodePartyFar, 4);
-   NOption(905, NodePartyDone, 4);
+   Reply_Blank;
+   NOption("Stay close.", NodePartyClose, 4);
+   NOption("Keep moderate distance.", NodePartyMedium, 4);
+   NOption("Hang back.", NodePartyFar, 4);
+   NOption("[Done]", NodePartyDone, 4);
 end
 
 procedure NodePartyClose begin

@@ -133,7 +133,7 @@ end
 
 procedure critter_p_proc begin
    if (self_team == TEAM_PLAYER) then begin
-      party_follow_dude_point(5, 3)
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0) then party_follow_dude_point(5, 3)
       return;
    end
    if REP_ENEMY_BOS then begin
@@ -240,7 +240,7 @@ end
 
 procedure Talus00 begin
    Reply(101);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(102, Talus01, 8);
    NOption(103, Talus02, 4);
    if (local_var(5) == 0) then begin
@@ -254,21 +254,21 @@ end
 
 procedure Talus01 begin
    Reply(106);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(107, Talus05, 4);
    NOption(exit_line, TalusEnd, 4);
 end
 
 procedure Talus02 begin
    Reply(108);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(107, Talus05, 4);
    NOption(exit_line, TalusEnd, 4);
 end
 
 procedure Talus05 begin
    Reply(110);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(111, Talus06, 7);
    if (local_var(5) == 0) then begin
       NOption(112, Talus07, 4);
@@ -281,7 +281,7 @@ end
 
 procedure Talus06 begin
    Reply(113);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(115, TalusEnd, 4);
    if (local_var(5) == 0) then begin
       NOption(112, Talus07, 4);
@@ -291,7 +291,7 @@ end
 procedure Talus07 begin
    Reply(116);
    call set_requisition;
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(118, Talus08, 4);
    BOption(119, Talus42, 4);
    NOption(159, TalusEnd, 4);
@@ -299,7 +299,7 @@ end
 
 procedure Talus08 begin
    Reply(406);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    if (global_var(GVAR_QUEST_BROHOOD_2_FIND_LOST) != 2) then begin
       NOption(109, Talus32, 4);
    end
@@ -318,7 +318,7 @@ procedure Talus10 begin
    NMessage(123);
    NMessage(124);
    Reply(125);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(126, TalusEnd, 4);
 end
 
@@ -338,7 +338,7 @@ end
 
 procedure Talus14 begin
    Reply(mstr(130) + dude_name + mstr(131));
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    if (not(line16flag)) then begin
       NOption(132, Talus16, 5);
    end
@@ -368,7 +368,7 @@ procedure Talus15 begin
    NMessage(137);
    Reply(138);
    call set_requisition;
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(118, Talus08, 4);
 end
 
@@ -385,7 +385,7 @@ end
 
 procedure Talus18 begin
    Reply(143);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(144, Talus19, 4);
    NOption(145, Talus20, 4);
    NOption(146, Talus21, 4);
@@ -395,7 +395,7 @@ procedure Talus19 begin
    who_rhombus := 1;
    NMessage(147);
    Reply(148);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    if (who_vree == 0) then begin
       NOption(145, Talus20, 4);
    end
@@ -410,7 +410,7 @@ procedure Talus20 begin
    who_vree := 1;
    NMessage(152);
    Reply(153);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    if (who_rhombus == 0) then begin
       NOption(144, Talus19, 4);
    end
@@ -424,7 +424,7 @@ end
 procedure Talus21 begin
    who_maxson := 1;
    Reply(157);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    if (who_rhombus == 0) then begin
       NOption(144, Talus19, 4);
    end
@@ -437,7 +437,7 @@ end
 
 procedure Talus22 begin
    Reply(161);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    BOption(162, TalusDownReact, 4);
    NOption(163, TalusEnd, 4);
    if (local_var(5) == 1) then begin
@@ -481,7 +481,7 @@ end
 
 procedure Talus28 begin
    Reply(149);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(102, Talus02, 4);
    NOption(103, Talus07, 4);
    NOption(150, TalusEnd, 4);
@@ -500,7 +500,7 @@ end
 procedure Talus30 begin
    BottomReact
    Reply(171);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    BOption(172, Talus37, 4);
    NOption(173, Talus38, 4);
    BOption(174, TalusEnd, 4);
@@ -508,7 +508,7 @@ end
 
 procedure Talus31 begin
    Reply(175);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(176, Talus35, 4);
    BOption(177, TalusBigDownReact, 4);
    NOption(178, Talus31a, 4);
@@ -529,7 +529,7 @@ end
 
 procedure Talus32 begin
    Reply(158);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(176, Talus35, 4);
    BOption(177, TalusBigDownReact, 4);
    GOption(178, Talus31a, 4);
@@ -537,7 +537,7 @@ end
 
 procedure Talus33 begin
    Reply(179);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(176, Talus35, 4);
    BOption(177, TalusBigDownReact, 4);
    GOption(178, Talus31a, 4);
@@ -550,7 +550,7 @@ end
 procedure Talus35 begin
    set_global_var(GVAR_QUEST_BROHOOD_2_FIND_LOST, 1);
    Reply(181);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    GOption(182, Talus31a, 4);
    NOption(183, Talus46, 4);
 end
@@ -573,7 +573,7 @@ end
 
 procedure Talus40 begin
    Reply(191);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(193, TalusEnd, 4);
 end
 
@@ -588,7 +588,7 @@ end
 
 procedure Talus43 begin
    Reply(196);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(192, Talus41, 4);
    NOption(193, TalusEnd, 4);
 end
@@ -609,14 +609,14 @@ end
 
 procedure Talus47 begin
    Reply(mstr(201) + dude_name + mstr(202));
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(205, Talus51, 4);
    NLowOption(206, Talus50);
 end
 
 procedure Talus49 begin
    Reply(207);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(205, Talus51, 4);
    NLowOption(206, Talus50);
 end
@@ -627,7 +627,7 @@ end
 
 procedure Talus51 begin
    Reply(210);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(212, Talus51a, 4);
    if fo1in2_alt_bos_reward_enabled then begin
       NOption(410, Talus51e, 4);
@@ -724,11 +724,11 @@ procedure NodeRecruit begin
 end
 
 procedure NodePartyMain begin
-   Reply(901);
-   NOption(902, NodePartyFollow, 4);
-   NOption(903, NodePartyWait, 4);
-   NOption(904, NodePartyHolster, 4);
-   NOption(905, NodePartyDone, 4);
+   Reply_Blank;
+   NOption("Follow me.", NodePartyFollow, 4);
+   NOption("Wait here.", NodePartyWait, 4);
+   NOption("Holster weapon.", NodePartyHolster, 4);
+   NOption("[Done]", NodePartyDone, 4);
 end
 
 procedure NodePartyWait begin
@@ -736,11 +736,11 @@ procedure NodePartyWait begin
 end
 
 procedure NodePartyFollow begin
-   Reply(906);
-   NOption(907, NodePartyClose, 4);
-   NOption(908, NodePartyMedium, 4);
-   NOption(909, NodePartyFar, 4);
-   NOption(905, NodePartyDone, 4);
+   Reply_Blank;
+   NOption("Stay close.", NodePartyClose, 4);
+   NOption("Keep moderate distance.", NodePartyMedium, 4);
+   NOption("Hang back.", NodePartyFar, 4);
+   NOption("[Done]", NodePartyDone, 4);
 end
 
 procedure NodePartyClose begin

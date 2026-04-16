@@ -97,7 +97,7 @@ end
 
 procedure critter_p_proc begin
    if (self_team == TEAM_PLAYER) then begin
-      party_follow_dude_point(5, 3)
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0) then party_follow_dude_point(5, 3)
       return;
    end
    if get_trish_state(TRISH_IS_DEAD) then begin
@@ -238,7 +238,7 @@ procedure Trish0 begin
    gsay_start;
    set_trish_state(DUDE_KNOWS_TRISH);
    Reply(101);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NLowOption(102, Trish1);
    NOption(103, Trish2, 4);
    NOption(104, TrishEnd, 4);
@@ -579,11 +579,11 @@ procedure TrishSleeping begin
 end
 
 procedure NodePartyMain begin
-   Reply(901);
-   NOption(902, NodePartyFollow, 4);
-   NOption(903, NodePartyWait, 4);
-   NOption(904, NodePartyHolster, 4);
-   NOption(905, NodePartyDone, 4);
+   Reply_Blank;
+   NOption("Follow me.", NodePartyFollow, 4);
+   NOption("Wait here.", NodePartyWait, 4);
+   NOption("Holster weapon.", NodePartyHolster, 4);
+   NOption("[Done]", NodePartyDone, 4);
 end
 
 procedure NodePartyWait begin
@@ -591,11 +591,11 @@ procedure NodePartyWait begin
 end
 
 procedure NodePartyFollow begin
-   Reply(906);
-   NOption(907, NodePartyClose, 4);
-   NOption(908, NodePartyMedium, 4);
-   NOption(909, NodePartyFar, 4);
-   NOption(905, NodePartyDone, 4);
+   Reply_Blank;
+   NOption("Stay close.", NodePartyClose, 4);
+   NOption("Keep moderate distance.", NodePartyMedium, 4);
+   NOption("Hang back.", NodePartyFar, 4);
+   NOption("[Done]", NodePartyDone, 4);
 end
 
 procedure NodePartyClose begin

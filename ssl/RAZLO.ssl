@@ -249,7 +249,7 @@ end
 
 procedure razlo01 begin
    Reply(104);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    if (tandi_is_kidnapped and (global_var(GVAR_TANDI_TALKED_ABOUT) == 1)) then begin
       NOption(105, razlo03, 4);
    end
@@ -328,7 +328,7 @@ end
 
 procedure razlo10 begin
    Reply(120);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(122, razlo14, 4);
    NOption(144, razlo23a, 4);
    NOption(121, razloend, 4);
@@ -394,7 +394,7 @@ end
 
 procedure razlo18 begin
    Reply(128);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(130, razlo14, 4);
    NOption(144, razlo23a, 4);
    NOption(129, razloend, 5);
@@ -402,7 +402,7 @@ end
 
 procedure razlo19 begin
    Reply(131);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(132, razlo20, 4);
    NOption(143, razlo22, 4);
    NOption(144, razlo23a, 4);
@@ -415,7 +415,7 @@ end
 
 procedure razlo21 begin
    Reply(136);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(138, razlo22, 4);
    NOption(144, razlo23a, 4);
    NLowOption(139, razlo11);
@@ -429,7 +429,7 @@ end
 
 procedure razlo23 begin
    Reply(141);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(143, razlo22, 4);
    NOption(144, razlo23a, 4);
    NOption(145, razlo27, 5);
@@ -776,7 +776,7 @@ end
 
 procedure critter_p_proc begin
    if (self_team == TEAM_PLAYER) then begin
-      party_follow_dude_point(5, 3)
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0) then party_follow_dude_point(5, 3)
       return;
    end
    if (map_var(MVAR_Caught_Stealing) == 1) then begin
@@ -836,11 +836,11 @@ procedure NodeRecruit begin
 end
 
 procedure NodePartyMain begin
-   Reply(901);
-   NOption(902, NodePartyFollow, 4);
-   NOption(903, NodePartyWait, 4);
-   NOption(904, NodePartyHolster, 4);
-   NOption(905, NodePartyDone, 4);
+   Reply_Blank;
+   NOption("Follow me.", NodePartyFollow, 4);
+   NOption("Wait here.", NodePartyWait, 4);
+   NOption("Holster weapon.", NodePartyHolster, 4);
+   NOption("[Done]", NodePartyDone, 4);
 end
 
 procedure NodePartyWait begin
@@ -848,11 +848,11 @@ procedure NodePartyWait begin
 end
 
 procedure NodePartyFollow begin
-   Reply(906);
-   NOption(907, NodePartyClose, 4);
-   NOption(908, NodePartyMedium, 4);
-   NOption(909, NodePartyFar, 4);
-   NOption(905, NodePartyDone, 4);
+   Reply_Blank;
+   NOption("Stay close.", NodePartyClose, 4);
+   NOption("Keep moderate distance.", NodePartyMedium, 4);
+   NOption("Hang back.", NodePartyFar, 4);
+   NOption("[Done]", NodePartyDone, 4);
 end
 
 procedure NodePartyClose begin

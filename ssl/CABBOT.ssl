@@ -146,7 +146,7 @@ end
 
 procedure critter_p_proc begin
    if (self_team == TEAM_PLAYER) then begin
-      party_follow_dude_point(5, 3)
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0) then party_follow_dude_point(5, 3)
       return;
    end
    if local_var(LVAR_BecomeInititate) == 1 then begin
@@ -255,7 +255,7 @@ end
 procedure cabbot01 begin
    set_local_var(LVAR_Herebefore, 1);
    Reply(101);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(103, cabbot17, 4);
    NOption(105, cabbot04, 4);
    NOption(106, cabbot12, 4);
@@ -277,7 +277,7 @@ end
 
 procedure cabbot02 begin
    Reply(108);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(109, cabbot17, 5);
    NOption(110, cabbot16, 4);
    NOption(111, cabbot04, 5);
@@ -297,7 +297,7 @@ procedure cabbot05 begin
    set_local_var(LVAR_AskedToJoin, 1);
 
    Reply(115);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(116, cabbot06, 4);
    NOption(117, cabbot10, 4);
    NOption(118, cabbot05a, 6);
@@ -305,7 +305,7 @@ end
 
 procedure cabbot05a begin
    Reply(119);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(120, cabbot06, 4);
    NOption(121, cabbot17, 6);
    NOption(122, cabbot10, 4);
@@ -315,7 +315,7 @@ procedure cabbot06 begin
    Reply(123);
    mark_on_map(AREA_GLOW)
 
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(124, cabbot07, 7);
    if ((global_var(GVAR_ARTIFACT_HOLODISK_USED) > 0) or party_has_item(PID_BOS_HOLODISK) or (global_var(GVAR_ARTIFACT_DISK_FOUND_GIVEN) > 0)) and (global_var(GVAR_QUEST_BROHOOD_1_JOIN_THEM) != 2) then begin// ARTIFACT_HOLODISK_USED, ARTIFACT_HOLODISK_POINTER, ARTIFACT_DISK_FOUND_GIVEN
       set_global_var(GVAR_QUEST_BROHOOD_1_JOIN_THEM, 1);
@@ -330,7 +330,7 @@ end
 
 procedure cabbot07 begin
    Reply(127);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    if ((global_var(GVAR_ARTIFACT_HOLODISK_USED) > 0) or party_has_item(PID_BOS_HOLODISK) or (global_var(GVAR_ARTIFACT_DISK_FOUND_GIVEN) > 0)) and (global_var(GVAR_QUEST_BROHOOD_1_JOIN_THEM) != 2) then begin// ARTIFACT_HOLODISK_USED, ARTIFACT_HOLODISK_POINTER, ARTIFACT_DISK_FOUND_GIVEN
       set_global_var(GVAR_QUEST_BROHOOD_1_JOIN_THEM, 1);
       UpReactLevel
@@ -355,7 +355,7 @@ end
 
 procedure cabbot12 begin
    Reply(132);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(133, cabbot04, 5);
    NOption(134, cabbot10, 4);
    NOption(135, cabbot17, 5);
@@ -363,7 +363,7 @@ end
 
 procedure cabbot16 begin
    Reply(136);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(137, cabbot17, 5);
    NOption(138, cabbot04, 5);
    BOption(139, cabbot16a, 4);
@@ -387,7 +387,7 @@ procedure cabbot19 begin
    else begin
       Reply(144);
    end
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    if (local_var(LVAR_AskedToJoin) == 0) then
       NOption(105, cabbot04, 5);
    else
@@ -404,7 +404,7 @@ end
 
 procedure cabbot21 begin
    Reply(149);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(150, cabbot21_1, 5);
    NOption(151, cabbotx, 4);
 end
@@ -434,7 +434,7 @@ procedure cabbot23 begin
       LevelToReact
    end
    Reply(153);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    if (local_var(LVAR_AskedToJoin) == 0) then
       NOption(105, cabbot04, 5);
    else
@@ -445,27 +445,27 @@ end
 
 procedure cabbot24 begin
    Reply(157);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(158, cabbot25, 4);
    NOption(159, cabbot32, 4);
 end
 
 procedure cabbot25 begin
    Reply(160);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(161, cabbotx3, 4);
    NOption(162, cabbot32, 4);
 end
 
 procedure cabbot27 begin
    Reply(163);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(164, cabbotopen, 4);
 end
 
 procedure cabbot28 begin
    Reply(165);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(166, cabbot31, 4);
 end
 
@@ -489,7 +489,7 @@ procedure cabbot33 begin
    else begin
       Reply(172);
    end
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(173, cabbot34, 4);
    BOption(174, cabbot33a, 4);
 end
@@ -523,7 +523,7 @@ procedure cabbot36 begin
    else begin
       Reply(184);
    end
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(185, cabbot35a, 5);
    NOption(186, cabbot37, 4);
 end
@@ -535,21 +535,21 @@ end
 
 procedure cabbot38 begin
    Reply(188);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(189, cabbot39, 5);
    NOption(190, cabbot40, 5);
 end
 
 procedure cabbot39 begin
    Reply(191);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(192, cabbot35a, 5);
    NOption(193, cabbot37, 4);
 end
 
 procedure cabbot40 begin
    Reply(194);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(195, cabbot41, 6);
    NOption(196, cabbot35a, 5);
    NOption(197, cabbot37, 4);
@@ -557,14 +557,14 @@ end
 
 procedure cabbot41 begin
    Reply(198);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(199, cabbot35a, 4);
    NOption(200, cabbot37, 4);
 end
 
 procedure cabbot42 begin
    Reply(201);
-   NOption(900, NodeRecruit, 4);
+   NOption("Join me.", NodeRecruit, 4);
    NOption(202, cabbot39, 4);
    NOption(203, cabbot35a, 5);
    NOption(204, cabbot37, 4);
@@ -776,11 +776,11 @@ procedure NodeRecruit begin
 end
 
 procedure NodePartyMain begin
-   Reply(901);
-   NOption(902, NodePartyFollow, 4);
-   NOption(903, NodePartyWait, 4);
-   NOption(904, NodePartyHolster, 4);
-   NOption(905, NodePartyDone, 4);
+   Reply_Blank;
+   NOption("Follow me.", NodePartyFollow, 4);
+   NOption("Wait here.", NodePartyWait, 4);
+   NOption("Holster weapon.", NodePartyHolster, 4);
+   NOption("[Done]", NodePartyDone, 4);
 end
 
 procedure NodePartyWait begin
@@ -788,11 +788,11 @@ procedure NodePartyWait begin
 end
 
 procedure NodePartyFollow begin
-   Reply(906);
-   NOption(907, NodePartyClose, 4);
-   NOption(908, NodePartyMedium, 4);
-   NOption(909, NodePartyFar, 4);
-   NOption(905, NodePartyDone, 4);
+   Reply_Blank;
+   NOption("Stay close.", NodePartyClose, 4);
+   NOption("Keep moderate distance.", NodePartyMedium, 4);
+   NOption("Hang back.", NodePartyFar, 4);
+   NOption("[Done]", NodePartyDone, 4);
 end
 
 procedure NodePartyClose begin
