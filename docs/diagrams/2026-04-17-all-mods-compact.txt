@@ -1,0 +1,150 @@
+================================================================================
+ fo1-et-tu-megamod  --  COMPACT MOD OVERVIEW  (2026-04-17)
+================================================================================
+
+ 6 aktywnych modow (+ 39 NPC skryptow w invasion_fix).
+
++-----------------------------+------------------------------------------------+
+| MOD                         | CO ROBI                                        |
++-----------------------------+------------------------------------------------+
+| fo1_mod_outdoorsman         | Camping: lighter=ognisko, shovel=shovel,       |
+|                             | bedroll=sen+heal, flicker, 2x fire light,      |
+|                             | GVAR_PARTY_NO_FOLLOW + edge-detect wake        |
++-----------------------------+------------------------------------------------+
+| fo1_mod_party_hotkeys       | Klawisz "0" toggle GVAR_PARTY_NO_FOLLOW        |
+|                             | (hold/follow); reset GVAR na map change        |
++-----------------------------+------------------------------------------------+
+| fo1_mod_party_armor_ext     | Runtime FID override dla custom NPC (MEDIC)    |
+|                             | per worn armor PID -> black male sprite set    |
+|                             | (hmbjmp/HMBLTR/hmbmet/hmcmbl/HMBMAX/...)       |
++-----------------------------+------------------------------------------------+
+| fo1_mod_invasion_fix        | 39 recruitable NPC: party follow check GVAR,   |
+|                             | wake-before-dialog gdy camp                    |
++-----------------------------+------------------------------------------------+
+| fo1_mod_spare_water_chip    | Drugi chip wodny dostepny do znalezienia       |
++-----------------------------+------------------------------------------------+
+| fo1_mod_new_start_plus      | Modyfikacje startu gry (premades, stats)       |
++-----------------------------+------------------------------------------------+
+
+
+================================================================================
+ OUTDOORSMAN  -- CAMP FLOW (compact)
+================================================================================
+
+   USE lighter w dziczy
+         |
+         +-->  create fire @ adjacent tile (dist=8, int=65536)
+         +-->  create fire2 @ SAME tile (doubled light)
+         +-->  spiral bedrolls (ring 0 = 5 tiles, ring+1 = +3)
+         +-->  fall_back_sf for each sleeper NPC
+         +-->  GVAR_PARTY_NO_FOLLOW = 1
+         +-->  track: firepit_obj_map, player_bedroll_map,
+                      bedroll_map, sleepers_map
+
+   USE player bedroll (tile)
+         |
+         +-->  gfade_out + crouch anim
+         +-->  game_time_advance to 06:00
+         +-->  critter_heal(dude, max_hp)
+         +-->  gfade_in + msg
+
+   USE shovel ON fire (primary or aux2)
+         |
+         +-->  destroy primary fire
+         +-->  sweep LIST_SCENERY: destroy all PID_FIRE_PIT on fire_tile
+         +-->  back_to_standing for each sleeper
+         +-->  GVAR_PARTY_NO_FOLLOW = 0
+         +-->  defer bedroll cleanup (20 ticks)
+
+   HOOK_GAMEMODECHANGE tick
+         |
+         +-->  cleanup_pending_bedrolls
+         +-->  edge detect GVAR 1->0 (hotkey unhold) -> wake sleepers
+
+   map_update_p_proc  (flicker tick)
+         |
+         +-->  every 3rd tick: modulate fire intensity 52000..65536
+
+
+================================================================================
+ PARTY_HOTKEYS  (compact)
+================================================================================
+
+   HOOK_KEYPRESS (key == DX 11 = "0", gameplay only)
+         |
+         +-->  toggle GVAR_PARTY_NO_FOLLOW 0<->1
+
+   HOOK_GAMEMODECHANGE (map change)
+         |
+         +-->  reset GVAR=0 on fresh map
+
+
+================================================================================
+ PARTY_ARMOR_EXT  (compact)
+================================================================================
+
+   HOOK_GAMEMODECHANGE (load/map/inv close)
+         |
+         +-->  refresh_all_party:
+                 iter LIST_CRITTERS, TEAM_PLAYER only
+                 compute_target_fid(get_script(obj), worn_pid)
+                 if target != current: art_change_fid_num(obj, target)
+
+   HOOK_INVENWIELD (wield/unwield armor)
+         |
+         +-->  refresh_one(obj) same logic
+
+   compute_target_fid:
+       SCRIPT_MEDIC + worn_pid -> FID from black male set
+         (jumpsuit -> hmbjmp 16777224
+          leather  -> HMBLTR 16777349
+          metal    -> hmbmet 16777225
+          combatMK1-> hmcmbt 16777226
+          combatMK2-> hmcmbl 16777344
+          power    -> hapowr 16777217
+          advpower -> HMBMAX 16777348
+          robe     -> harobe/HAROBB)
+
+
+================================================================================
+ INVASION_FIX NPC (39 NPC scripts)
+================================================================================
+
+   critter_p_proc (engine tick per NPC):
+     if self_team == TEAM_PLAYER:
+         if GVAR_PARTY_NO_FOLLOW == 0: party_follow_dude_point(5,3)
+
+   talk_p_proc (click TALK):
+     if self_team == TEAM_PLAYER:
+         if GVAR_PARTY_NO_FOLLOW == 1:
+             reg_anim back_to_standing   <-- wake before dialog
+         start_gdialog(...)
+         NodePartyMain (Follow / Wait / Holster / Done)
+
+
+================================================================================
+ GVAR SOURCES (kto ustawia GVAR_PARTY_NO_FOLLOW)
+================================================================================
+
+     SETTER              -> VALUE -> EFFECT
+   -------------------------------------------------------------------
+   outdoorsman lighter    ->   1  -> NPC hold + fall_back_sf
+   outdoorsman shovel     ->   0  -> NPC wake + follow
+   party_hotkeys "0"      ->  !x  -> toggle
+   party_hotkeys map_chg  ->   0  -> reset
+   outdoorsman edge 1->0  ->   -  -> triggers wake (no set, just reads)
+
+
+================================================================================
+ INTEGRACJE (cross-mod)
+================================================================================
+
+   outdoorsman  <--GVAR--> invasion_fix NPC scripts (follow block)
+   outdoorsman  <--GVAR--> party_hotkeys ("0" toggle)
+   outdoorsman  <--GVAR--> TANDI / IAN / VASQUEZ (follow + talk wake)
+   party_armor_ext independent (tylko SCRIPT_MEDIC match teraz)
+
+
+================================================================================
+ EOF
+================================================================================

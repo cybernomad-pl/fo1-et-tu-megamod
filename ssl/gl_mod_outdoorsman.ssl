@@ -191,8 +191,10 @@ procedure useobjon_handler begin
     // No camp on this map -- silent pass, let engine handle vanilla firepit.
     if (tracked_fire == 0) then return;
 
-    // Camp exists but player hit a different firepit (shouldn't happen often).
-    if (target != tracked_fire) then begin
+    // Accept either the primary firepit OR the aux fire2 stacked on
+    // the same tile (player can't tell them apart -- both are "our fire").
+    if (target != tracked_fire
+        and tile_num(target) != tile_num(tracked_fire)) then begin
         display_msg("This fire isn't part of your camp.");
         return;
     end
