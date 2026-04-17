@@ -4,12 +4,16 @@
 
  6 AKTYWNYCH MODOW (mods_order.txt):
 
-   fo1_mod_invasion_fix        -- 39 recruitable NPC + 27 vanilla copy
-   fo1_mod_spare_water_chip    -- start kit (lighter/rope/shovel/water chip)
+   fo1_mod_invasion_fix        -- fix vanilla invasion mechaniki
+                                  (shady_invaded/hub_invaded NPC cleanup)
+                                  + HOSTED nasz follow/wake w 39 NPC .int
+   fo1_mod_spare_water_chip    -- daje 1x water chip do inv dude na first load
+                                  (nic wiecej; duplikuje co robi init)
    fo1_mod_party_hotkeys       -- klawisz "0" hold/follow toggle
-   fo1_mod_new_start_plus      -- init hook (gl_megamod_init.int)
-   fo1_mod_outdoorsman         -- camping system (lighter/shovel/bedroll)
-   fo1_mod_party_armor_ext     -- runtime FID override custom NPC
+   fo1_mod_new_start_plus      -- init hook (gl_megamod_init.int) --
+                                  start kit LIGHTER/ROPE/SHOVEL/WATER_CHIP/...
+   fo1_mod_outdoorsman         -- camping: lighter/shovel/bedroll/rest/flicker
+   fo1_mod_party_armor_ext     -- runtime FID override custom NPC (MEDIC)
 
 
 ================================================================================
@@ -64,9 +68,23 @@
  MOD 2: fo1_mod_spare_water_chip
 ================================================================================
 
-   Drugi chip wodny dostepny do znalezienia (vanilla FO1: tylko 1).
-   Implementacja: scripted spawn na konkretnej mapie (Necropolis).
-   Scope: poza tym projektem -- Borys zainstalowal pre-built.
+   gl_mod_spare_water_chip.ssl
+         |
+         v
+   game_loaded?
+         |
+         v
+   load_array("mod_spare_water_chip")
+   if given_array["given"] != 1:
+         |
+         v
+   if not obj_is_carrying(dude, PID_WATER_CHIP):
+       add_obj_to_inven(dude, create_object(PID_WATER_CHIP))
+   given_array["given"] := 1
+   save_array
+   msg "Someone slipped a spare Water Chip into your pack."
+
+   DUPLIKAT: gl_megamod_init.ssl tez daje WATER_CHIP. Do sprzatniecia.
 
 
 ================================================================================
@@ -265,7 +283,11 @@
          |
          v
      EDGE DETECT: last_no_follow == 1 AND cur_nf == 0?
-         (= hotkey released GVAR 1->0, NOT via shovel)
+         (EDGE = wykrycie ZMIANY 1->0 miedzy tickami, nie ciagly stan.
+          Termin z elektroniki cyfrowej. Triggeruje raz, w momencie
+          gdy GVAR przechodzi z 1 na 0 -- typowo po hotkey "0" release.
+          Shovel tez triggeruje edge ale wake anim jest juz wywolany
+          w handle_shovel; tutaj redundancja, harmless.)
          for each sleeper in sleepers_map[cur]:
              reg_anim back_to_standing
          free sleepers, clear tracking
@@ -347,14 +369,26 @@
 
 
 ================================================================================
- MOD 6: fo1_mod_invasion_fix  (NPC scripts)
+ MOD 6: fo1_mod_invasion_fix  (invasion fix + hosted follow/wake)
 ================================================================================
 
-   66 .int files total. 39 sa edytowane:
-     37 "standard" invasion NPCs (AGATHA..TRISH)
-     + TANDI, IAN, VASQUEZ (custom party flow)
+   ORIGINAL SCOPE (nie tykane):
+     Fix vanilla invasion mechaniki w FO1. Gdy gracz wywola invasion
+     (shady_invaded, hub_invaded, necropolis_invaded -- world events
+     po zbyt dlugim questingu / triggery scripted), NPC w danym miescie
+     maja w map_enter_p_proc call `invasion_kill_critter`. Ten mod
+     naprawia bug(i) w tym flow -- scripts naprawcze dla 66 NPC.
 
-   Pozostale 27 to vanilla-copy (ARADESH, BARTER, BRAHMIN, ...).
+   DODATEK (nasze zmiany):
+     37 "standard" invasion NPC (AGATHA..TRISH) dostaly nowa mechanike:
+       critter_p_proc: follow check (GVAR==0 OR local_var(13) != 0)
+       talk_p_proc:    NodePartyMain z conditional "Get up and follow me"
+       NodeCampWakeUp: set LVAR 13 = 1 + reg_anim back_to_standing
+     + TANDI, IAN, VASQUEZ -- dodano tylko follow check (brak dialog option)
+
+     Pozostale 27 .int to vanilla-copy (ARADESH, BARTER, BRAHMIN,
+     CHILD, COOK, DOG, SETH, etc.) -- tylko invasion fix, zero follow
+     mechaniki. Nie sa recruitable = nie problem.
 
 
    --------------------------------------------------------------------
