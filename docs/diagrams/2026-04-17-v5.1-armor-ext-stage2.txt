@@ -1,0 +1,159 @@
+================================================================================
+ fo1-et-tu-megamod  --  ARMOR EXT STAGE 2 + 2X FIRE  v5.1  (2026-04-17)
+================================================================================
+
+ ZMIANY v5 -> v5.1
+
+   [1] Ognisko 2x jasniejsze -- drugi PID_FIRE_PIT na tym samym tile.
+       Engine sumuje overlapping lights. Distance=8 + Intensity=65536
+       kazde. Wizualnie czyta sie jako jedno ognisko (sprite overlap).
+       Cleanup w shovel: scan LIST_SCENERY na tile pierwszego firepit,
+       destroy kazdy PID_FIRE_PIT (primary + aux).
+
+   [2] fo1_mod_party_armor_ext STAGE 2 -- FID override dla MEDIKA
+       (Borys: "czarny medyk = black style player = hmbjmp").
+       Zastosowano art_change_fid_num(obj, target_fid) przy:
+         - HOOK_GAMEMODECHANGE (load, map change, inventory close)
+         - HOOK_INVENWIELD    (wield/unwield armora)
+       Lookup: get_script(obj) -> SCRIPT_MEDIC -> tabela worn_pid -> FID.
+
+
+================================================================================
+ DLACZEGO 2X OGNISKA A NIE "INTENSITY x 2"
+================================================================================
+
+   Fallout engine limits:
+     OBJ_DATA_LIGHT_DISTANCE:  max 8  (values higher = clamp to 8)
+     OBJ_DATA_LIGHT_INTENSITY: max 65536 (already at cap)
+
+   Pierwsze ognisko bylo juz na max (distance=15 clamp 8, int=65536).
+   "Razy 2" fizycznie niemozliwe na jednym obiekcie.
+
+   ROZWIAZANIE: drugi niewidzialny (sprite overlap = invisible visually)
+   firepit na TYM SAMYM tile. Engine renderuje oba sprite'y w tym samym
+   miejscu (efekt: jeden ognisk wizualnie) ale sumuje swiatla =
+   efektywnie podwojone.
+
+
+================================================================================
+ FID MAPPING -- MEDIC (black male style)
+================================================================================
+
+ Borys: "fid black male jumpsuit vault = czarny medyk = black style player"
+ Sprite set z art/critters/Critters.lst:
+
+   ARMOR TYPE              SPRITE    FID (full)
+   --------------------   --------   ----------
+   Jumpsuit/no armor      hmbjmp     16777224
+   Leather family         HMBLTR     16777349
+   Metal (MK1/MK2)        hmbmet     16777225
+   Combat MK1             hmcmbt     16777226  (no black MK1 variant)
+   Combat MK2/Brother.    hmcmbl     16777344  (the "CombatBLK")
+   Power (vanilla/BoS)    hapowr     16777217  (shared; no black variant)
+   Advanced Power         HMBMAX     16777348
+   Robe                   harobe     16777218  (default)
+   Bridgekeeper Robe      HAROBB     16777353
+
+ Match criteria: get_script(obj) == SCRIPT_MEDIC (184).
+ Worn item PID matched against PID_LEATHER_ARMOR, PID_METAL_ARMOR,
+ PID_COMBAT_ARMOR, PID_COMBAT_ARMOR_MK_II, PID_POWERED_ARMOR, itd.
+
+
+================================================================================
+ FLOW: FID OVERRIDE (party_armor_ext Stage 2)
+================================================================================
+
+   HOOK_GAMEMODECHANGE fires (load/map/inventory close)
+         |
+         v
+   refresh_all_party:
+     iter LIST_CRITTERS
+     for each TEAM_PLAYER alive critter:
+         sid = get_script(obj)
+         worn_pid = obj_pid(critter_inven_obj(obj, INVEN_TYPE_WORN))
+         target_fid = compute_target_fid(sid, worn_pid)
+         if (target_fid != 0 and obj_art_fid(obj) != target_fid):
+             art_change_fid_num(obj, target_fid)
+         |
+         v
+   HOOK_INVENWIELD fires (player swaps armor on NPC)
+         |
+         v
+   refresh_one(obj) with same logic
+
+
+================================================================================
+ FLOW: 2X CAMPFIRE (gl_mod_outdoorsman)
+================================================================================
+
+   create_campfire_adjacent:
+         |
+         v
+   fire = create_object(PID_FIRE_PIT, fire_tile, elev)
+   light: distance=8, intensity=65536
+         |
+         v
+   fire2 = create_object(PID_FIRE_PIT, fire_tile, elev)   <-- SAME TILE
+   light: distance=8, intensity=65536
+   (sprite overlap -- reads as one fire; light is doubled)
+         |
+         v
+   flicker via map_update_p_proc still modulates only `fire`
+   (fire2 keeps steady 65536 -> overall flicker subtle)
+
+
+================================================================================
+ FLOW: SHOVEL CLEANUP (aux fire sweep)
+================================================================================
+
+   handle_shovel_on_firepit:
+         |
+         v
+   fire_obj = firepit_obj_map[map]
+   fire_tile = tile_num(fire_obj)
+   destroy_object(fire_obj)
+         |
+         v
+   SWEEP: iter LIST_SCENERY
+     for each obj:
+       if obj_pid == PID_FIRE_PIT and tile_num == fire_tile:
+           destroy_object(obj)   <-- catches aux fire2
+         |
+         v
+   (rest of shovel flow unchanged: wake sleepers, release no-follow,
+    defer bedroll cleanup)
+
+
+================================================================================
+ STAN DEPLOY
+================================================================================
+
+ /KLAUDIA/megamod-build/out/:
+   gl_mod_outdoorsman.int       -- +fire2, +sweep in shovel
+   gl_party_armor_ext.int       -- MEDIC mapping (stage 2 active)
+
+ Game dir:
+   mods/fo1_mod_outdoorsman/scripts/gl_mod_outdoorsman.int
+   mods/fo1_mod_party_armor_ext/scripts/gl_party_armor_ext.int
+
+
+================================================================================
+ TODO / FUTURE
+================================================================================
+
+ 1. Rozszerzyc mapping na pozostalych custom NPC (GWEN, DIANA, PETROX,
+    TOLYA, ALYA, THERESA, ...) -- Borys musi podac sprite styl per-NPC.
+
+ 2. Dodac support dla female sprites (hfb* jesli istnieja) gdyby byla
+    zenska wersja customa w party.
+
+ 3. Zweryfikowac czy "2 firepit overlap" nie powoduje blokowania
+    tile (jesli tak: set obj_flags hide). Test w grze konieczny.
+
+ 4. Dodac toggle (ini) aby player mogl wylaczyc fire2 jesli uzna
+    swiatlo za przesadne.
+
+
+================================================================================
+ EOF
+================================================================================

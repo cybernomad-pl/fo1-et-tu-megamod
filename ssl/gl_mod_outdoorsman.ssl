@@ -318,14 +318,37 @@ procedure handle_shovel_on_firepit begin
     variable i;
     variable obj;
     variable now_ticks;
+    variable fire_tile;
+    variable lst;
+    variable scanned;
 
     map_key := "" + cur_map_index;
 
     gfade_out(600);
 
-    // 1. Destroy tracked firepit
+    // 1. Destroy tracked firepit (primary). Remember its tile so we can
+    //    sweep any stacked second firepit (aux light source).
     fire_obj := firepit_obj_map[map_key];
-    if (fire_obj != 0) then destroy_object(fire_obj);
+    fire_tile := 0;
+    if (fire_obj != 0) then begin
+        fire_tile := tile_num(fire_obj);
+        destroy_object(fire_obj);
+    end
+
+    // 1b. Sweep any extra PID_FIRE_PIT on the same tile (aux light stack).
+    if (fire_tile > 0) then begin
+        lst := list_begin(LIST_SCENERY);
+        scanned := list_next(lst);
+        while (scanned) do begin
+            if (scanned != 0
+                and obj_pid(scanned) == PID_FIRE_PIT
+                and tile_num(scanned) == fire_tile) then begin
+                destroy_object(scanned);
+            end
+            scanned := list_next(lst);
+        end
+        list_end(lst);
+    end
 
     // 2. Wake tracked sleepers: just play stand-up anim.
     //    No party_remove -- follow is blocked via GVAR_PARTY_NO_FOLLOW
@@ -466,6 +489,7 @@ procedure create_campfire_adjacent begin
     variable had_any_sleeper;
     variable ring;
     variable slot;
+    variable fire2;
 
     player_tile := tile_num(dude_obj);
     fire_tile := tile_num_in_direction(player_tile, 0, 1);
@@ -488,8 +512,18 @@ procedure create_campfire_adjacent begin
         return;
     end
 
-    set_object_data(fire, OBJ_DATA_LIGHT_DISTANCE, 15);
+    set_object_data(fire, OBJ_DATA_LIGHT_DISTANCE, 8);
     set_object_data(fire, OBJ_DATA_LIGHT_INTENSITY, 65536);
+
+    // Stack a second invisible light source on the same tile for 2x brightness.
+    // Engine sums overlapping lights, so effective radius grows + intensity x2.
+    fire2 := create_object(PID_FIRE_PIT, fire_tile, dude_elevation);
+    if (fire2 != 0) then begin
+        set_object_data(fire2, OBJ_DATA_LIGHT_DISTANCE, 8);
+        set_object_data(fire2, OBJ_DATA_LIGHT_INTENSITY, 65536);
+        // Two sprites overlap on same tile -- visually reads as one
+        // fire, but light sum is doubled.
+    end
 
     bedrolls_arr := create_array(0, 4);
     sleepers_arr := create_array(0, 4);
