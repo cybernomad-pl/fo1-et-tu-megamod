@@ -1,0 +1,29 @@
+/*
+    fo1_mod_new_start_plus -- fo1-et-tu-megamod
+    On NEW GAME start (not load), gives Vault Dweller:
+      WATER_CHIP           (easy main quest)
+      ELECTRONIC_LOCKPICKS (for lockpick mod mechanics)
+      RADIO                (for radio mod mechanics)
+    LIGHTER/SHOVEL/ROPE are owned by fo1_mod_outdoorsman.
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
+
+procedure start;
+
+procedure start begin
+    if game_loaded then begin
+        // is_loading_game = TRUE -> save load (skip, don't re-gift)
+        // is_loading_game = FALSE -> NEW GAME -> gift starting items
+        if not(is_loading_game) then begin
+            add_obj_to_inven(dude_obj, create_object(PID_WATER_CHIP, 0, 0));
+            add_obj_to_inven(dude_obj, create_object(PID_ELECTRONIC_LOCKPICKS, 0, 0));
+            add_obj_to_inven(dude_obj, create_object(PID_RADIO, 0, 0));
+            display_msg("You check your pack. Water chip, lockpicks, radio.");
+        end
+    end
+end

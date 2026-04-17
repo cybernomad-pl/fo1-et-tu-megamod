@@ -59,7 +59,6 @@ variable pending_cleanup;    // map_key -> cleanup_deadline (game_time ticks)
 variable last_map_idx;       // for map-change detection
 variable flicker_counter;    // map_update tick counter (flicker throttle)
 variable last_no_follow;     // edge detect GVAR 1->0 transition (hotkey wake)
-variable kit_given;          // starting-kit idempotency (LIGHTER/SHOVEL/ROPE)
 
 procedure start;
 procedure useobj_handler;
@@ -125,8 +124,10 @@ procedure start begin
 
         last_map_idx := cur_map_index;
 
-        // Give LIGHTER / SHOVEL / ROPE on first load (owned by this mod).
-        call give_camping_kit;
+        // NEW GAME only -- give LIGHTER / SHOVEL / ROPE once.
+        if not(is_loading_game) then begin
+            call give_camping_kit;
+        end
 
         // Enable USE action on lighter
         set_proto_data(PID_LIGHTER, PROTO_IT_FLAGS,
@@ -697,33 +698,11 @@ procedure map_update_p_proc begin
 end
 
 // ============================================================
-// STARTING KIT -- LIGHTER, SHOVEL, ROPE. Idempotent (once per save).
+// STARTING KIT -- LIGHTER, SHOVEL, ROPE. Called only on NEW GAME.
 // ============================================================
 procedure give_camping_kit begin
-    variable item;
-
-    kit_given := load_array("outdoorsman_kit");
-    if (kit_given == 0) then begin
-        kit_given := create_array_map;
-        save_array("outdoorsman_kit", kit_given);
-    end
-    if (kit_given["given"] == 1) then return;
-
-    if (obj_is_carrying_obj_pid(dude_obj, PID_LIGHTER) == 0) then begin
-        item := create_object(PID_LIGHTER, 0, 0);
-        add_obj_to_inven(dude_obj, item);
-    end
-    if (obj_is_carrying_obj_pid(dude_obj, PID_SHOVEL) == 0) then begin
-        item := create_object(PID_SHOVEL, 0, 0);
-        add_obj_to_inven(dude_obj, item);
-    end
-    if (obj_is_carrying_obj_pid(dude_obj, PID_ROPE) == 0) then begin
-        item := create_object(PID_ROPE, 0, 0);
-        add_obj_to_inven(dude_obj, item);
-    end
-
-    kit_given["given"] := 1;
-    save_array("outdoorsman_kit", kit_given);
-
+    add_obj_to_inven(dude_obj, create_object(PID_LIGHTER, 0, 0));
+    add_obj_to_inven(dude_obj, create_object(PID_SHOVEL, 0, 0));
+    add_obj_to_inven(dude_obj, create_object(PID_ROPE, 0, 0));
     display_msg("You pack lighter, shovel and rope for the road.");
 end

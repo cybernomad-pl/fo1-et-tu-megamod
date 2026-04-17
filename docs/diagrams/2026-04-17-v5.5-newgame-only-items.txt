@@ -1,0 +1,146 @@
+================================================================================
+ fo1-et-tu-megamod  --  NEW-GAME-ONLY ITEM GIFTING  v5.5  (2026-04-17)
+================================================================================
+
+ DECYZJA BORYSA:
+   -- Brak idempotency (brak save_array, brak obj_is_carrying guard).
+   -- Itemy tylko RAZ, na samym starcie NEW GAME (nie przy load).
+   -- Gracz moze sobie te itemy skombinowac poza tym = zero problem.
+
+ MECHANIZM:
+   sfall metarule 22 = METARULE_IS_LOADGAME -> `is_loading_game`
+     TRUE  = gra ladowana z save
+     FALSE = NEW GAME start
+   Sprawdzane w start() procedure each global script.
+
+
+================================================================================
+ RENAME
+================================================================================
+
+   gl_megamod_init.ssl  ->  gl_mod_new_start_plus.ssl
+   gl_megamod_init.int  ->  gl_mod_new_start_plus.int
+   (konwencja nazwy matches folder modu)
+
+
+================================================================================
+ gl_mod_new_start_plus.ssl  (finalny)
+================================================================================
+
+   include define.h, command.h, sfall headers
+
+   procedure start begin
+       if game_loaded then begin
+           if not(is_loading_game) then begin
+               add_obj_to_inven(dude, create_object(PID_WATER_CHIP))
+               add_obj_to_inven(dude, create_object(PID_ELECTRONIC_LOCKPICKS))
+               add_obj_to_inven(dude, create_object(PID_RADIO))
+               display_msg "You check your pack. Water chip, lockpicks, radio."
+           end
+       end
+   end
+
+
+================================================================================
+ gl_mod_outdoorsman.ssl -> start() + give_camping_kit (nowy fragment)
+================================================================================
+
+   procedure start begin
+       if game_loaded then begin
+           ... (load all campfire arrays, init state)
+           last_map_idx := cur_map_index
+
+           if not(is_loading_game) then begin
+               call give_camping_kit
+           end
+
+           ... (set_proto_data LIGHTER USE action, register hooks)
+       end
+   end
+
+   procedure give_camping_kit begin
+       add_obj_to_inven(dude, create_object(PID_LIGHTER))
+       add_obj_to_inven(dude, create_object(PID_SHOVEL))
+       add_obj_to_inven(dude, create_object(PID_ROPE))
+       display_msg "You pack lighter, shovel and rope for the road."
+   end
+
+
+================================================================================
+ FLOW PORONWANIE
+================================================================================
+
+  NEW GAME:
+    Engine spawns dude in Vault 13 Entrance
+         |
+         v
+    Global scripts start() fires for each mod
+         |
+         v
+    is_loading_game = FALSE
+         |
+         v
+    new_start_plus:   WATER_CHIP + LOCKPICKS + RADIO
+    outdoorsman:      LIGHTER + SHOVEL + ROPE
+         |
+         v
+    Dude has 6 items, 2 display_msg.
+
+
+  LOAD SAVE:
+    Engine loads save
+         |
+         v
+    Global scripts start() fires
+         |
+         v
+    is_loading_game = TRUE
+         |
+         v
+    new_start_plus:   skip (don't re-gift)
+    outdoorsman:      skip (don't re-gift)
+         |
+         v
+    Gracz zachowuje state z save.
+
+
+================================================================================
+ WLASNOSC ITEMOW
+================================================================================
+
+   +-----------------------------+------------------------------------+
+   | MOD                         | ITEMS NA START                     |
+   +-----------------------------+------------------------------------+
+   | fo1_mod_new_start_plus      | WATER_CHIP                         |
+   |                             | ELECTRONIC_LOCKPICKS               |
+   |                             | RADIO                              |
+   +-----------------------------+------------------------------------+
+   | fo1_mod_outdoorsman         | LIGHTER                            |
+   |                             | SHOVEL                             |
+   |                             | ROPE                               |
+   +-----------------------------+------------------------------------+
+
+
+================================================================================
+ 2x REVIEW PODSUMOWANIE
+================================================================================
+
+ REVIEW #1 (logic):
+   [OK] new_start_plus: check is_loading_game, 3 itemy, zero guards
+   [OK] outdoorsman start: is_loading_game check przed give_camping_kit
+   [OK] give_camping_kit: 3x create_object + add_obj_to_inven, jeden msg
+   [OK] zero save_array dla kit state
+   [OK] zero obj_is_carrying check (Borys: nie rob idempotency)
+
+ REVIEW #2 (deploy state):
+   [OK] mods_order.txt: 5 aktywnych modow, bez spare_water_chip
+   [OK] fo1_mod_new_start_plus/scripts/ = tylko gl_mod_new_start_plus.int
+   [OK] fo1_mod_outdoorsman/scripts/ = gl_mod_outdoorsman.int
+   [OK] usuniete: gl_megamod_init.ssl (repo + build), .int (deploy),
+                  fo1_mod_spare_water_chip (folder + mods_order)
+   [OK] kompilacja obu SSL bez errorow
+
+
+================================================================================
+ EOF
+================================================================================
