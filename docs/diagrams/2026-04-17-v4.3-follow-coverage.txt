@@ -1,0 +1,174 @@
+================================================================================
+ fo1-et-tu-megamod  --  FOLLOW MECHANISM v4.3  (2026-04-17)
+================================================================================
+
+ SINGLE SOURCE OF TRUTH:  GVAR_PARTY_NO_FOLLOW  (vanilla FO1 global)
+
+ TRZY TRIGGERY:
+   1. outdoorsman  -- set GVAR=1 przy camp, GVAR=0 przy shovel
+   2. party_hotkeys -- klawisz "0" toggle GVAR (hold position hotkey)
+   3. map change (party_hotkeys) -- GVAR=0 reset na nowej mapie
+
+ KAZDY RECRUITABLE NPC w critter_p_proc:
+      if (self_team == TEAM_PLAYER) then begin
+         if (global_var(GVAR_PARTY_NO_FOLLOW) == 0) then
+            party_follow_dude_point(5, 3)
+         return;
+      end
+
+ TANDI (extra): if Tandi_In_Party then party_member_follow_dude
+                (vanilla macro tez sprawdza GVAR internally)
+
+ IAN, VASQUEZ: party_member_follow_dude (vanilla, respektuje GVAR)
+
+================================================================================
+ FLOW
+================================================================================
+
+   USE lighter w dziczy
+         |
+         v
+   create_campfire_adjacent
+   reg_anim fall_back_sf(-1) dla kazdego NPC party
+         |
+         v
+   set_global_var(GVAR_PARTY_NO_FOLLOW, 1)   <-- TRIGGER
+         |
+         v
+   NPC critter_p_proc tick:
+      self_team == TEAM_PLAYER? YES
+      GVAR == 0? NO (=1)
+      -> skip party_follow_dude_point
+      -> NPC stoi (lezy) w miejscu
+
+
+   USE ON shovel na tracked firepit
+         |
+         v
+   handle_shovel_on_firepit
+   destroy firepit
+   reg_anim back_to_standing dla kazdego sleeper
+         |
+         v
+   set_global_var(GVAR_PARTY_NO_FOLLOW, 0)   <-- RESET
+         |
+         v
+   NPC critter_p_proc tick:
+      GVAR == 0? YES
+      -> party_follow_dude_point(5, 3) wraca
+      -> NPC goni dude normalnie
+
+
+   Hotkey "0" (DX 11, w game_mode 0 only):
+         |
+         v
+   toggle GVAR_PARTY_NO_FOLLOW 0<->1
+   display_msg "Party: FOLLOW" / "Party: HOLD POSITION"
+
+
+   Map change (gamemode_handler w party_hotkeys):
+         |
+         v
+   last_map_index != cur_map_index?
+         |
+         v YES
+   if GVAR != 0: set GVAR = 0 (reset no-follow na nowej mapie)
+
+
+================================================================================
+ COVERAGE TABLE
+================================================================================
+
+ [X] = respektuje GVAR_PARTY_NO_FOLLOW
+ [?] = niepewny (brak source, vanilla engine default)
+ [!] = KNOWN BROKEN (bedzie gonic przez camp)
+
+ ---- VANILLA FO1 PARTY (party.h _In_Party macros) -------------------
+   [X] IAN        -- vanilla party_member_follow_dude (already there)
+   [X] VASQUEZ    -- vanilla party_member_follow_dude
+   [X] TANDI      -- dodalam party_member_follow_dude w critter_p_proc
+   [!] DOGMEAT    -- fo1_base/scripts/DOGMEAT.int (NO SOURCE in workspace)
+   [!] TYCHO      -- fo1_base/scripts/TYCHO.int (NO SOURCE)
+   [!] KATJA      -- fo1_base/scripts/KATJA.int (NO SOURCE)
+   [!] MrHandyC   -- fo1_base/scripts/MRHANDYC.int (NO SOURCE)
+   [!] EYEBOT     -- fo1_base/scripts/EYEBOT.int (NO SOURCE)
+   [!] RAE        -- fo1_base/scripts/RAE.int (NO SOURCE)
+
+ ---- ET TU CUSTOM / RECOMPILED (workspace ssl/) ----------------------
+ 38 NPC zmienione: wait_mode ini lookup -> GVAR check
+
+   [X] AGATHA      [X] ALYA        [X] CABBOT       [X] CITIZEN
+   [X] CURTIS      [X] DARREL      [X] DIANA        [X] GENGHOUL
+   [X] GENRAIDR    [X] GENVAULT    [X] GHREFUGE     [X] GWEN
+   [X] HAROLD      [X] ISMARC      [X] LENORE       [X] LORENZO
+   [X] LORRAINE    [X] LOXLEY      [X] LYLE         [X] MANAGER
+   [X] MARCELLE    [X] MEDIC       [X] MICHAEL      [X] MISSBRO
+   [X] OFFICER     [X] PALGUARD    [X] PETROX       [X] RAIDGRD
+   [X] RAIDPRIS    [X] RAZLO       [X] REBEL        [X] SINTHIA
+   [X] SOPHIA      [X] TALUS       [X] THERESA      [X] TOLYA
+   [X] TRISH       [X] VASQUEZ
+
+ ---- NIE-PARTY NPCs (nie tykam, nie maja TEAM_PLAYER flow) -----------
+   DOG, DOG2, BRAHMIN, CHILD, CINDY, COOK, GARL, JARVIS, LOSER,
+   PLEASANT, SETH, SETH2, SSGUIDE, TGUARD, V13COMP, VALTCTZN,
+   VALTCUPL, WIFE, WOMEN, WORKBNCH, WTRGRD, WTRTHIEF, BARTER,
+   BGUARD, ARADESH, HOTGHOUL
+
+
+================================================================================
+ DEPLOY STATE (commit 9f52611)
+================================================================================
+
+ BUILD OUT:  /KLAUDIA/megamod-build/out/*.int
+   -- 39 NPC ints (38 above + TANDI)
+   -- gl_mod_outdoorsman.int
+   -- gl_party_hotkeys.int (zalozenie z poprzednich)
+
+ DEPLOYED:
+   fo1_mod_outdoorsman/scripts/gl_mod_outdoorsman.int
+   fo1_mod_invasion_fix/scripts/<NPC>.int  (x 39)
+   fo1_mod_party_hotkeys/scripts/gl_party_hotkeys.int
+                         (deployed wczesniej, bez zmian w tej iteracji)
+
+
+================================================================================
+ KNOWN ISSUES
+================================================================================
+
+ 1. Dogmeat / Tycho / Katja / MrHandyC / Eyebot / Rae
+    -- beda gonic przez camp bo nie maja source do edycji
+    -- workaround: nie uzywaj ich w partii podczas campu, albo
+       shovel przed travel
+    -- full fix wymaga int->ssl decompilera
+
+ 2. ABANDON CAMP (gracz wyjdzie z mapy BEZ shovel)
+    -- bedrolle / firepit zostaja w workspace tracking (stale obj_id)
+    -- GVAR_PARTY_NO_FOLLOW nie jest resetowane przez outdoorsman
+       (party_hotkeys resetuje na map change, wiec OK)
+    -- NPC na starej mapie zostaja leżący (reg_anim persistent)
+    -- jak gracz wraca -- engine NPC despawnowal (encounter map),
+       nowy spawn bez campfire tracking
+
+ 3. HOTKEY vs CAMP interakcja:
+    -- hotkey "0" ustawia GVAR=1, shovel tez resetuje do 0
+    -- jak gracz ma hotkey=1 przed campem i shovel -- hotkey stan
+       stracony (minor side-effect)
+
+
+================================================================================
+ ZMIANY v3 -> v4 -> v4.1 -> v4.2 -> v4.3
+================================================================================
+
+ v3:   party_remove/party_add (dzialalo, ale Borys odrzucil)
+ v4:   set_party_waiting/end_party_waiting (nie dziala w global script)
+ v4.1: GVAR_PARTY_NO_FOLLOW (nie dziala dla Tandi/Dogmeat/etc. bo
+                             nie wywolywali party_member_follow_dude)
+ v4.2: back to party_remove (Borys: NIGDY TEGO NIE RÓB)
+ v4.3: edytuja recruitable NPC scripts, dodalam GVAR check w ich
+       critter_p_proc. Single source of truth: GVAR_PARTY_NO_FOLLOW.
+       Brak manipulacji party list. Ta wersja DEPLOYED.
+
+
+================================================================================
+ EOF
+================================================================================
