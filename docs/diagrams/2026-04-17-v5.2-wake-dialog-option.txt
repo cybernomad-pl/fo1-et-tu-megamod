@@ -1,0 +1,118 @@
+================================================================================
+ fo1-et-tu-megamod  --  WAKE DIALOG OPTION  v5.2  (2026-04-17)
+================================================================================
+
+ ZMIANY v5.1 -> v5.2
+
+   [1] Revert wake-before-talk w 37 NPC (async anim przed dialogiem --
+       chaotyczny przy "Wait here" itd). Zastepujemy jawna opcja.
+
+   [2] Nowa opcja dialogowa "Get up and follow me." w NodePartyMain 37 NPC.
+       Widoczna tylko gdy global_var(GVAR_PARTY_NO_FOLLOW) == 1 (camp).
+
+   [3] Per-NPC LVAR 15 override dla follow. Ustawiany przez NodeCampWakeUp
+       -- ignoruje globalna flage GVAR, NPC goni dude mimo ze reszta party
+       nadal spi.
+
+   [4] Hotkey "0" edge wake (1->0) w outdoorsman -- bez zmian, dziala juz
+       od v5 (gamemode_handler edge detect + reg_anim back_to_standing).
+
+
+================================================================================
+ FLOW: DIALOG WAKE (per-NPC)
+================================================================================
+
+   Gracz klika TALK na lezacym NPC  (GVAR_PARTY_NO_FOLLOW == 1)
+         |
+         v
+   NPC.talk_p_proc:
+     self_team == TEAM_PLAYER  -> YES
+     start_gdialog -> NodePartyMain
+         |
+         v
+   NodePartyMain:
+     Reply_Blank
+     if GVAR == 1:
+        NOption "Get up and follow me." -> NodeCampWakeUp
+     NOption "Follow me."
+     NOption "Wait here."
+     NOption "Holster weapon."
+     NOption "[Done]"
+         |
+         v Gracz wybiera "Get up and follow me."
+   NodeCampWakeUp:
+     set_local_var(15, 1)                         <-- per-NPC override
+     reg_anim back_to_standing
+     display_msg "<NPC> gets up and follows you."
+
+
+================================================================================
+ FLOW: CRITTER_P_PROC FOLLOW OVERRIDE
+================================================================================
+
+   critter_p_proc (engine tick per NPC):
+         |
+         v
+   self_team == TEAM_PLAYER?   -> YES (party)
+         |
+         v
+   GVAR == 0?                  -> jezeli YES, normalny follow
+                                  if NO (nadal camp), sprawdz LVAR 15:
+         |
+         v
+   local_var(15) != 0?         -> YES = wake override, follow mimo camp
+                                  NO = pozostaje lezacy, skip follow
+
+
+================================================================================
+ GVAR / LVAR STANY
+================================================================================
+
+   +---------------+----------------+-----------------+-----------------+
+   | Scenariusz    | GVAR_NO_FOLLOW | LVAR 15 (NPC)   | NPC zachowanie  |
+   +---------------+----------------+-----------------+-----------------+
+   | normalny      |       0        |    0 (default)  | follow          |
+   | camp (lezy)   |       1        |    0            | stoi/lezy       |
+   | camp + wake   |       1        |    1 (set via   | follow (solo)   |
+   | (dialog)      |                |     dialog)     |                 |
+   | hotkey "0"    |     1<->0      |    dowolne      | toggle all      |
+   | shovel        |     1 -> 0     |    dowolne      | wszyscy follow  |
+   +---------------+----------------+-----------------+-----------------+
+
+
+================================================================================
+ KNOWN ISSUES
+================================================================================
+
+ 1. LVAR 15 nie resetuje sie miedzy campami. Jesli gracz wybudzi NPC w
+    campie #1 przez dialog (LVAR=1), w campie #2 ten NPC nie bedzie lezal
+    -- GVAR=1 ale LVAR=1 override follow.
+    Workaround: nie robic dialog-wake, uzywac hotkey "0" (wszyscy wracaja
+    przez edge detect bez tykania LVAR).
+    Full fix: dodac procedure map_enter_p_proc reset LVAR 15 = 0 (kazda
+    zmiana mapy reset).
+
+ 2. Anim back_to_standing leci asynchronicznie -- follow moze zaczac sie
+    przed anim konczem. NPC przez chwile wyglada dziwnie (animacja +
+    ruch). Akceptowalne bez complex synchro.
+
+ 3. Tandi, Ian, Vasquez maja custom talk flows -- nie dostali dialog
+    option "Get up and follow me". Budzenie ich przez hotkey "0".
+
+
+================================================================================
+ SCOPE
+================================================================================
+
+ Zmienione: 37 NPC (AGATHA ALYA CABBOT CITIZEN CURTIS DARREL DIANA
+ GENGHOUL GENRAIDR GENVAULT GHREFUGE GWEN HAROLD ISMARC LENORE LORENZO
+ LORRAINE LOXLEY LYLE MANAGER MARCELLE MEDIC MICHAEL MISSBRO OFFICER
+ PALGUARD PETROX RAIDGRD RAIDPRIS RAZLO REBEL SINTHIA SOPHIA TALUS
+ THERESA TOLYA TRISH).
+
+ Nie zmienione: TANDI, IAN, VASQUEZ (custom flows).
+
+
+================================================================================
+ EOF
+================================================================================

@@ -119,7 +119,7 @@ end
 
 procedure critter_p_proc begin
    if (self_team == TEAM_PLAYER) then begin
-      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0) then party_follow_dude_point(5, 3)
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0 or local_var(15) != 0) then party_follow_dude_point(5, 3)
       return;
    end
    if (tmp_hostile) then begin
@@ -136,11 +136,6 @@ end
 
 procedure talk_p_proc begin
    if (self_team == TEAM_PLAYER) then begin
-      if (global_var(GVAR_PARTY_NO_FOLLOW) == 1) then begin
-         reg_anim_begin();
-         reg_anim_animate(self_obj, ANIM_back_to_standing, -1);
-         reg_anim_end();
-      end
       start_gdialog(NAME, self_obj, 4, -1, -1);
       gSay_Start;
       call NodePartyMain;
@@ -681,8 +676,13 @@ end
 procedure combat_p_proc begin
 end
 
+procedure NodeCampWakeUp;
+
 procedure NodePartyMain begin
    Reply_Blank;
+   if (global_var(GVAR_PARTY_NO_FOLLOW) == 1) then begin
+      NOption("Get up and follow me.", NodeCampWakeUp, 4);
+   end
    NOption("Follow me.", NodePartyFollow, 4);
    NOption("Wait here.", NodePartyWait, 4);
    NOption("Holster weapon.", NodePartyHolster, 4);
@@ -719,4 +719,12 @@ procedure NodePartyHolster begin
 end
 
 procedure NodePartyDone begin
+end
+
+procedure NodeCampWakeUp begin
+   set_local_var(15, 1);
+   reg_anim_begin();
+   reg_anim_animate(self_obj, ANIM_back_to_standing, -1);
+   reg_anim_end();
+   display_msg(obj_name(self_obj) + " gets up and follows you.");
 end
