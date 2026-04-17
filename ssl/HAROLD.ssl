@@ -119,7 +119,7 @@ end
 
 procedure critter_p_proc begin
    if (self_team == TEAM_PLAYER) then begin
-      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0 or local_var(15) != 0) then party_follow_dude_point(5, 3)
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0 or local_var(13) != 0) then party_follow_dude_point(5, 3)
       return;
    end
    if (tmp_hostile) then begin
@@ -722,7 +722,7 @@ procedure NodePartyDone begin
 end
 
 procedure NodeCampWakeUp begin
-   set_local_var(15, 1);
+   set_local_var(13, 1);
    reg_anim_begin();
    reg_anim_animate(self_obj, ANIM_back_to_standing, -1);
    reg_anim_end();

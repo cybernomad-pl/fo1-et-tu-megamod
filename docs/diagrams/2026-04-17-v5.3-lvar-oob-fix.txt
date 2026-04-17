@@ -1,0 +1,101 @@
+================================================================================
+ fo1-et-tu-megamod  --  LVAR OUT-OF-BOUNDS FIX  v5.3  (2026-04-17)
+================================================================================
+
+ ROOT CAUSE: NPC gonili za graczem pomimo GVAR_PARTY_NO_FOLLOW == 1.
+
+================================================================================
+ BUG: local_var(15) out-of-bounds
+================================================================================
+
+ SCRIPTS.LST metadata:
+   Medic.int     # local_vars=15     -> LVARy 0..14 (15 slotow)
+   Petrox.int    # local_vars=15
+   Gwen.int      # local_vars=15
+   ...  (wszystkie 37 NPC)
+
+ MOJA ZMIANA v5.2:
+   if (global_var(GVAR_PARTY_NO_FOLLOW) == 0 or local_var(15) != 0) ...
+
+ local_var(15) -> INDEX OUT OF RANGE (poza 0..14)
+ Engine zwraca NIEOKRESLONA wartosc (stale memory / zero / random).
+ Wiele odczytow = non-zero => warunek OR zawsze TRUE => follow.
+
+
+================================================================================
+ FIX: local_var(13) zamiast local_var(15)
+================================================================================
+
+ LVAR usage heatmapa w 37 NPC scriptach:
+     LVAR 0: 23x
+     LVAR 1-11: rozne uzycia
+     LVAR 12: 0x  <-- WOLNY
+     LVAR 13: 0x  <-- WOLNY
+     LVAR 14: 1x
+
+ Wybrany: LVAR 13.
+ -- W zakresie 0..14 (valid dla local_vars=15)
+ -- Nie uzywany w zadnym z 37 NPC
+ -- Zero ryzyka kolizji
+
+
+================================================================================
+ LOGIKA DECYZJI FOLLOW (finalna)
+================================================================================
+
+  critter_p_proc tick dla NPC w party:
+        |
+        v
+  self_team == TEAM_PLAYER?
+        |
+        v YES
+  (global_var(GVAR_PARTY_NO_FOLLOW) == 0) OR (local_var(13) != 0)?
+    |                                      |
+    v YES = follow                         v NO oba: SKIP follow
+  party_follow_dude_point(5, 3)            NPC stoi/lezy
+
+
+ Tabela stanow:
+
+  GVAR  LVAR13  -> Zachowanie                   | Kiedy
+  ----  ------     ------------                 | -------------
+    0     0     -> follow (normal)              | poza campem
+    1     0     -> no follow (sleeper)          | w campie
+    1     1     -> follow (wake override)       | po dialog "Get up..."
+    0     1     -> follow (redundant, OK)       | po shovel gdy LVAR juz 1
+
+ shovel -> GVAR 1->0, LVAR nie tykany: wszyscy follow (GVAR=0 wystarcza).
+ hotkey "0" -> toggle GVAR: NPC follow/hold zaleznie od GVAR.
+ dialog wake -> set LVAR 13 = 1 dla tego NPC: follow solo w campie.
+
+
+================================================================================
+ WERYFIKACJA
+================================================================================
+
+ Przed fix:
+   local_var(15) out-of-bounds, czesto non-zero
+   -> NPC zawsze follow, GVAR ignorowany
+   -> Borys: "NPC chodza za mna caly czas"
+
+ Po fix:
+   local_var(13) w zakresie, domyslnie 0 (vanilla Fallout: LVARs
+   inicjalizowane na 0 przy creation)
+   -> NPC respektuja GVAR_PARTY_NO_FOLLOW
+   -> wake override tylko po dialogu
+
+
+================================================================================
+ KNOWN ISSUES (unchanged od v5.2)
+================================================================================
+
+ 1. LVAR 13 nie resetuje sie miedzy campami -- raz obudzony przez dialog
+    goni na zawsze. Rozwiazanie: dodac map_enter_p_proc reset LVAR 13 = 0
+    (nastepna iteracja).
+
+ 2. Tandi/Ian/Vasquez nie maja tej mechaniki -- obudz hotkey "0".
+
+
+================================================================================
+ EOF
+================================================================================
