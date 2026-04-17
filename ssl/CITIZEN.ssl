@@ -135,6 +135,11 @@ end
 
 procedure talk_p_proc begin
    if (self_team == TEAM_PLAYER) then begin
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 1) then begin
+         reg_anim_begin();
+         reg_anim_animate(self_obj, ANIM_back_to_standing, -1);
+         reg_anim_end();
+      end
       start_gdialog(NAME, self_obj, 4, -1, -1);
       gSay_Start;
       call NodePartyMain;

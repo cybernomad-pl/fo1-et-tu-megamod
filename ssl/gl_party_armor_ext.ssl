@@ -1,0 +1,124 @@
+/*
+    Party Armor Extension -- fo1-et-tu-megamod
+
+    PURPOSE
+      Runtime FID override for custom party NPCs (Medyk, Gwen, Diana, ...)
+      whose sprites don't change when they wear armor. Vanilla sfall
+      party_armor.ini handles this only for canonical FO1 party members
+      (Ian, Katja, Tandi, Vasquez) because it matches by proto PID and
+      our custom NPCs share generic proto PIDs with mook NPCs.
+
+    DESIGN (two-stage)
+      STAGE 1 (current) -- DUMP ONLY
+        On every map change, scan LIST_CRITTERS and dump for TEAM_PLAYER
+        critters: obj_pid, obj_art_fid, worn_armor_pid, team, script_id.
+        Output: party_armor_ext.ini [dump_<map_idx>].
+        Purpose: figure out which PID/FID mapping we need for overrides.
+
+      STAGE 2 (future) -- HOOK_ADJUSTFID OVERRIDE
+        HOOK_ADJUSTFID fires per-frame per-critter before rendering.
+        Read [override_<script_id>] sections from party_armor_ext.ini,
+        match by obj script_id + worn armor PID, return adjusted FID.
+
+    WHY SEPARATE MOD
+      -- outdoorsman is about camping, not cosmetics
+      -- party_armor.ini is engine-level and limited to proto-unique NPCs
+      -- this mod is a USER-SPACE layer that overrides FID at render time
+         for obj instances (script_id), not proto (pid)
+
+    HOOKS
+      HOOK_GAMEMODECHANGE -- map-change dump
+      HOOK_ADJUSTFID      -- per-frame FID override (placeholder, disabled)
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
+
+#define LOG(s, k, v) set_ini_setting("party_armor_ext.ini|" + s + "|" + k, v)
+
+procedure start;
+procedure gamemode_handler;
+procedure adjustfid_handler;
+procedure dump_party_members;
+
+variable last_map_idx;
+
+procedure start begin
+    if game_loaded then begin
+        last_map_idx := cur_map_index;
+        register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
+        register_hook_proc(HOOK_ADJUSTFID, adjustfid_handler);
+        LOG("start", "loaded", 1);
+    end
+end
+
+// ============================================================
+// HOOK_GAMEMODECHANGE -- dump party on map change
+// ============================================================
+procedure gamemode_handler begin
+    if (cur_map_index == last_map_idx) then return;
+    last_map_idx := cur_map_index;
+    call dump_party_members;
+end
+
+// ============================================================
+// HOOK_ADJUSTFID -- per-critter FID override (STUB for Stage 2)
+//
+// Args: (obj)  -- the critter being rendered.
+// Return: set_sfall_return(new_fid) to override, or nothing to keep engine FID.
+//
+// TODO Stage 2: read [override_<obj_script_id>] from party_armor_ext.ini,
+// match by obj_pid + worn armor PID, return mapped FID.
+// ============================================================
+procedure adjustfid_handler begin
+    // No-op for now. Engine FID is kept.
+end
+
+// ============================================================
+// DUMP -- scan TEAM_PLAYER critters, log PID/FID/worn_armor
+// ============================================================
+procedure dump_party_members begin
+    variable lst;
+    variable obj;
+    variable section;
+    variable idx;
+    variable key;
+    variable worn_obj;
+    variable worn_pid;
+
+    section := "dump_" + cur_map_index;
+    idx := 0;
+
+    LOG(section, "_map", cur_map_index);
+
+    lst := list_begin(LIST_CRITTERS);
+    obj := list_next(lst);
+    while (obj) do begin
+        if (obj != 0 and not(is_critter_dead(obj))) then begin
+            // Only party members (TEAM_PLAYER).
+            if (get_team(obj) == TEAM_PLAYER) then begin
+                key := "" + idx;
+
+                worn_obj := critter_inven_obj(obj, INVEN_TYPE_WORN);
+                if (worn_obj != 0) then
+                    worn_pid := obj_pid(worn_obj);
+                else
+                    worn_pid := 0;
+
+                LOG(section, key + "_pid",       obj_pid(obj));
+                LOG(section, key + "_fid",       obj_art_fid(obj));
+                LOG(section, key + "_worn_pid",  worn_pid);
+                LOG(section, key + "_team",      get_team(obj));
+                LOG(section, key + "_obj_id",    obj);
+                idx := idx + 1;
+            end
+        end
+        obj := list_next(lst);
+    end
+    list_end(lst);
+
+    LOG(section, "_count", idx);
+end

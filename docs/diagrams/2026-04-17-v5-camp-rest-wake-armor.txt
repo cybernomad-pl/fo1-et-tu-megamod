@@ -1,0 +1,263 @@
+================================================================================
+ fo1-et-tu-megamod  --  CAMP + REST + WAKE + ARMOR EXT  v5  (2026-04-17)
+================================================================================
+
+ ZMIANY W TEJ ITERACJI (v4.3 -> v5)
+
+   [1] Lighter light distance 5 -> 8 (max). Intensity juz max (65536).
+   [2] Campfire flicker (map_update_p_proc, co 3 tick, intensity 52000-65536).
+   [3] Player bedroll USE = rest until morning + heal dude to max HP.
+   [4] TALK na recruitable NPC w campie -> reg_anim back_to_standing
+       PRZED start_gdialog (39 NPC: 37 standard + IAN + VASQUEZ + TANDI).
+   [5] Hotkey "0" unhold (GVAR 1->0 edge) -> wake animacja wszystkich
+       sleeperow, potem follow resume.
+   [6] Usunieto display_msg "Party: FOLLOW/HOLD POSITION".
+   [7] Wyciagnieto debug PID/FID dump z outdoorsman do NOWEGO modu
+       fo1_mod_party_armor_ext (osobny plik, osobna logika).
+   [8] Stub HOOK_ADJUSTFID dla przyszlego FID override custom NPCs.
+
+
+================================================================================
+ PLIKI ZMIENIONE
+================================================================================
+
+   ssl/gl_mod_outdoorsman.ssl      -- +flicker, +player rest, +hotkey-wake,
+                                      -debug dump
+   ssl/gl_party_hotkeys.ssl        -- -display_msg
+   ssl/gl_party_armor_ext.ssl      -- NOWY plik. Stage 1 dump.
+   ssl/[37 NPC].ssl                -- +wake before dialog (AGATHA..TRISH)
+   ssl/IAN.ssl                     -- +wake before dialog (custom talk flow)
+   ssl/VASQUEZ.ssl                 -- +wake before dialog (custom talk flow)
+   ssl/TANDI.ssl                   -- +wake before dialog (custom talk flow)
+
+
+================================================================================
+ FLOW: LIGHTER (make camp)
+================================================================================
+
+   USE lighter (inventory)
+         |
+         v
+   is_wilderness?          NO -> toggle lighter flame only
+         |
+         v YES
+   map_has_campfire?       YES -> msg "already burns" + abort
+         |
+         v NO
+   gfade_out
+   create firepit (distance=15 clamp 8, intensity=65536)
+         |
+         v
+   for each party NPC (TEAM_PLAYER, not dude):
+      ring = slot/6, dir = slot%6, dist = 5 + ring*3
+      create bedroll on ring tile
+      move_to(npc, bedroll_tile)
+      reg_anim ANIM_fall_back_sf(-1)   <-- NPC lezy
+      track in sleepers_map[map_key]
+         |
+         v
+   set_global_var(GVAR_PARTY_NO_FOLLOW, 1)
+   track player_bedroll in player_bedroll_map[map_key]
+   gfade_in
+   display_msg "You make camp..."
+
+
+================================================================================
+ FLOW: PLAYER BEDROLL USE = REST UNTIL MORNING
+================================================================================
+
+   USE player bedroll (world obj on map)
+         |
+         v
+   HOOK_USEOBJ fires with item = bedroll obj
+         |
+         v
+   obj_pid in (PID_BED_1, PID_BED_2)?
+   item == player_bedroll_map[cur_map]?    <-- TRACKED = OURS
+         |
+         v YES
+   handle_player_bedroll_rest:
+      combat? -> abort msg
+      gfade_out
+      reg_anim ANIM_magic_hands_ground (crouch-ish)
+      compute hours_to_0600
+      game_time_advance(hours * 36000)
+      critter_heal(dude, max_hp)
+      gfade_in
+      msg "You rest until morning"
+
+
+================================================================================
+ FLOW: CAMPFIRE FLICKER (map_update_p_proc)
+================================================================================
+
+   Global script map_update_p_proc  (auto-called by sfall)
+         |
+         v
+   flicker_counter++
+   counter % 3 == 0?    NO -> skip
+         |
+         v YES
+   get_game_mode != 0?  YES -> skip (only in gameplay)
+         |
+         v NO
+   fire = firepit_obj_map[cur_map]
+   fire == 0?           YES -> skip (no camp here)
+         |
+         v NO
+   intensity = 52000 + random(0, 13536)
+   set_object_data(fire, OBJ_DATA_LIGHT_INTENSITY, intensity)
+   tile_refresh_display
+
+
+================================================================================
+ FLOW: SHOVEL ON FIREPIT
+================================================================================
+
+   USE shovel ON tracked firepit
+         |
+         v
+   HOOK_USEOBJON (user, shovel, firepit)
+   firepit == firepit_obj_map[cur_map]?
+         |
+         v YES
+   gfade_out
+   destroy firepit
+   for each sleeper: reg_anim ANIM_back_to_standing
+   set_global_var(GVAR_PARTY_NO_FOLLOW, 0)
+   pending_cleanup[map] = now + 20 ticks (bedroll delay)
+   gfade_in
+   msg "You shovel dirt..."
+   give_exp(10)
+
+
+================================================================================
+ FLOW: HOTKEY "0" TOGGLE + WAKE EDGE DETECT
+================================================================================
+
+   Press "0"  (party_hotkeys, DX 11, gameplay only)
+         |
+         v
+   GVAR_PARTY_NO_FOLLOW = toggle (NO display_msg anymore)
+
+   ---- THEN, in outdoorsman gamemode_handler tick: ----
+
+   cur_nf = global_var(GVAR_PARTY_NO_FOLLOW)
+   last_no_follow == 1 and cur_nf == 0?     <-- EDGE 1->0 (unhold)
+         |
+         v YES
+   for each obj in sleepers_map[cur_map]:
+      reg_anim ANIM_back_to_standing
+   free sleepers_map[cur_map]
+         |
+         v
+   last_no_follow = cur_nf  (persist for next tick)
+
+
+================================================================================
+ FLOW: TALK ON SLEEPING NPC
+================================================================================
+
+   Click TALK on NPC lying in camp
+         |
+         v
+   engine calls talk_p_proc on NPC
+         |
+         v
+   self_team == TEAM_PLAYER?
+         |
+         v YES
+   global_var(GVAR_PARTY_NO_FOLLOW) == 1?   <-- STILL IN CAMP MODE
+         |
+         v YES
+   reg_anim ANIM_back_to_standing          <-- queued, plays async
+         |
+         v
+   start_gdialog(NAME, ...)                <-- dialog opens immediately
+   (NPC stands up "behind" the dialog window; by close, NPC is standing)
+
+
+================================================================================
+ FOLLOW COVERAGE (unchanged from v4.3)
+================================================================================
+
+   [X] 39 custom NPCs: TANDI, IAN, VASQUEZ + 36 invasion_fix NPCs
+   [!] 6 vanilla no-source: DOGMEAT, TYCHO, KATJA, MRHANDYC, EYEBOT, RAE
+
+
+================================================================================
+ NOWY MOD: fo1_mod_party_armor_ext  (Stage 1 = DUMP)
+================================================================================
+
+ CEL:
+   Runtime FID override dla custom party NPC (Medyk, Gwen, Diana, ...)
+   ktorych sprite nie zmienia sie po zalozeniu pancerza.
+
+ DLACZEGO OSOBNY MOD:
+   - party_armor.ini (engine-level) matchuje po proto PID
+   - custom NPC dziela PID z generic mookami -> engine nie rozroznia
+   - potrzebny user-space layer matchujacy po SCRIPT ID lub obj_id
+
+ STAGE 1 (obecna) -- DUMP:
+   HOOK_GAMEMODECHANGE:
+      na map change, skan LIST_CRITTERS
+      dla kazdego TEAM_PLAYER critter -> party_armor_ext.ini [dump_<map>]:
+         N_pid, N_fid, N_worn_pid, N_team, N_obj_id
+   HOOK_ADJUSTFID: no-op (stub).
+
+ STAGE 2 (przyszlosc) -- OVERRIDE:
+   czytaj [override_<script_id>] z party_armor_ext.ini
+   match obj + worn_pid -> zwroc adjusted_fid przez set_sfall_return
+   (per-klatka, per-critter, przed renderingiem)
+
+ JAK ZEBRAC DANE:
+   1. Borys rekrutuje MEDIK/GWEN/DIANA/etc, zaklada im rozne pancerze
+   2. Wchodzi na mape (jakakolwiek) -> trigger dump
+   3. Kopiuje party_armor_ext.ini sekcje [dump_<map>]
+   4. Sfall party_armor.ini dla Ian/Tandi/Katja/Vasquez pokaze
+      odpowiednie CombatBLK/Power/etc FID dla generic proto
+   5. Na podstawie porownania tworzymy [override_<script>] sekcje
+
+
+================================================================================
+ DEPLOY STATE
+================================================================================
+
+   /KLAUDIA/megamod-build/out/:
+      gl_mod_outdoorsman.int       (+flicker, +rest, +wake-edge, -dump)
+      gl_party_hotkeys.int         (-display_msg)
+      gl_party_armor_ext.int       NEW
+      invasion/*.int               (39 NPC updated z wake-before-talk)
+
+   Game dir:
+      mods/fo1_mod_outdoorsman/scripts/gl_mod_outdoorsman.int
+      mods/fo1_mod_party_hotkeys/scripts/gl_party_hotkeys.int
+      mods/fo1_mod_party_armor_ext/scripts/gl_party_armor_ext.int  NEW
+      mods/fo1_mod_invasion_fix/scripts/<NPC>.int  (x 39)
+
+   mods/mods_order.txt: dodano "fo1_mod_party_armor_ext" na koncu
+
+
+================================================================================
+ KNOWN ISSUES
+================================================================================
+
+ 1. Wake anim przy TALK leci asynchronicznie -- dialog otwiera sie zanim
+    NPC wstanie. NPC wstaje "w tle" podczas rozmowy. Po zamknieciu
+    dialogu NPC juz stoi. Akceptowalne bez zmian architektonicznych.
+
+ 2. Armor override stage 2 jeszcze nie zaimplementowany -- wymaga dumpu
+    party z gry z kombinacjami pancerzy.
+
+ 3. Flicker intensity modulation co 3 ticki (~300ms). Jesli za szybko
+    w praktyce -- zwiekszyc modulo do 5 lub 7.
+
+ 4. Power armor loot protect -- nie ruszane, osobny task.
+
+ 5. 6 vanilla NPC (Dogmeat, Tycho, Katja, MrHandyC, Eyebot, Rae) --
+    gonia w campie (no source). Workaround: shovel przed travel.
+
+
+================================================================================
+ EOF
+================================================================================

@@ -43,10 +43,8 @@ procedure keypress_handler begin
     current := global_var(GVAR_PARTY_NO_FOLLOW);
     if (current) then begin
         set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
-        display_msg("Party: FOLLOW");
     end else begin
         set_global_var(GVAR_PARTY_NO_FOLLOW, 1);
-        display_msg("Party: HOLD POSITION");
     end
 end
 

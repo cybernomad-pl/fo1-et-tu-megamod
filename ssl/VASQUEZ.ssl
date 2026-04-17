@@ -270,6 +270,13 @@ end
 procedure talk_p_proc begin
    set_tma_data_default;
 
+   // Wake up if sleeping in camp (GVAR_PARTY_NO_FOLLOW set by outdoorsman).
+   if (Vasquez_In_Party and global_var(GVAR_PARTY_NO_FOLLOW) == 1) then begin
+      reg_anim_begin();
+      reg_anim_animate(self_obj, ANIM_back_to_standing, -1);
+      reg_anim_end();
+   end
+
    if (Vasquez_In_Party or party_is_waiting) then begin
       self_look_at_dude;
       dude_look_at_self;
