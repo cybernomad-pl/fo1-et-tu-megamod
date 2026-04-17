@@ -1,0 +1,522 @@
+================================================================================
+ fo1-et-tu-megamod  --  CALA LOGIKA WSZYSTKICH MODOW  (2026-04-17)
+================================================================================
+
+ 6 AKTYWNYCH MODOW (mods_order.txt):
+
+   fo1_mod_invasion_fix        -- 39 recruitable NPC + 27 vanilla copy
+   fo1_mod_spare_water_chip    -- start kit (lighter/rope/shovel/water chip)
+   fo1_mod_party_hotkeys       -- klawisz "0" hold/follow toggle
+   fo1_mod_new_start_plus      -- init hook (gl_megamod_init.int)
+   fo1_mod_outdoorsman         -- camping system (lighter/shovel/bedroll)
+   fo1_mod_party_armor_ext     -- runtime FID override custom NPC
+
+
+================================================================================
+ STAN GLOBALNY (cross-mod shared state)
+================================================================================
+
+   GVAR_PARTY_NO_FOLLOW (398)   -- vanilla engine global
+     0 = party follows dude normally (default)
+     1 = party holds position (camp OR hotkey hold)
+     SETTERS: outdoorsman lighter/shovel, party_hotkeys key "0"/map_change
+     READERS: 39 NPC critter_p_proc, outdoorsman edge detect
+
+   LVAR 13 per-NPC (37 invasion_fix NPC)       -- wake override
+     0 = respects GVAR (normal)
+     1 = follow even if GVAR==1 (solo woken via dialog)
+     SETTER: NodeCampWakeUp in NPC talk_p_proc
+     READER: NPC critter_p_proc
+
+   sfall array_maps (outdoorsman, persisted across save/load):
+     campfire_map          -- "<map_idx>" -> fire tile
+     campfire_firepit_obj  -- "<map_idx>" -> firepit obj_id
+     campfire_player_bedroll -- "<map_idx>" -> player bedroll obj_id
+     campfire_bedrolls     -- "<map_idx>" -> array of bedroll obj_ids
+     campfire_sleepers     -- "<map_idx>" -> array of NPC obj_ids
+     campfire_pending      -- map -> cleanup_deadline ticks
+
+
+================================================================================
+ MOD 1: fo1_mod_new_start_plus  (init)
+================================================================================
+
+   gl_megamod_init.ssl
+         |
+         v
+   game_loaded?  YES
+         |
+         v
+   load_array("megamod_kit")
+   if kit_given["given"] != 1:
+         |
+         v
+   dla PID in (LIGHTER, ROPE, SHOVEL, WATER_CHIP, ELEC_LOCKPICKS, ...):
+     if not obj_is_carrying(dude, pid):
+         create_object(pid) + add_obj_to_inven(dude, item)
+         |
+         v
+   kit_given["given"] := 1
+   save_array
+
+
+================================================================================
+ MOD 2: fo1_mod_spare_water_chip
+================================================================================
+
+   Drugi chip wodny dostepny do znalezienia (vanilla FO1: tylko 1).
+   Implementacja: scripted spawn na konkretnej mapie (Necropolis).
+   Scope: poza tym projektem -- Borys zainstalowal pre-built.
+
+
+================================================================================
+ MOD 3: fo1_mod_party_hotkeys
+================================================================================
+
+   gl_party_hotkeys.ssl
+         |
+         v
+   register_hook_proc HOOK_KEYPRESS, HOOK_GAMEMODECHANGE
+   GVAR_PARTY_NO_FOLLOW = 0  (fresh state)
+
+
+   HOOK_KEYPRESS (pressed, key):
+         |
+         v
+   pressed == 0? -> return
+   key != 11 (DX "0")? -> return
+   get_game_mode != 0? -> return (only gameplay)
+         |
+         v
+   current = global_var(GVAR_PARTY_NO_FOLLOW)
+   if current: set GVAR = 0    (release)
+   else:       set GVAR = 1    (hold)
+
+
+   HOOK_GAMEMODECHANGE:
+         |
+         v
+   cur_map_index != last_map_index?
+         |
+         v YES
+   last_map_index = cur
+   if GVAR != 0: GVAR = 0     (reset na nowej mapie)
+
+
+================================================================================
+ MOD 4: fo1_mod_outdoorsman  (camping system)
+================================================================================
+
+   gl_mod_outdoorsman.ssl
+         |
+         v
+   start (game_loaded):
+     load 6 array_maps (campfire state)
+     set_proto_data(PID_LIGHTER, ACTION_USE) -- lighter can be USEd
+     register_hook_proc HOOK_USEOBJ, HOOK_USEOBJON, HOOK_GAMEMODECHANGE
+
+   --------------------------------------------------------------------
+    HOOK_USEOBJ (user, item)
+   --------------------------------------------------------------------
+     user != dude -> return
+         |
+         v
+     item.pid == PID_LIGHTER -> handle_lighter
+         |
+         v YES
+     item.pid in (PID_BED_1, PID_BED_2) AND item == player_bedroll_map[cur]:
+         -> handle_player_bedroll_rest
+
+
+   handle_lighter:
+         |
+         v
+     map_has_campfire? -> YES: msg "already burns", abort
+         |
+         v NO
+     lighter_lit = 0? (turn on):
+         lighter_lit = 1
+         set_object_data LIGHTER: dist=8, int=65536
+         msg "You flick lighter open..."
+         is_wilderness AND not combat? -> create_campfire_adjacent
+     else (turn off):
+         lighter_lit = 0
+         set_object_data LIGHTER: dist=0, int=0
+         msg "You snap lighter shut..."
+
+
+   create_campfire_adjacent:
+         |
+         v
+     gfade_out(600) + game_time_advance(600)
+         |
+         v
+     fire = create_object(PID_FIRE_PIT, adjacent_tile)
+         fallback: try dirs 1..5
+         fail -> msg "No room", gfade_in, return
+         |
+         v
+     set_object_data(fire, dist=8, int=65536)
+     fire2 = create_object(PID_FIRE_PIT, SAME TILE)
+         (sprite overlap visually = one fire; 2x light sum)
+         |
+         v
+     bedrolls_arr = create_array(0, 4)
+     sleepers_arr = create_array(0, 4)
+
+     SLOT 0 (player bedroll):
+         tile = dir 0, dist 5 from fire
+         create PID_BED_1
+         track in player_bedroll_map[cur_map]
+         add to bedrolls_arr
+
+     SLOT 1..N (per party NPC via LIST_CRITTERS):
+         ring = slot/6, dir = slot%6
+         tile = dir, dist = 5 + ring*3 from fire
+         create PID_BED_1 or PID_BED_2 (alternating)
+         move_to(npc, tile)
+         reg_anim fall_back_sf -1
+         add npc to sleepers_arr
+         |
+         v
+     if had_any_sleeper:
+         set_global_var(GVAR_PARTY_NO_FOLLOW, 1)
+         |
+         v
+     save 4 arrays (campfire_map, firepit_obj_map,
+                    player_bedroll_map, bedroll_map, sleepers_map)
+     gfade_in(600)
+     msg "You make camp..."
+     give_exp(15)
+
+
+   handle_player_bedroll_rest (USE on player bedroll):
+         |
+         v
+     combat? -> msg "Not a good time", return
+         |
+         v
+     gfade_out(600)
+     reg_anim ANIM_magic_hands_ground (crouch anim)
+     hour = game_time_hour / 100
+     hours_to_morning = (24-hour+6) if hour>=6 else (6-hour)
+     game_time_advance(hours * 36000)
+     critter_heal(dude, max_hp)
+     gfade_in(600)
+     msg "You rest until morning..."
+
+
+   --------------------------------------------------------------------
+    HOOK_USEOBJON (user, shovel, target)
+   --------------------------------------------------------------------
+     user != dude -> return
+     item.pid != PID_SHOVEL -> return
+     target.pid != PID_FIRE_PIT -> return
+     tracked_fire = firepit_obj_map[cur_map]
+     tracked == 0 -> return (no camp, ignore)
+         |
+         v
+     target != tracked_fire AND tile_num(target) != tile_num(tracked):
+         msg "This fire isn't part of your camp", return
+         (accepts aux fire2 on same tile)
+         |
+         v
+     combat? -> msg "No time...", return
+         |
+         v
+     handle_shovel_on_firepit
+
+
+   handle_shovel_on_firepit:
+         |
+         v
+     gfade_out(600)
+     destroy_object(tracked_fire)
+     SWEEP LIST_SCENERY on fire_tile: destroy every PID_FIRE_PIT
+         (catches fire2 aux light)
+         |
+         v
+     for each sleeper in sleepers_arr:
+         reg_anim back_to_standing -1
+     free sleepers_arr + sleepers_map[cur] = 0
+         |
+         v
+     set_global_var(GVAR_PARTY_NO_FOLLOW, 0)      <-- release follow
+         |
+         v
+     pending_cleanup[cur] = game_time + 20 ticks
+         (bedrolls stay visible 2s for back_to_standing anim)
+     clear campfire_map + firepit_obj_map + player_bedroll_map
+     gfade_in(600)
+     msg "You shovel dirt...", give_exp(10)
+
+
+   --------------------------------------------------------------------
+    HOOK_GAMEMODECHANGE (tick, fires on mode transitions)
+   --------------------------------------------------------------------
+     ALWAYS: cleanup_pending_bedrolls
+
+     cleanup_pending_bedrolls:
+         for each map_key in pending_cleanup:
+             if now >= deadline:
+                 if key == cur_map: destroy bedroll_obj_ids
+                 else: drop tracking (objs already despawned)
+                 pending_cleanup[key] = 0
+         |
+         v
+     EDGE DETECT: last_no_follow == 1 AND cur_nf == 0?
+         (= hotkey released GVAR 1->0, NOT via shovel)
+         for each sleeper in sleepers_map[cur]:
+             reg_anim back_to_standing
+         free sleepers, clear tracking
+         |
+         v
+     last_no_follow = cur_nf
+         |
+         v
+     MAP CHANGE: cur_map_index != last_map_idx?
+         drop stale sleepers for old_map
+         last_map_idx = cur_map_index
+
+
+   --------------------------------------------------------------------
+    MAP_UPDATE_P_PROC (auto-called by sfall, throttled)
+   --------------------------------------------------------------------
+     flicker_counter++
+     counter % 3 != 0 -> return
+     game_mode != 0 -> return
+     fire = firepit_obj_map[cur_map]
+     fire == 0 -> return
+         |
+         v
+     intensity = 52000 + random(0, 13536)
+     set_object_data(fire, LIGHT_INTENSITY, intensity)
+     tile_refresh_display
+
+
+================================================================================
+ MOD 5: fo1_mod_party_armor_ext  (FID override dla custom NPC)
+================================================================================
+
+   gl_party_armor_ext.ssl
+         |
+         v
+   register_hook_proc HOOK_GAMEMODECHANGE, HOOK_INVENWIELD
+
+
+   HOOK_GAMEMODECHANGE:
+         |
+         v
+     refresh_all_party
+     if cur_map != last: dump_party_members to party_armor_ext.ini
+
+
+   HOOK_INVENWIELD (obj, item, slot):
+         |
+         v
+     obj team != TEAM_PLAYER -> return
+     refresh_one(obj)
+
+
+   refresh_one(obj):
+         |
+         v
+     sid = get_script(obj)                    -- SCRIPTS.LST line number
+     worn_obj = critter_inven_obj(obj, INVEN_TYPE_WORN)
+     worn_pid = obj_pid(worn_obj) or 0
+     target_fid = compute_target_fid(sid, worn_pid)
+     target_fid == 0 -> return (no override)
+         |
+         v
+     if obj_art_fid(obj) != target_fid:
+         art_change_fid_num(obj, target_fid)
+
+
+   compute_target_fid(sid, worn_pid):
+       sid == SCRIPT_MEDIC (184) -> BLACK MALE sprite set:
+         worn_pid == 0                        -> FID 16777224  (hmbjmp)
+         LEATHER family                       -> FID 16777349  (HMBLTR)
+         METAL family                         -> FID 16777225  (hmbmet)
+         COMBAT_ARMOR                         -> FID 16777226  (hmcmbt)
+         COMBAT_MK2 / BROTHERHOOD_COMBAT      -> FID 16777344  (hmcmbl)
+         POWERED / HARDENED_POWER             -> FID 16777217  (hapowr)
+         ADV_POWER / ADV_POWER_MK2            -> FID 16777348  (HMBMAX)
+         BRIDGEKEEPERS_ROBE                   -> FID 16777353  (HAROBB)
+
+       inne sid -> return 0 (TODO: Gwen/Diana/etc)
+
+
+================================================================================
+ MOD 6: fo1_mod_invasion_fix  (NPC scripts)
+================================================================================
+
+   66 .int files total. 39 sa edytowane:
+     37 "standard" invasion NPCs (AGATHA..TRISH)
+     + TANDI, IAN, VASQUEZ (custom party flow)
+
+   Pozostale 27 to vanilla-copy (ARADESH, BARTER, BRAHMIN, ...).
+
+
+   --------------------------------------------------------------------
+    CRITTER_P_PROC (engine tick per NPC, 37 standard NPC)
+   --------------------------------------------------------------------
+     if self_team == TEAM_PLAYER:
+         if GVAR_PARTY_NO_FOLLOW == 0 OR local_var(13) != 0:
+             party_follow_dude_point(5, 3)       <-- follow
+         return
+         |
+         v (nie TEAM_PLAYER -- normal AI logic goes here)
+     ... vanilla hostile AI / generic behavior
+
+
+   --------------------------------------------------------------------
+    TALK_P_PROC (standard 37 NPC)
+   --------------------------------------------------------------------
+     if self_team == TEAM_PLAYER:
+         start_gdialog(NAME, self_obj, 4, -1, -1)
+         gSay_Start
+         call NodePartyMain
+         gSay_End
+         end_dialogue
+         return
+         |
+         v (nie party -- vanilla dialog tree)
+
+
+   NodePartyMain:
+     Reply_Blank
+     if GVAR_PARTY_NO_FOLLOW == 1:
+         NOption "Get up and follow me." -> NodeCampWakeUp
+     NOption "Follow me."  -> NodePartyFollow
+     NOption "Wait here."  -> NodePartyWait
+     NOption "Holster weapon." -> NodePartyHolster
+     NOption "[Done]"      -> NodePartyDone
+
+
+   NodeCampWakeUp:
+     set_local_var(13, 1)                     <-- solo wake override
+     reg_anim back_to_standing -1
+     display_msg "<NAME> gets up and follows you."
+
+
+   --------------------------------------------------------------------
+    TANDI / IAN / VASQUEZ (custom flow, bez LVAR 13 override)
+   --------------------------------------------------------------------
+     critter_p_proc: uzywaja vanilla party_member_follow_dude macro
+       (sprawdza wewnetrznie party_no_follow i party_is_waiting)
+     talk_p_proc: complex dialog tree per-NPC
+     Budzenie w campie: tylko przez hotkey "0" albo shovel.
+
+
+================================================================================
+ INTEGRACJA CROSS-MOD (data flow)
+================================================================================
+
+   +-------------------+
+   | new_start_plus    | gives: LIGHTER, SHOVEL, ROPE, WATER_CHIP (one-shot)
+   +-------------------+
+             |
+             v items in dude inventory
+   +-------------------+           +-------------------+
+   | outdoorsman       |<--------->|  party_hotkeys    |
+   | USE lighter       |   GVAR    |  key "0" toggle   |
+   | USE shovel        |  _PARTY_  |  map_change reset |
+   | USE bedroll       |  _NO_     +-------------------+
+   | bedroll tracking  |  _FOLLOW_          |
+   | flicker           |                    |
+   +-------------------+                    |
+             |                              |
+             | GVAR=0/1                     | GVAR=0/1
+             v                              v
+   +---------------------------------------------------+
+   | invasion_fix 37 NPC critter_p_proc                |
+   |   follow = (GVAR==0) OR (LVAR13 != 0)             |
+   |   NodeCampWakeUp sets LVAR13=1                    |
+   +---------------------------------------------------+
+             ^
+             | (separate system)
+             |
+   +-------------------+
+   | party_armor_ext   | FID override dla sid==SCRIPT_MEDIC
+   | HOOK_GAMEMODE     | na podstawie worn armor PID
+   | HOOK_INVENWIELD   | art_change_fid_num(obj, target_fid)
+   +-------------------+
+
+
+================================================================================
+ FLOW END-TO-END: CAMP -> REST -> WAKE
+================================================================================
+
+  [1] Gracz w dziczy, party = Medyk + Gwen + Diana + Tandi
+  [2] USE lighter -> create_campfire_adjacent:
+        fire + fire2 (2x light)
+        spiral bedrolls: player(slot0), Medyk(slot1), Gwen(slot2), Diana(slot3), Tandi(slot4)
+        fall_back_sf na kazdym NPC (lying pose)
+        GVAR_PARTY_NO_FOLLOW := 1
+  [3] map_update_p_proc: co 3 tick modulacja intensity (flicker)
+  [4] critter_p_proc tick NPC: GVAR=1 AND LVAR13=0 -> skip follow (stoja/leza)
+  [5] Gracz USE player bedroll -> rest until morning + heal
+  [6] Gracz TALK na lezacym Medyku:
+        NodePartyMain pokazuje "Get up and follow me."
+        Klikam -> NodeCampWakeUp:
+          Medyk.LVAR13 := 1
+          Medyk reg_anim back_to_standing
+          msg "Medic gets up..."
+  [7] Medyk critter_p_proc tick: GVAR=1 OR LVAR13=1 -> follow (solo)
+        Reszta (Gwen/Diana/Tandi) nadal spi (LVAR13 == 0)
+  [8] Gracz USE shovel ON firepit -> handle_shovel_on_firepit:
+        destroy fire + fire2
+        wake anim kazdego sleeper (Gwen/Diana/Tandi)
+        GVAR_PARTY_NO_FOLLOW := 0
+        defer bedroll cleanup 20 ticks
+  [9] Wszyscy critter_p_proc tick: GVAR=0 -> follow
+
+
+================================================================================
+ HOOKS SUMMARY (co w ktorym modzie)
+================================================================================
+
+   HOOK_KEYPRESS       -> party_hotkeys (key "0")
+   HOOK_USEOBJ         -> outdoorsman (lighter, player bedroll)
+   HOOK_USEOBJON       -> outdoorsman (shovel on firepit)
+   HOOK_GAMEMODECHANGE -> outdoorsman (bedroll cleanup, edge wake,
+                                       map change reset)
+                       -> party_hotkeys (map change reset GVAR)
+                       -> party_armor_ext (refresh party FIDs +
+                                          dump on map change)
+   HOOK_INVENWIELD     -> party_armor_ext (refresh one NPC FID)
+
+   map_update_p_proc (sfall auto) -> outdoorsman (flicker ticks)
+
+
+================================================================================
+ KNOWN ISSUES (aktualne)
+================================================================================
+
+ 1. LVAR 13 nie resetuje sie miedzy campami. Raz obudzony przez dialog
+    NPC nie bedzie spal w nastepnym campie. Fix: dodac map_enter_p_proc
+    reset LVAR 13 = 0 na NPC.
+
+ 2. 27 vanilla-copy invasion_fix NPCs (ARADESH, BARTER, COOK, etc.)
+    nie maja nowej mechaniki follow (nie tykane). Nie sa party = nie
+    problem.
+
+ 3. 6 vanilla FO1 party NPC bez source: DOGMEAT, TYCHO, KATJA,
+    MRHANDYC, EYEBOT, RAE. Gonia w campie. Workaround: nie rekrutuj
+    przed campem, albo shovel przed travel.
+
+ 4. party_armor_ext MEDIC only. GWEN/DIANA/PETROX/TOLYA/ALYA/THERESA
+    i inne custom NPC jeszcze bez FID mapping. TODO: po dumpie
+    PID/FID/worn z runtime.
+
+ 5. reg_anim back_to_standing async -- NPC zaczyna follow zanim
+    anim skonczy. Akceptowalne visually.
+
+ 6. fire2 sprite overlap -- moze blokowac tile dla party (jesli engine
+    traktuje 2x scenery jako blocking). Test w grze = nie potwierdzone
+    jako bug.
+
+
+================================================================================
+ EOF
+================================================================================
