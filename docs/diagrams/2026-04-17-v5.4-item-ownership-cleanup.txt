@@ -1,0 +1,157 @@
+================================================================================
+ fo1-et-tu-megamod  --  ITEM OWNERSHIP CLEANUP  v5.4  (2026-04-17)
+================================================================================
+
+ PROBLEM:
+   gl_megamod_init (fo1_mod_new_start_plus) trzymal wszystkie starting
+   items w jednym miejscu -- LIGHTER, SHOVEL, ROPE, WATER_CHIP,
+   ELECTRONIC_LOCKPICKS, RADIO. Dublowalo to spare_water_chip dla chipu,
+   a LIGHTER/SHOVEL/ROPE nalezaly semantycznie do outdoorsman.
+
+ DECYZJA:
+   Item nalezy do modu ktory z niego korzysta.
+
+
+================================================================================
+ BEFORE  (brud, duplikacja, kradziez responsibility)
+================================================================================
+
+   +-------------------------+------------------------------------+
+   | gl_megamod_init         | LIGHTER  (outdoorsman uses)        |
+   | (new_start_plus)        | SHOVEL   (outdoorsman uses)        |
+   |                         | ROPE     (nikt nie uzywa)          |
+   |                         | WATER_CHIP  <-- DUPLIKAT           |
+   |                         | ELECTRONIC_LOCKPICKS               |
+   |                         | RADIO                              |
+   +-------------------------+------------------------------------+
+   | gl_mod_spare_water_chip | WATER_CHIP  <-- DUPLIKAT           |
+   +-------------------------+------------------------------------+
+
+   Save tracking: "megamod_kit" + "mod_spare_water_chip" (2 osobne)
+
+
+================================================================================
+ AFTER  (czysta wlasnosc itemow)
+================================================================================
+
+   +---------------------------+----------------------------------+
+   | gl_megamod_init.ssl       | WATER_CHIP                       |
+   | (new_start_plus)          | ELECTRONIC_LOCKPICKS             |
+   |                           | RADIO                            |
+   |                           |                                  |
+   | save: "megamod_kit"       |                                  |
+   +---------------------------+----------------------------------+
+   | gl_mod_outdoorsman.ssl    | LIGHTER                          |
+   | (fo1_mod_outdoorsman)     | SHOVEL                           |
+   |                           | ROPE                             |
+   |                           |                                  |
+   | save: "outdoorsman_kit"   |                                  |
+   +---------------------------+----------------------------------+
+
+   USUNIETE:
+     - gl_mod_spare_water_chip.ssl  (plik)
+     - mods/fo1_mod_spare_water_chip/ (folder w game dir)
+     - "fo1_mod_spare_water_chip" z mods_order.txt
+
+
+================================================================================
+ FLOW: give_camping_kit (outdoorsman, nowy)
+================================================================================
+
+   start() when game_loaded:
+     load array "outdoorsman_kit"
+         |
+         v
+   array["given"] == 1?
+         |            |
+         v YES        v NO
+     return       ----+
+                      v
+             dla PID in (LIGHTER, SHOVEL, ROPE):
+               obj_is_carrying(dude, PID) == 0?
+                  | YES
+                  v
+               create_object(PID) -> add_obj_to_inven(dude)
+                      |
+                      v
+             array["given"] := 1
+             save_array
+             msg "You pack lighter, shovel and rope for the road."
+
+
+================================================================================
+ FLOW: give_starting_kit (init, zmodyfikowany)
+================================================================================
+
+   start() when game_loaded:
+     load array "megamod_kit"
+         |
+         v
+   array["given"] == 1?    (uzywa starego klucza, nie reset existing)
+         |            |
+         v YES        v NO
+     return       ----+
+                      v
+             dla PID in (WATER_CHIP, ELECTRONIC_LOCKPICKS, RADIO):
+               obj_is_carrying(dude, PID) == 0?
+                  | YES
+                  v
+               create_object(PID) -> add_obj_to_inven(dude)
+                      |
+                      v
+             array["given"] := 1
+             msg "You check your pack. Water chip, lockpicks, radio."
+
+
+================================================================================
+ INTEGRATION (porownanie z v5.3)
+================================================================================
+
+   mods_order.txt teraz (5 aktywnych modow, o jeden mniej):
+     fo1_mod_invasion_fix
+     fo1_mod_party_hotkeys
+     fo1_mod_new_start_plus      (WATER_CHIP/LOCKPICKS/RADIO init)
+     fo1_mod_outdoorsman         (+LIGHTER/SHOVEL/ROPE init)
+     fo1_mod_party_armor_ext
+
+
+================================================================================
+ IDEMPOTENCY & SAVE MIGRATION SAFETY
+================================================================================
+
+ 1. Obecny gracz mial save gdzie megamod_kit["given"]=1 (z LIGHTER/etc).
+    Po update outdoorsman_kit["given"] nie ustawione -> give_camping_kit
+    odpala. Check obj_is_carrying dla kazdego PID: gracz JUZ MA LIGHTER
+    -> skip create_object. Efekt: zaden item nie dublowany.
+    Save ma teraz oba klucze: megamod_kit + outdoorsman_kit.
+
+ 2. Swiezy gracz: init + outdoorsman wywolane przy first load, kazdy
+    kit array utworzony independently.
+
+ 3. Brak kolizji save_array nazw (megamod_kit vs outdoorsman_kit).
+
+ 4. Brak duplikatu proto tworzenia -- jedyny mod dla kazdego itemu.
+
+
+================================================================================
+ 2x REVIEW PODSUMOWANIE
+================================================================================
+
+ REVIEW #1 (item ownership):
+   [OK] init: WATER_CHIP + ELECTRONIC_LOCKPICKS + RADIO
+   [OK] outdoorsman: LIGHTER + SHOVEL + ROPE
+   [OK] zero duplikatow
+
+ REVIEW #2 (idempotency + save state):
+   [OK] save_array names unique (megamod_kit, outdoorsman_kit)
+   [OK] kit_given["given"] flag per-mod
+   [OK] obj_is_carrying guard dla kazdego item (double-check)
+   [OK] kolejnosc start(): load arrays -> give_kit -> set_proto_data
+   [OK] register_hook_proc wciaz po kit (dobra kolejnosc)
+   [OK] existing save safety: guard zapobiega duplikatom
+   [OK] kompilacja bez errorow
+
+
+================================================================================
+ EOF
+================================================================================

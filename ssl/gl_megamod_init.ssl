@@ -1,7 +1,9 @@
 /*
-    Megamod Init -- fo1-et-tu-megamod
-    Gives Vault Dweller starting kit on first load.
-    Lighter, Rope, Shovel -- always in inventory from the start.
+    Megamod Init (new_start_plus) -- fo1-et-tu-megamod
+    Gives Vault Dweller starting kit on first load:
+      WATER_CHIP, ELECTRONIC_LOCKPICKS, RADIO.
+    Other starting items owned by their respective mods:
+      LIGHTER/SHOVEL/ROPE -> outdoorsman
 */
 
 #include "define.h"
@@ -31,22 +33,6 @@ end
 procedure give_starting_kit begin
     variable item;
 
-    // Only give if player doesn't already have them
-    if (obj_is_carrying_obj_pid(dude_obj, PID_LIGHTER) == 0) then begin
-        item := create_object(PID_LIGHTER, 0, 0);
-        add_obj_to_inven(dude_obj, item);
-    end
-
-    if (obj_is_carrying_obj_pid(dude_obj, PID_ROPE) == 0) then begin
-        item := create_object(PID_ROPE, 0, 0);
-        add_obj_to_inven(dude_obj, item);
-    end
-
-    if (obj_is_carrying_obj_pid(dude_obj, PID_SHOVEL) == 0) then begin
-        item := create_object(PID_SHOVEL, 0, 0);
-        add_obj_to_inven(dude_obj, item);
-    end
-
     // Easy Main Quest: water chip in starting inventory
     if (obj_is_carrying_obj_pid(dude_obj, PID_WATER_CHIP) == 0) then begin
         item := create_object(PID_WATER_CHIP, 0, 0);
@@ -66,5 +52,5 @@ procedure give_starting_kit begin
     kit_given["given"] := 1;
     save_array("megamod_kit", kit_given);
 
-    display_msg("You check your pack. Lighter, rope, shovel. The basics.");
+    display_msg("You check your pack. Water chip, lockpicks, radio.");
 end
