@@ -164,13 +164,14 @@ end
 // Returns 0 if no override applies (engine keeps default).
 // ============================================================
 procedure compute_target_fid(variable sid, variable worn_pid) begin
-    // MEDIC: black male style (Borys: czarny medyk = black style player)
-    if (sid == SCRIPT_MEDIC) then begin
-        // Jumpsuit / no armor / vault suit
-        if (worn_pid == 0) then return FID_HMBJMP;
-        // Leather family
+    // MEDIC + OFFICER: black male sprite set (both share hmb* family).
+    // LEATHER JACKET (clothing) -> keep jumpsuit sprite (not armor).
+    if (sid == SCRIPT_MEDIC or sid == SCRIPT_OFFICER) then begin
+        // Jumpsuit / no armor / vault suit / clothing
+        if (worn_pid == 0
+            or worn_pid == PID_LEATHER_JACKET) then return FID_HMBJMP;
+        // Leather ARMOR (protective)
         if (worn_pid == PID_LEATHER_ARMOR
-            or worn_pid == PID_LEATHER_JACKET
             or worn_pid == PID_LEATHER_ARMOR_MK_II
             or worn_pid == PID_CURED_LEATHER_ARMOR) then return FID_HMBLTR;
         // Metal
@@ -191,11 +192,34 @@ procedure compute_target_fid(variable sid, variable worn_pid) begin
         if (worn_pid == PID_BRIDGEKEEPERS_ROBE) then return FID_HAROBB;
     end
 
-    // THERESA: female punk sprite set (faction leader, V13 rebels)
-    if (sid == SCRIPT_THERESA) then begin
-        if (worn_pid == 0) then return FID_NFPJMP;  // vault suit default
+    // THERESA + DIANA (raider mohawk, also punk female) + GWEN (raider female):
+    // female punk sprite set.
+    if (sid == SCRIPT_THERESA
+        or sid == SCRIPT_DIANA
+        or sid == SCRIPT_GWEN) then begin
+        // Jumpsuit / no armor / leather jacket (clothing)
+        if (worn_pid == 0
+            or worn_pid == PID_LEATHER_JACKET) then return FID_NFPJMP;
+        // Leather ARMOR
         if (worn_pid == PID_LEATHER_ARMOR
-            or worn_pid == PID_LEATHER_JACKET
+            or worn_pid == PID_LEATHER_ARMOR_MK_II
+            or worn_pid == PID_CURED_LEATHER_ARMOR) then return FID_NFPGLA;
+        // Metal
+        if (worn_pid == PID_METAL_ARMOR
+            or worn_pid == PID_METAL_ARMOR_MK_II) then return FID_NFPGMT;
+        // Combat (black dark combat)
+        if (worn_pid == PID_COMBAT_ARMOR
+            or worn_pid == PID_COMBAT_ARMOR_MK_II
+            or worn_pid == PID_BROTHERHOOD_COMBAT_ARMOR) then return FID_HFCMBL;
+    end
+
+    // Vault citizens / rebels: same female punk set for now (Borys TBD)
+    if (sid == SCRIPT_CITIZEN
+        or sid == SCRIPT_REBEL
+        or sid == SCRIPT_GENVAULT) then begin
+        if (worn_pid == 0
+            or worn_pid == PID_LEATHER_JACKET) then return FID_NFPJMP;
+        if (worn_pid == PID_LEATHER_ARMOR
             or worn_pid == PID_LEATHER_ARMOR_MK_II
             or worn_pid == PID_CURED_LEATHER_ARMOR) then return FID_NFPGLA;
         if (worn_pid == PID_METAL_ARMOR
