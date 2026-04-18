@@ -209,7 +209,9 @@ procedure Officer00 begin
 end
 
 procedure Officer01 begin
-   NMessage(101);
+   Reply(101);
+   NOption("Join me.", NodeRecruit, 4);
+   NOption("Goodbye.", OfficerEnd, 4);
 end
 
 procedure Officer02 begin
@@ -357,11 +359,15 @@ procedure Officer24 begin
 end
 
 procedure Officer25 begin
-   NMessage(149);
+   Reply(149);
+   NOption("Join me.", NodeRecruit, 4);
+   NOption("Goodbye.", OfficerEnd, 4);
 end
 
 procedure Officer26 begin
-   NMessage(150);
+   Reply(150);
+   NOption("Join me.", NodeRecruit, 4);
+   NOption("Goodbye.", OfficerEnd, 4);
 end
 
 procedure Officer27 begin

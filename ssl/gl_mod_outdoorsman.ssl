@@ -226,8 +226,12 @@ procedure gamemode_handler begin
     variable i;
     variable obj;
 
+    LOG("gm", "A_entry", cur_map_index);
+    LOG("gm", "A_last_idx", last_map_idx);
+
     // Always run pending bedroll cleanup (only for current map -- safe).
     call cleanup_pending_bedrolls;
+    LOG("gm", "B_after_cleanup", 1);
 
     // Edge detect GVAR_PARTY_NO_FOLLOW 1->0 (hotkey unhold, not shovel):
     // play wake-up anim on still-tracked sleepers so they stand before following.
@@ -253,6 +257,7 @@ procedure gamemode_handler begin
         end
     end
     last_no_follow := cur_nf;
+    LOG("gm", "C_after_edge_detect", 1);
 
     // Map change: drop stale sleepers tracking for abandoned camp.
     // (bedrolls/firepit stay on disk but are no longer tracked.
@@ -270,6 +275,7 @@ procedure gamemode_handler begin
 
         last_map_idx := cur_map_index;
     end
+    LOG("gm", "Z_exit", cur_map_index);
 end
 
 // ============================================================
@@ -412,13 +418,23 @@ procedure cleanup_pending_bedrolls begin
     variable j;
     variable obj;
 
-    if (pending_cleanup == 0) then return;
-    keys := array_keys(pending_cleanup);
-    if (keys == 0) then return;
-    if (len_array(keys) == 0) then begin
-        free_array(keys);
+    LOG("cln", "A_entry", cur_map_index);
+
+    if (pending_cleanup == 0) then begin
+        LOG("cln", "Z_exit_no_pending", 1);
         return;
     end
+    keys := array_keys(pending_cleanup);
+    if (keys == 0) then begin
+        LOG("cln", "Z_exit_null_keys", 1);
+        return;
+    end
+    if (len_array(keys) == 0) then begin
+        free_array(keys);
+        LOG("cln", "Z_exit_empty_keys", 1);
+        return;
+    end
+    LOG("cln", "B_keys_count", len_array(keys));
 
     now_ticks := game_time;
 

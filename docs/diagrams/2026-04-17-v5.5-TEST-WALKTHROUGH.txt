@@ -1,0 +1,369 @@
+================================================================================
+ fo1-et-tu-megamod  --  v5.5 TEST WALKTHROUGH / DEMO SCENARIO  (2026-04-17)
+================================================================================
+
+ CEL: Przejsc kazdy aktywny mod end-to-end. 11 aktow. ~20-30 min grania.
+ Zaliczone = [OK] w checkboxie, bug = [XX] + notatka.
+
+ AKTYWNE MODY (5):
+   1. fo1_mod_new_start_plus   -- NEW GAME items (chip/pick/radio)
+   2. fo1_mod_outdoorsman      -- NEW GAME items (lighter/shovel/rope) +
+                                  camp + flicker + rest + shovel-extinguish
+   3. fo1_mod_party_hotkeys    -- klawisz 0 toggle follow
+   4. fo1_mod_party_armor_ext  -- MEDIC armor FID override
+   5. fo1_mod_invasion_fix     -- 37 NPC dialog patches (wake/follow)
+
+
+================================================================================
+ PRE-FLIGHT (przed startem gry)
+================================================================================
+
+   [ ] mods_order.txt -- 5 aktywnych modow (widocznych)
+   [ ] fo1_mod_new_start_plus/scripts/gl_mod_new_start_plus.int istnieje
+   [ ] fo1_mod_outdoorsman/scripts/gl_mod_outdoorsman.int istnieje
+   [ ] fo1_mod_party_armor_ext/scripts/gl_party_armor_ext.int istnieje
+   [ ] fo1_mod_party_hotkeys/scripts/gl_party_hotkeys.int istnieje
+   [ ] fo1_mod_invasion_fix/scripts/ ma 37 NPC .int (MEDIC, GWEN, etc)
+   [ ] BRAK gl_megamod_init.int nigdzie
+   [ ] BRAK fo1_mod_spare_water_chip/ folderu
+
+
+================================================================================
+ AKT 1 -- NEW GAME ITEM GIFTING  (new_start_plus + outdoorsman)
+================================================================================
+
+   KROK:
+     1. Start nowej gry, pomin lub skonfiguruj char (Vault Dweller).
+     2. Gracz spawnuje w Vault 13 Entrance.
+     3. Po krotkim czasie w lewym gornym rogu powinny pojawic sie 2 msg:
+          "You check your pack. Water chip, lockpicks, radio."
+          "You pack lighter, shovel and rope for the road."
+        (kolejnosc zalezy od mods_order, obie maja pojawic sie raz)
+     4. Otworz inventory (I).
+
+   OCZEKIWANE:
+     [ ] "You check your pack..." display msg
+     [ ] "You pack lighter..." display msg
+     [ ] Inventory ma: WATER_CHIP, ELECTRONIC_LOCKPICKS, RADIO,
+                      LIGHTER, SHOVEL, ROPE
+     [ ] Lacznie 6 nowych itemow + vanilla startowe
+
+   BUGI DO WYPATRZENIA:
+     - dublowany msg (gracz widzi 2x tego samego) = guard zawiodl
+     - brak itemu = create_object dostaje zly PID lub proto brak
+     - crash na starcie = includy SSL nie matchuja compile
+
+
+================================================================================
+ AKT 2 -- SAVE/LOAD IDEMPOTENCY  (is_loading_game check)
+================================================================================
+
+   KROK:
+     1. Nadal w Vault 13 po Akt 1.
+     2. QuickSave (F6) lub Save as "Test-NewGame".
+     3. QuickLoad (F7) lub Load save.
+     4. Czekaj 2-3s.
+     5. Otworz inventory.
+
+   OCZEKIWANE:
+     [ ] NIC nie wyswietla sie w lewym gornym rogu (zero gift msgs)
+     [ ] Inventory TAKA SAMA jak przed save (zero dodatkowych itemow)
+     [ ] Zero duplikatu WATER_CHIP / LIGHTER / etc
+
+   BUGI:
+     - drugie "You check your pack..." = is_loading_game zwrocil FALSE (zly)
+     - 2x WATER_CHIP w inv = add_obj_to_inven odpalilo pomimo guard
+
+
+================================================================================
+ AKT 3 -- REKRUTACJA MEDIC  (invasion_fix NPC patch)
+================================================================================
+
+   KROK:
+     1. Wyjdz z Vault 13, idz na Worldmap.
+     2. Jedz do Vault 13 na Worldmap (jesli trzeba przelacz) lub do
+        Shady Sands -- najpierw sprawdz czy w Vault 13 jest MEDIC do rekrutu.
+        (Alt: Cathedral/Hub medic jesli Vault 13 go nie ma na tym etapie.)
+     3. Znajdz MEDIC, zagadaj.
+     4. Rekrutuj do druzyny.
+
+   OCZEKIWANE:
+     [ ] MEDIC przylacza sie do party
+     [ ] Follow dudea normalnie (biegnie za graczem)
+     [ ] Dialog ma standardowe opcje (Follow me / Stay here / etc)
+
+
+================================================================================
+ AKT 4 -- ARMOR FID OVERRIDE  (party_armor_ext Stage 2)
+================================================================================
+
+   KROK:
+     1. Party z Akt 3 (MEDIC w druzynie).
+     2. Otworz inventory MEDICa (party order / barter).
+     3. Daj mu LEATHER ARMOR (cheat lub handel: Seth/Tandi quest reward).
+        Alt: console spawn PID 3 (leather_armor) via sfall debug.
+     4. Zamknij inventory, obserwuj sprite MEDIC na mapie.
+     5. Powtorz dla: METAL ARMOR, COMBAT MK1, COMBAT MK2, POWER, ADV POWER.
+
+   OCZEKIWANE:
+     [ ] Leather armor -> MEDIC sprite zmienia sie na black male leather
+         (hmblkr, czarna skora)
+     [ ] Metal armor -> black male metal (hmbmet)
+     [ ] Combat MK1 -> black male combat (hmcmbt)
+     [ ] Combat MK2 / Brotherhood -> czarny combat leather (hmcmbl)
+     [ ] Power armor -> hapowr (black power)
+     [ ] Advanced Power -> hmbmax (black max)
+     [ ] Bridgekeeper robe (jesli dostaniesz) -> haroBB
+
+   BUGI:
+     - Sprite nie zmienia sie = HOOK_INVENWIELD nie zarejestrowany lub
+       art_change_fid_num nie odpalil
+     - Crash po zalozeniu armor = zly FID const
+     - Sprite zostaje stary po zdjeciu armor = gamemode_handler nie resetuje
+       (sprawdz gdy zdejmiesz armor -- ma wrocic do jumpsuit FID_HMBJMP)
+
+
+================================================================================
+ AKT 5 -- WILDERNESS CAMPFIRE  (outdoorsman: lighter + flicker + stack)
+================================================================================
+
+   KROK:
+     1. Wyjdz z miasta na worldmap, uruchom random encounter (desert/mountain).
+     2. Na mapie encounter (wilderness), otworz inventory gracza.
+     3. USE LIGHTER (kliknij prawym na lighter, wybierz uzyj).
+     4. Obserwuj: gfade_out -> spawn campfire + bedroll gracza +
+        bedrolle NPC w ringu -> gfade_in.
+     5. Zagadaj NPC w druzynie -- powinni byc w pozycji fall_back_sf (lying).
+     6. Poczekaj 5-10s na samym firepit.
+
+   OCZEKIWANE:
+     [ ] gfade_out/in dziala bez crashu
+     [ ] Firepit powstaje obok gracza (CAMPFIRE_NEAR_RANGE=3 tile)
+     [ ] Bedroll gracza na pozycji dir=0, dist=5 od fire
+     [ ] Kazdy NPC ma bedroll w ringu
+     [ ] NPC lezy na bedroll (ANIM_fall_back_sf)
+     [ ] Campfire jest JASNY (fire2 stacked, 2x swiatlo)
+     [ ] Flicker -- swiatlo subtelnie pulsuje (nie stale)
+
+   BUGI:
+     - Tylko jeden firepit (brak fire2) = stacking zawiodl
+     - Swiatlo nie pulsuje = map_update_p_proc nie odpala flicker
+     - Crash na USE lighter poza wilderness = is_wilderness check
+       powinien pominac (nie spawnowac campfire, tylko toggle flame)
+
+
+================================================================================
+ AKT 6 -- PLAYER BEDROLL REST  (outdoorsman: USE on player bedroll)
+================================================================================
+
+   KROK:
+     1. Nadal w obozie z Akt 5. Dzien lub pozny wieczor.
+     2. Najedz kursorem na PLAYER BEDROLL (ten bez NPC na nim).
+     3. USE (akcja default).
+
+   OCZEKIWANE:
+     [ ] Gracz odpoczywa az do rana (czas pomija do 08:00 lub nastepnego
+         dnia o default godzinie)
+     [ ] Statystyki: HP regeneracja podczas snu
+     [ ] Po przebudzeniu NPC dalej lezy (nie wstaje sam)
+
+   BUGI:
+     - Nic sie nie dzieje = handle_player_bedroll_rest zawiodl
+     - Gracz spi ale NPC sie budzi = niepotrzebny wake hook odpalil
+
+
+================================================================================
+ AKT 7 -- PARTY HOLD HOTKEY "0"  (party_hotkeys)
+================================================================================
+
+   KROK:
+     1. Zgaś oboz (SHOVEL) lub przenies sie do innej mapy (np. Junktown).
+     2. Party follow normalnie.
+     3. Nacisnij klawisz "0" (top-row, nie numpad).
+     4. Odejdz 10 kafli od party.
+     5. Nacisnij "0" ponownie.
+
+   OCZEKIWANE:
+     [ ] Po pierwszym "0" -- NPC staja w miejscu, nie idz za graczem
+         (GVAR_PARTY_NO_FOLLOW = 1)
+     [ ] Gracz moze swobodnie odejsc, NPC sie NIE rusza
+     [ ] Po drugim "0" -- NPC zaczynaja biec za graczem ponownie
+         (GVAR_PARTY_NO_FOLLOW = 0)
+     [ ] Po zmianie mapy (np. wejscie do budynku) -- flag zresetowany,
+         NPC znow follow by default
+
+   BUGI:
+     - "0" otwiera automap (TAB mapping) = zly scancode (11, nie 15)
+     - NPC dalej biega mimo HOLD = critter_p_proc nie sprawdza GVAR
+     - Przez mapy utrzymany flag = gamemode_handler reset nie dziala
+
+
+================================================================================
+ AKT 8 -- WAKE-BEFORE-TALK  (invasion_fix NPC + outdoorsman wake)
+================================================================================
+
+   KROK:
+     1. Wroc do obozu w wilderness (LIGHTER ponownie albo nastepny encounter).
+     2. NPC lezy na bedroll (ANIM_fall_back_sf).
+     3. Kliknij zagadaj do lezacego NPC.
+
+   OCZEKIWANE:
+     [ ] NPC najpierw wstaje (ANIM_back_to_standing) -- widoczna anim
+     [ ] Dopiero po wstaniu -- dialog window pokazuje sie
+     [ ] Po zakonczeniu dialogu NPC moze zostac stojacy lub wrocic do snu
+
+   BUGI:
+     - Dialog od razu bez animacji wstania = wake hook nie odpalil
+     - NPC zostaje w pozycji lezacej PO dialogu = wake nie zmienil anim
+       stanu
+
+
+================================================================================
+ AKT 9 -- "GET UP AND FOLLOW ME" DIALOG OPTION
+         (invasion_fix NodePartyMain + LVAR 13 override)
+================================================================================
+
+   KROK:
+     1. W obozie, klawisz "0" -> GVAR_PARTY_NO_FOLLOW := 1 (hold).
+     2. Zagadaj NPC w druzynie (MEDIC, etc).
+     3. NPC wstaje (Akt 8).
+     4. W dialogu otwieraja sie opcje Party Main.
+     5. Wybierz "Get up and follow me."
+     6. Zamknij dialog.
+
+   OCZEKIWANE:
+     [ ] Opcja "Get up and follow me." pokazuje sie TYLKO gdy
+         GVAR_PARTY_NO_FOLLOW == 1
+     [ ] Po wyborze opcji -- NPC ustawia LVAR 13 := 1
+     [ ] Msg: "<Name> gets up and follows you."
+     [ ] NPC wstaje (reg_anim_animate back_to_standing)
+     [ ] Ten NPC zaczyna biegac za graczem MIMO ze GVAR_PARTY_NO_FOLLOW=1
+         (bo LVAR 13 override w critter_p_proc)
+     [ ] Inni NPC dalej stoja w miejscu (ich LVAR 13 = 0)
+
+   BUGI:
+     - Opcja widoczna zawsze = brak check na GVAR_PARTY_NO_FOLLOW
+     - NPC nie rusza sie po wake = LVAR 13 nie ustawiony lub zle indeksowany
+       (KRYTYCZNE: jesli LVAR 15 zamiast 13 -- out of bounds, NPC chodzi
+        zawsze. Test: pozostali NPC dalej stoja? Jesli chodza = regresja)
+     - Jeden NPC wstaje, inni tez (wszyscy na raz) = uzywasz GVAR nie LVAR
+
+
+================================================================================
+ AKT 10 -- WAKE-EDGE DETECTION (hotkey 1 -> 0)
+================================================================================
+
+   KROK:
+     1. W obozie, wszyscy NPC spia (GVAR_PARTY_NO_FOLLOW = 0 domyslnie).
+     2. Klawisz "0" -> GVAR = 1 (hold).
+     3. Klawisz "0" ponownie -> GVAR = 0 (follow wznowiony).
+     4. Obserwuj NPC w obozie.
+
+   OCZEKIWANE:
+     [ ] Edge detect (GVAR 1->0) triggeruje wake u lezacych NPC
+     [ ] last_no_follow var w outdoorsman.ssl wykryl transition
+     [ ] Wszyscy lezacy NPC: reg_anim_animate ANIM_back_to_standing
+     [ ] Po wstaniu biegna za graczem (normal follow)
+
+   BUGI:
+     - NPC nie wstaja sami = edge detect zawiodl (last_no_follow = 0 od startu)
+     - Wake odpala kazdy tick = brak guard, animacja zepsuta (loop)
+
+
+================================================================================
+ AKT 11 -- SHOVEL EXTINGUISH  (outdoorsman: USE shovel ON firepit)
+================================================================================
+
+   KROK:
+     1. W obozie, wszyscy NPC spia.
+     2. Otworz inventory, USE SHOVEL.
+     3. Kursor zmienia sie na "use on".
+     4. Kliknij na firepit (glowny lub fire2 stacked).
+     5. Obserwuj.
+
+   OCZEKIWANE:
+     [ ] gfade_out/in sekwencja
+     [ ] Firepit glowny znika
+     [ ] Fire2 (stacked) tez znika (target check: tile_num matches)
+     [ ] Kazdy sleeper: reg_anim_animate ANIM_back_to_standing
+     [ ] end_party_waiting -- party zaczyna follow
+     [ ] Bedrolle znikaja po ~2s (CLEANUP_DELAY_TICKS = 20)
+     [ ] XP reward: XP_CAMPFIRE_SMOTHER = 10
+
+   BUGI:
+     - SHOVEL na fire2 daje "That does nothing" = stary check tile_num
+       zapomniany (fix z v5.0 regresja)
+     - Bedrolle zostaja na mapie = deferred cleanup nie dziala
+     - Bedrolle znikaja od razu (NPC bez bedroll podczas anim) =
+       CLEANUP_DELAY_TICKS zignorowany
+
+
+================================================================================
+ AKT 12 (OPCJONALNY) -- MULTI-MAP PERSISTENCE
+================================================================================
+
+   KROK:
+     1. W obozie, USE SHOVEL -> wszystko cleanup.
+     2. Exit do worldmap, jedz do innego encounter.
+     3. USE LIGHTER ponownie.
+
+   OCZEKIWANE:
+     [ ] Nowy oboz tworzy sie na nowej mapie
+     [ ] Stary oboz NIE ma tutaj pozostalosci (bedrolle nie migruja)
+     [ ] campfire_map["<idx>"] = tile dla nowej mapy, stare entries
+         zostaja ale sa inactive
+
+
+================================================================================
+ CHECKLIST SZYBKI (do zaznaczania w czasie testu)
+================================================================================
+
+   [ ] AKT 1  NEW GAME items (6 itemow, 2 msgi)
+   [ ] AKT 2  SAVE/LOAD idempotency (zero duplikatow)
+   [ ] AKT 3  MEDIC rekrutacja
+   [ ] AKT 4  Armor FID override (min 3 armory przetestowane)
+   [ ] AKT 5  Campfire w wilderness (fire2 stacked, flicker)
+   [ ] AKT 6  Player bedroll rest (sleep til morning)
+   [ ] AKT 7  Klawisz 0 hold/follow toggle
+   [ ] AKT 8  Wake-before-talk animacja
+   [ ] AKT 9  "Get up and follow me" dialog option + LVAR 13
+   [ ] AKT 10 Wake-edge detection (1->0 transition)
+   [ ] AKT 11 Shovel extinguish + fire2 + bedroll cleanup
+   [ ] AKT 12 Multi-map persistence (opcjonalny)
+
+
+================================================================================
+ REGRESJE HISTORYCZNE (pilnuj czy NIE wrocily)
+================================================================================
+
+   v5.3 LVAR 15 out-of-bounds:
+     NPC CHODZA ZA GRACZEM mimo hold = LVAR 13 zle indeksowany.
+     Test w Akt 9: inni NPC STOJA, tylko wake'd NPC lata.
+
+   v5.0 Shovel rejected fire2:
+     SHOVEL na stacked fire dawal "nothing". Test w Akt 11: USE na fire2
+     dziala tak samo jak na fire1.
+
+   v4.x Party msg spam:
+     "Party: FOLLOW" / "Party: HOLD" nie powinno pojawiac sie.
+     Test w Akt 7: tylko ciche przelaczanie.
+
+   Necropolis water chip (confabulation):
+     Nie ma zadnej mechaniki chip-spawn poza wilderness. Test: NIE powinienes
+     zobaczyc chip na zadnej mapie miejskiej. Chip jest w startowym inv tylko.
+
+
+================================================================================
+ DEBUG TIPS
+================================================================================
+
+   - Save oddzielny przed kazdym aktem -> mozesz wrocic
+   - Sfall console (alt+F12 jesli enabled w ddraw.ini) -> zobacz msgi
+   - ini_setting debug: outdoorsman.ini zapisuje key state
+   - Jesli NPC nie wstaje: get_critter_anim(npc) w konsoli
+   - Jesli FID nie zmienia: obj_art_fid(npc) w konsoli
+
+
+================================================================================
+ EOF
+================================================================================

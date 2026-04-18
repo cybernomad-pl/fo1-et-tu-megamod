@@ -1,0 +1,385 @@
+================================================================================
+ fo1-et-tu-megamod  --  LOGIC TRACE + CRASH DIAGNOSIS  (2026-04-18)
+================================================================================
+
+ CEL: Znalezc CZARNA MAPE crash na worldmap exit.
+ METODA: ASCII logika wszystkich 5 skryptow + strategiczne logi do ini.
+
+
+================================================================================
+ HOOKS MATRIX  (kto na co slucha)
+================================================================================
+
+  +----------------+-----------+-----------+-----------+-----------+-----------+
+  | SCRIPT         | START     | USEOBJ    | USEOBJON  | GAMEMODE  | KEYPRESS  |
+  |                |           |           |           | CHANGE    |           |
+  +----------------+-----------+-----------+-----------+-----------+-----------+
+  | new_start_plus | YES       | -         | -         | -         | -         |
+  | outdoorsman    | YES       | YES       | YES       | YES       | -         |
+  | party_hotkeys  | YES       | -         | -         | YES       | YES       |
+  | party_armor_ext| YES       | -         | -         | YES       | - (*)     |
+  | gl_fo1mechanics| YES (nie  | nieznane  | nieznane  | nieznane  | nieznane  |
+  |  (cudzy mod)   |  nasze)   |           |           |           |           |
+  +----------------+-----------+-----------+-----------+-----------+-----------+
+
+  (*) party_armor_ext uses HOOK_INVENWIELD too (not shown).
+
+  GAMEMODECHANGE triggerowane przy:
+    - Load save
+    - Map change (town -> town)
+    - TOWN -> WORLDMAP exit  <-- TUTAJ CRASH
+    - WORLDMAP -> TOWN enter
+    - Inventory open/close
+    - Dialog open/close
+    - Combat start/end
+
+
+================================================================================
+ LOGIKA 1 -- new_start_plus  (malo prawdopodobne winowajca)
+================================================================================
+
+   start()                                 HOOKS: none
+     |
+     v
+   game_loaded?
+     |
+     v
+   is_loading_game?                        YES -> return (load save)
+     |
+     v NO = NEW GAME
+     |
+   add 9 items do dude_obj:
+     WATER_CHIP, LOCKPICKS, RADIO,
+     CURED_LEATHER_ARMOR, MIRROR_SHADES, COMBAT_KNIFE,
+     3x LEATHER_JACKET
+     |
+     v
+   display_msg
+     |
+     v
+   koniec.  Zaden hook, zero state machinery.
+
+   RYZYKO CRASHU NA WORLDMAP: ~0%.
+     Skrypt start() nie jest wywolywany przy zmianie mapy,
+     tylko raz przy game start.
+
+
+================================================================================
+ LOGIKA 2 -- party_hotkeys  (niskie ryzyko)
+================================================================================
+
+   start()                                 HOOKS: KEYPRESS, GAMEMODECHANGE
+     |
+     v
+   last_map_index := cur_map_index
+   register 2 hooks
+   set GVAR_PARTY_NO_FOLLOW := 0
+     |
+     v
+   koniec.
+
+   keypress_handler:
+     pressed = arg[0], key = arg[1]
+     if pressed == 0 return     // release event
+     if key != 36 return        // J only
+     if game_mode != 0 return   // only in overworld, not dialog/inv
+     toggle GVAR_PARTY_NO_FOLLOW
+
+   gamemode_handler  [LOG A_entry, A_last_idx]
+     if cur_map == last_map:
+       [LOG Z_same_map]
+       return
+     last_map_index := cur_map_index
+     if GVAR_NO_FOLLOW != 0: set 0    // reset hold on map change
+     [LOG Z_mapchange_done]
+
+   RYZYKO CRASHU NA WORLDMAP: ~5%.
+     Tylko GVAR read/set i cur_map_index read. Brak obj operations.
+     Moglby crashowac jesli cur_map_index zwraca invalid value i
+     silnik go nie lubi, ale to raczej sfall-robust.
+
+
+================================================================================
+ LOGIKA 3 -- party_armor_ext  (SREDNIE ryzyko)
+================================================================================
+
+   start()                                 HOOKS: GAMEMODECHANGE, INVENWIELD
+     |
+     v
+   last_map_idx := cur_map_index
+   register 2 hooks
+     |
+     v
+   koniec.
+
+   gamemode_handler  [LOG A_entry, A_last_idx]
+     |
+     v
+   refresh_all_party   [LOG rap A_entry]
+     iter LIST_CRITTERS:
+       obj = list_next
+       if obj != 0 and not dead:
+         if team == TEAM_PLAYER:
+           refresh_one(obj)
+             get_script(obj) -> sid
+             critter_inven_obj(obj, WORN) -> armor
+             compute_target_fid(sid, armor_pid)
+             if fid != 0 and obj_art_fid != fid:
+               art_change_fid_num(obj, fid)
+     [LOG rap Z_exit_iter count]
+     |
+     v
+   [LOG B_after_refresh]
+     |
+     v
+   if cur != last_map_idx:
+     last_map_idx := cur
+     dump_party_members    // write ini dump
+     [LOG C_after_dump]
+     |
+     v
+   [LOG Z_exit]
+
+   RYZYKO CRASHU NA WORLDMAP: SREDNIE (20%).
+     LIST_CRITTERS na worldmap -- nie wiem czy zwraca cos.
+     Jesli zwraca stale obj_id z poprzedniej mapy (juz despawn),
+     get_team/is_critter_dead moze crashowac.
+     GUARD: obj != 0 and not is_critter_dead. Ale to moze nie
+     wystarczyc dla stale ids.
+
+
+================================================================================
+ LOGIKA 4 -- outdoorsman  (NAJWIEKSZE ryzyko, najwiecej logiki)
+================================================================================
+
+   start()                                 HOOKS: USEOBJ, USEOBJON, GAMEMODECHANGE
+     |
+     v
+   load 6 save_arrays:
+     campfire_lighter, campfire_map, firepit_obj_map,
+     campfire_player_bedroll, campfire_bedrolls,
+     campfire_sleepers, campfire_pending
+     |
+     v
+   last_map_idx := cur_map_index
+   if NEW GAME: give_camping_kit (3 items)
+   set_proto_data LIGHTER USE flag
+   register 3 hooks
+
+   gamemode_handler  [LOG A_entry A_last_idx]
+     |
+     v
+   cleanup_pending_bedrolls
+     [LOG cln A_entry]
+     if pending_cleanup == 0: [LOG Z_exit_no_pending] return
+     keys = array_keys(pending_cleanup)
+     if keys == 0: [LOG Z_exit_null_keys] return
+     if len == 0: free_array; [LOG Z_exit_empty_keys] return
+     [LOG cln B_keys_count]
+     for i in 0..len-1:
+       map_key = keys[i]
+       deadline = pending[map_key]
+       if deadline > 0 and now >= deadline:
+         if map_key == "cur_map_index":
+           destroy bedrolls on current map
+         else:
+           drop tracking (stale map)
+         pending[map_key] := 0
+     [LOG Z_exit_done]  <-- MISSING! trzeba dodac
+     |
+     v
+   [LOG B_after_cleanup]
+     |
+     v
+   edge detect GVAR 1->0:
+     if last_no_follow == 1 and cur == 0:
+       sleepers = sleepers_map[cur_key]
+       for each sleeper: reg_anim_animate ANIM_back_to_standing
+       free_array(sleepers)
+       sleepers_map[cur_key] := 0
+     last_no_follow := cur
+   [LOG C_after_edge_detect]
+     |
+     v
+   if cur_map_index != last_map_idx:        // MAP CHANGE path
+     old_sleepers = sleepers_map["last_map"]
+     if != 0:
+       free_array(old_sleepers)           // <-- potencjalny crash
+       sleepers_map["last_map"] := 0
+       save_array
+     last_map_idx := cur_map_index
+   [LOG Z_exit]
+
+   map_update_p_proc  (tick handler -- sfall per-frame)
+     flicker_campfire
+     pending cleanup scheduling
+     -- NOT called on worldmap (sfall only calls this in normal maps)
+
+   RYZYKO CRASHU NA WORLDMAP: WYSOKIE (50%).
+     Najbardziej podejrzany: map_change_detection block.
+     free_array(old_sleepers) na arrayu z obj_id z poprzedniej mapy
+     -- array sam powinno byc OK (to tylko lista liczb), ale jesli
+     sleepers_map["<old_idx>"] to stara referencja do freed
+     array z wczesniejszej iteracji -- double free = crash.
+
+
+================================================================================
+ LOGIKA 5 -- gl_fo1mechanics  (CUDZY MOD, fo1_base)
+================================================================================
+
+   debug.log ma:
+     "Script Error: scripts\gl_fo1mechanics.int: op_obj_pid: obj is NULL"
+
+   To NIE jest nasz skrypt. To z fo1_base.dat (vanilla mod).
+   Error byl OBECNY w logu przed naszymi zmianami (Pig Rat combat).
+
+   Nie nasz problem -- ignorujemy.
+
+
+================================================================================
+ HIPOTEZY CRASHU (w kolejnosci prawdopodobienstwa)
+================================================================================
+
+ H1 [50%] -- outdoorsman: double-free old_sleepers.
+   Scenariusz:
+     - Gracz w V13, wczesniej nie byl w wilderness camp.
+     - sleepers_map ma wpis "42" (V13) = 0 (nigdy nie spal).
+     - Wyjscie na worldmap: cur_map_index != last_map_idx.
+     - Block "if old_sleepers != 0" -- ale sleepers to 0, wiec pominie.
+     - Teoretycznie powinno byc OK jesli sleepers_map[old_key] = 0.
+   Problem moze wystapic jesli:
+     - sleepers_map z save pamieta stary kiedys-wazny obj_id ptr,
+       i array_map dereferencing na zniknietej arrayu = crash.
+
+ H2 [20%] -- party_armor_ext: LIST_CRITTERS na worldmap.
+   Scenariusz:
+     - Gamemode change -> refresh_all_party.
+     - LIST_CRITTERS na worldmap -- stale obj_ids jesli silnik
+       trzyma ich w pamieci po despawn z V13.
+     - get_script/critter_inven_obj na stale obj = crash lub garbage.
+
+ H3 [15%] -- cleanup_pending_bedrolls array iteration:
+   Jesli pending_cleanup ma stale key dla niewczesniej odwiedzanej
+   mapy, iteracja robi save_array -- moze crashowac.
+
+ H4 [10%] -- vanilla mod (gl_fo1mechanics) unrelated error,
+   nasze zmiany odslonily timing issue, objaw czarnej mapy.
+
+ H5 [5%] -- inne (ktos inny nie nasz).
+
+
+================================================================================
+ PLAN DIAGNOSTYCZNY -- TESTY BORYSA
+================================================================================
+
+ STEP 1: Start nowa gra (nie load save!)
+   -> sprawdz inventory ma 9+3 items
+   -> notuj czy juz cokolwiek dziwnego
+
+ STEP 2: Wyjscie z V13 na worldmap
+   -> jesli CZARNA MAPA:
+      - zamknij gre
+      - otworz Fallout1in2/ folder
+      - kop outdoorsman.ini + party_armor_ext.ini + party_hotkeys.ini
+      - poszlij mi (moga byc w folderze Fallout1in2/ lub mods/)
+
+ INTERPRETACJA INI:
+   Szukam ostatniego wpisu w kazdym z 3 ini -- gdzie handler
+   przestal pisac = tam zawiesil sie.
+
+   outdoorsman.ini:
+     [gm] A_entry = X        (wszedl gamemode_handler)
+     [gm] A_last_idx = Y
+     [cln] A_entry           (wszedl cleanup)
+     [cln] B_keys_count = N  (count keys)
+     [cln] Z_exit_done       <-- jesli brak, cleanup sie wysypal
+     [gm] B_after_cleanup
+     [gm] C_after_edge_detect
+     [gm] Z_exit             <-- jesli brak, reszta gamemode_handler
+
+   party_armor_ext.ini:
+     [gm] A_entry
+     [rap] A_entry           (wszedl refresh_all_party)
+     [rap] Z_exit_iter = N   <-- jesli brak, iteracja LIST_CRITTERS crashed
+     [gm] B_after_refresh
+     [gm] C_after_dump       (jesli map change)
+     [gm] Z_exit
+
+   party_hotkeys.ini:
+     [gm] A_entry
+     [gm] Z_same_map LUB Z_mapchange_done
+
+
+================================================================================
+ NEXT STEPS PO DANYCH
+================================================================================
+
+ Jesli H1 (outdoorsman):
+   -> dodaj guard przed free_array: sprawdz czy array zachowuje
+      semantic invariant; fallback: zignoruj map change cleanup
+      gdy sleepers_map[old] == 0 (juz jest)
+
+ Jesli H2 (party_armor_ext):
+   -> dodaj guard: if (cur_map_index < 0) return; na samym poczatku
+      gamemode_handler -- pomijaj worldmap
+
+ Jesli H3 (cleanup):
+   -> dodaj guard: map_key musi byc numeric ("\d+"), nie garbage
+
+ Jesli H4 (vanilla):
+   -> rollback nie pomoze; trzebaby fix gl_fo1mechanics (nie nasz)
+
+
+================================================================================
+ AGILITY UNIQUE ITEM -- PROPOZYCJA
+================================================================================
+
+ Szukalam UNIQUE items ktore normalnie nic nie robia.
+
+ KANDYDACI Z ITEMPID.H:
+   PID_CORNELIUS_GOLD_WATCH (257) -- Cornelius gold watch
+     * UNIQUE, quest item z Vault City (FO2 -- w Et Tu port
+       nieznane czy aktywny, ale PID istnieje)
+     * Thematycznie: zegarek = TIMING = REFLEKSY = AGILITY
+     * Normalnie zero bonusow, tylko quest handoff
+
+   PID_RUBBER_BOOTS (262) -- gumiaki
+     * Odporne na klej, nic wiecej nie robia
+     * Tematycznie: buty = STOPA = ZWINNOSC
+     * Drugi wybor
+
+   PID_TANGLERS_HAND (114) -- Tangler's hand
+     * UNIQUE, quest Hub gangster
+     * Mniej logiczne dla AG (to reka, nie noga)
+
+ MOJA PROPOZYCJA: CORNELIUS_GOLD_WATCH.
+   Tematycznie perfect, UNIQUE, zero-use w vanilla Et Tu.
+
+
+================================================================================
+ FULL STAT BOOSTER MATRIX (po znalezieniu AG)
+================================================================================
+
+  +-------------+-----------------------------+-------+-------+
+  | STAT        | ITEM                        | PID   | BONUS |
+  +-------------+-----------------------------+-------+-------+
+  | Strength    | Robot Parts                 | 269   | +5    |
+  | Perception  | Dixon Eye                   | 281   | +5    |
+  | Endurance   | Water Flask                 | 126   | +5    |
+  | Charisma    | Mirror Shades               | 433   | +7 ?  |
+  | Intelligence| Cybernetic Brain            | 321   | +5    |
+  | Agility     | Cornelius Gold Watch (PROP) | 257   | +5    |
+  | Luck        | Magic 8 Ball                | 328   | +5    |
+  +-------------+-----------------------------+-------+-------+
+
+  CHARYZMA: Borys wspomniale +7, potem +5. Domyslnie +5 dla zgodnosci.
+  Mozna +7 dla Charisma specjalnie jesli preferencje -- jedna zmiana.
+
+  DZIALANIE NA NPC:
+    TAK dla: HP_max, AP, carry weight, melee damage, AC, perception range
+    NIE dla: Skills (przeliczone raz przy char creation, nie pochodne)
+
+
+================================================================================
+ EOF
+================================================================================

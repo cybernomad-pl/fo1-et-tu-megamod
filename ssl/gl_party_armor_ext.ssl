@@ -77,13 +77,18 @@ end
 // Refresh all party FIDs (catches armor swaps in inventory).
 // ============================================================
 procedure gamemode_handler begin
+    LOG("gm", "A_entry", cur_map_index);
+    LOG("gm", "A_last_idx", last_map_idx);
     call refresh_all_party;
+    LOG("gm", "B_after_refresh", 1);
 
     // Dump on map change (for diagnostics).
     if (cur_map_index != last_map_idx) then begin
         last_map_idx := cur_map_index;
         call dump_party_members;
+        LOG("gm", "C_after_dump", 1);
     end
+    LOG("gm", "Z_exit", cur_map_index);
 end
 
 // ============================================================
@@ -104,10 +109,14 @@ end
 procedure refresh_all_party begin
     variable lst;
     variable obj;
+    variable iter_count;
 
+    LOG("rap", "A_entry", cur_map_index);
+    iter_count := 0;
     lst := list_begin(LIST_CRITTERS);
     obj := list_next(lst);
     while (obj) do begin
+        iter_count := iter_count + 1;
         if (obj != 0 and not(is_critter_dead(obj))) then begin
             if (get_team(obj) == TEAM_PLAYER) then begin
                 call refresh_one(obj);
@@ -116,6 +125,7 @@ procedure refresh_all_party begin
         obj := list_next(lst);
     end
     list_end(lst);
+    LOG("rap", "Z_exit_iter", iter_count);
 end
 
 // ============================================================

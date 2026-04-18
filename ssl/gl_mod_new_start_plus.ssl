@@ -1,10 +1,14 @@
 /*
     fo1_mod_new_start_plus -- fo1-et-tu-megamod
-    On NEW GAME start (not load), gives Vault Dweller:
-      WATER_CHIP           (easy main quest)
-      ELECTRONIC_LOCKPICKS (for lockpick mod mechanics)
-      RADIO                (for radio mod mechanics)
-    LIGHTER/SHOVEL/ROPE are owned by fo1_mod_outdoorsman.
+    On NEW GAME start (not load), gives Vault Dweller starting loadout:
+      Main quest:     WATER_CHIP
+      Mod mechanics:  ELECTRONIC_LOCKPICKS (lockpick), RADIO (radio)
+      Gang wear:      CURED_LEATHER_ARMOR (combat jacket, player)
+                      MIRROR_SHADES (style)
+                      COMBAT_KNIFE (melee)
+                      3x LEATHER_JACKET (for gang members to wear)
+    LIGHTER/SHOVEL/ROPE belong to fo1_mod_outdoorsman.
+    Motorcycle + trunk weapons belong to fo1_mod_biker.
 */
 
 #include "define.h"
@@ -20,10 +24,19 @@ procedure start begin
         // is_loading_game = TRUE -> save load (skip, don't re-gift)
         // is_loading_game = FALSE -> NEW GAME -> gift starting items
         if not(is_loading_game) then begin
+            // Core mod items
             add_obj_to_inven(dude_obj, create_object(PID_WATER_CHIP, 0, 0));
             add_obj_to_inven(dude_obj, create_object(PID_ELECTRONIC_LOCKPICKS, 0, 0));
             add_obj_to_inven(dude_obj, create_object(PID_RADIO, 0, 0));
-            display_msg("You check your pack. Water chip, lockpicks, radio.");
+            // Player gang wear (inventory only -- player decides to equip)
+            add_obj_to_inven(dude_obj, create_object(PID_CURED_LEATHER_ARMOR, 0, 0));
+            add_obj_to_inven(dude_obj, create_object(PID_MIRROR_SHADES, 0, 0));
+            add_obj_to_inven(dude_obj, create_object(PID_COMBAT_KNIFE, 0, 0));
+            // 3x leather jacket for future gang members
+            add_obj_to_inven(dude_obj, create_object(PID_LEATHER_JACKET, 0, 0));
+            add_obj_to_inven(dude_obj, create_object(PID_LEATHER_JACKET, 0, 0));
+            add_obj_to_inven(dude_obj, create_object(PID_LEATHER_JACKET, 0, 0));
+            display_msg("You check your pack. Shades, combat jacket, knife, spare jackets.");
         end
     end
 end

@@ -174,6 +174,11 @@ procedure look_at_p_proc begin
 end
 
 procedure map_enter_p_proc begin
+   // If in party, don't reset team or home tile (keep her as party member)
+   if (self_team == TEAM_PLAYER) then begin
+      return;
+   end
+
    // Theresa is ALWAYS punk
    art_change_fid_num(self_obj, 122);
 
@@ -358,7 +363,9 @@ procedure Theresa13 begin
 end
 
 procedure Theresa14 begin
-   NMessage(133);
+   Reply(133);
+   NOption("Join me.", NodeRecruit, 4);
+   NOption("Goodbye.", TheresaEnd, 4);
 end
 
 procedure Theresa15 begin
@@ -450,7 +457,9 @@ procedure Theresa24 begin
       exp_flag := 0;
       line := 10;
    end
-   NMessage(172);
+   Reply(172);
+   NOption("Join me.", NodeRecruit, 4);
+   NOption("Goodbye.", TheresaEnd, 4);
 end
 
 procedure Theresa25 begin

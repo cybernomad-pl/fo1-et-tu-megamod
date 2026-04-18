@@ -1,0 +1,191 @@
+================================================================================
+ fo1-et-tu-megamod  --  v6 ITER 1 REVIEW  (2026-04-18)
+================================================================================
+
+ STATUS: FIX 1-4 zrobione, skompilowane, zdeployowane.
+ CZEKA:  FIX 5 (motocykl), FIX 6 (extra motocykle).
+
+
+================================================================================
+ CO ZMIENIONE (4 pliki)
+================================================================================
+
+  +--------------------------------+-----------------------------+---------+
+  | SSL                            | ZMIANA                      | BYTES   |
+  +--------------------------------+-----------------------------+---------+
+  | gl_party_hotkeys.ssl           | key != 11 -> key != 36 (J)  | 1840    |
+  | gl_mod_new_start_plus.ssl      | +6 itemow (jacket/shades/.) | 1947    |
+  | THERESA.ssl                    | Theresa14+24: Join me opt   | 12287   |
+  | OFFICER.ssl                    | Officer01+25+26: Join me    | 10139   |
+  +--------------------------------+-----------------------------+---------+
+
+  DEPLOY (timestamps 00:22):
+    fo1_mod_party_hotkeys/scripts/gl_party_hotkeys.int      [OK]
+    fo1_mod_new_start_plus/scripts/gl_mod_new_start_plus.int [OK]
+    fo1_mod_invasion_fix/scripts/THERESA.int                 [OK]
+    fo1_mod_invasion_fix/scripts/OFFICER.int                 [OK]
+
+
+================================================================================
+ CODE REVIEW  (par-fix)
+================================================================================
+
+ FIX 1 -- klawisz J:
+   [OK] key != 36 (DIK_J z dik.h:36)
+   [OK] komentarz zaktualizowany
+   [OK] zachowana semantyka: pressed==0 check, game_mode check
+   [OK] reset na map change bez zmian
+   RYZYKO: zero -- jedna liczbowa zmiana.
+
+ FIX 2 -- Theresa:
+   [OK] Theresa14: Reply(133) + NOption "Join me" + NOption "Goodbye"
+   [OK] Theresa24: Reply(172) + set_global_var zachowany + Join me
+   [OK] NodeRecruit istnieje (linia 467)
+   [OK] TheresaEnd istnieje (linia 460)
+   NIEPEWNE: msg 133 i 172 mogly byc pisane jako narracja
+     (trzecioosobowa) -- teraz wyswietlaja sie jako Theresa speech.
+     Trzeba zobaczyc w grze jak brzmia.
+
+ FIX 3 -- Officer:
+   [OK] Officer01 (waterchip_returned): Reply(101) + Join me
+   [OK] Officer25 (armory + reaction>BAD): Reply(149) + Join me
+   [OK] Officer26 (armory_access): Reply(150) + Join me
+   [OK] Officer00 (hostile) ZOSTAWIONY -- nie chce werbowac wroga
+   [OK] Officer27 (dude armed) ZOSTAWIONY -- put away weapon warning
+   RYZYKO: jak FIX 2 -- msg 101/149/150 moze byc 3osobowy.
+
+ FIX 4 -- new_start_plus:
+   [OK] 9 itemow laczony:
+        WATER_CHIP, ELECTRONIC_LOCKPICKS, RADIO,
+        CURED_LEATHER_ARMOR (combat jacket),
+        MIRROR_SHADES, COMBAT_KNIFE,
+        3x LEATHER_JACKET
+   [OK] wszystkie PID-y z itempid.h zweryfikowane
+   [OK] is_loading_game guard zachowany
+   [OK] msg: "You check your pack. Shades, combat jacket, knife, spare jackets."
+   RYZYKO:
+     - weight ~24 lb = w porzadku (ST5 carry = 75 lb)
+     - 9 itemow = inventory trochę zaśmieconych, ale gracz decyduje
+       co zalozyc/zostawic.
+
+
+================================================================================
+ HIPOTEZY TESTOWE  (co moze sie stac w grze)
+================================================================================
+
+ H1. Klawisz J -- toggle hold/follow jak poprzednio "0".
+     Test: po spawnie w V13, J -> party hold, J -> follow.
+
+ H2. Klawisz 0 NIE triggeruje party_hotkeys.
+     Test: 0 dziala tylko dla party_orders auto-loot switch.
+
+ H3. Theresa po questach (waterchip/rebels) -- Join me dostepne.
+     Test A: swiezy char, zagadaj Theresa -> juz sa rozne Join me
+             opcje w Theresa01 (nic sie nie zmienilo).
+     Test B: konsola sfall `set_global_var 31 2` (disband rebels)
+             + zagadaj -> Theresa23 z Join me.
+     Test C: konsola `set_global_var 172 1` (waterchip_returned?)
+             ale nie znam dokladnie GVAR-u -- sprawdzic w global.h.
+
+ H4. Theresa14 -- low reaction level. Trudno wywolac w early game.
+     Najprosciej: INT 1 char albo -10 charisma speech failure.
+
+ H5. Officer po waterchipie -- Join me dziala.
+     Test: swiezy char + Officer02 (default reaction > BAD) ma Join me.
+     Po oddaniu chipu -> teraz Officer01 tez ma Join me.
+
+ H6. Officer26 (armory_access=1) -- Join me po speech check
+     ktory otworzyl armory. Test: wykonac speech check przez
+     Officer15a, potem drug raz zagadac.
+
+ H7. New start -- 6 nowych itemow widocznych od razu.
+     Test: nowa gra, I key, inv ma 9 new start items + 3 from
+     outdoorsman (lighter/shovel/rope) = 12 items total.
+
+ H8. Gang jacket uzyteczny?
+     W FO1 party NPC moga nosic armor tylko przez party_armor_ext.
+     Nasz mod dziala dla MEDIC. Dla innych NPC (ktorych zrekrutujesz
+     np. Theresa, Officer) jacket dostarczony ale sprite nie zmieni sie.
+     To jest COVERED by FIX przyszly (party_armor_ext expansion).
+
+
+================================================================================
+ TEST SCENARIO  (kolejnosc)
+================================================================================
+
+ 1. Start nowa gra.
+    [ ] Display msg: "You check your pack. Shades, combat jacket..."
+    [ ] Display msg: "You pack lighter, shovel and rope for the road."
+    [ ] Inventory: 12 new start items (potwierdz kazdy).
+
+ 2. Klawisz J test.
+    [ ] J -> nic w dialog / nic w inv
+    [ ] J w game mode -> (brak msg, ale party hold)
+    [ ] Odejdz 10 kafli -> party stoi
+    [ ] J -> party bieg za Toba
+
+ 3. Klawisz 0 test (powinien byc CZYSTY od nas).
+    [ ] 0 -> zero toggle party follow
+    [ ] 0 triggeruje tylko party_orders auto-loot (jesli aktywny T)
+
+ 4. Officer test (V13 Entrance).
+    [ ] Zagadaj -> Officer18 (default) ma "Join me."
+    [ ] Rekrutuj -> "Vault 13 Officer joins your party."
+    [ ] Party party member widoczny na tile-ach.
+
+ 5. Theresa test (V13 Living Quarters 2nd floor, Theresa rebel).
+    [ ] Zagadaj -> Theresa01 ma "Join me."
+    [ ] Rekrutuj.
+
+ 6. Regresja -- Save/Load.
+    [ ] Zapisz, wyladuj -> inv taki sam, bez duplikatow.
+
+ 7. Regresja -- rest of party (MEDIC, CABBOT, etc).
+    [ ] Zadne inne dialog zepsute.
+    [ ] "Join me." dziala normalnie u innych NPC.
+
+
+================================================================================
+ NIEPEWNE -- DO WERYFIKACJI W GRZE
+================================================================================
+
+ Q1. Czy Reply(msg_id) przypisuje tekst jako mowe NPC (Theresa: "...")
+     lub jako narracje ("Theresa refuses to talk...")?
+     -> Sprawdzic wizualnie dla Theresa14/24 i Officer01/25/26.
+
+ Q2. Czy Reply wymaga speaking_head (twarz animowana) aby dzialalo?
+     Normalnie NPC bez animacji uzywaja Reply bez problemu (widac
+     w Officer02 i Theresa01).
+
+ Q3. Czy po rekrutacji Theresa/Officer ich script map_enter_p_proc
+     nie teleportuje ich spowrotem na home_tile?
+     Officer: linia 140 "if team == TEAM_PLAYER return" -- OK.
+     Theresa: brak tego guardu (linia 186 set_self_team(TEAM_V13_REBELS))
+     -> POTENCJALNY BUG: Theresa po zmianie mapy moze resetowac team.
+     SPRAWDZIC: jesli zwerbujesz Theresa i wyjdziesz z mapy, czy wroci
+     zeby byc rebel, czy dalej party.
+
+
+================================================================================
+ ROZPISKA KOLEJNYCH ITERACJI
+================================================================================
+
+ ITER 2  -- FIX 5 (motocykl + trunk loadout)
+   a) research Trunk_Ptr import timing
+   b) sprawdzic czy mozna spawn PID_DRIVABLE_MOTO1 w V13 entrance
+   c) nowy mod fo1_mod_biker
+   d) load trunk z broniami
+   e) review + test
+
+ ITER 3  -- FIX 6 (extra motocykle wszedzie gdzie player moto)
+   a) hook na spawn/map_enter
+   b) liczenie party members (bez zwierzakow)
+   c) count/3 extra motocykli na tile obok player moto
+   d) flag: scenery only (nie drivable)
+   e) cleanup gdy player moto znika
+   f) review + test
+
+
+================================================================================
+ EOF
+================================================================================
