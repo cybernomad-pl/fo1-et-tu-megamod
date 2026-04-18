@@ -27,6 +27,9 @@ procedure start begin
         register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
         // Start with party following (fresh state)
         set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
+        // Disable FO2 CHA-based party limit (biker gang wants unlimited)
+        set_global_var(GVAR_ENABLE_FO2_PARTY_LIMIT, 0);
+        LOG("start", "party_limit_disabled", 1);
     end
 end
 

@@ -50,6 +50,7 @@ variable tmp_hostile;
 variable Only_Once := 1;
 
 procedure start begin
+   if (self_team == TEAM_PLAYER) then return;
    if Only_Once then begin
       Only_Once := 0;
       set_self_team(TEAM_RAIDERS);

@@ -52,6 +52,7 @@ variable initial := 0;
 variable rndz;
 
 procedure start begin
+   if (self_team == TEAM_PLAYER) then return;
    if not(initial) then begin
       initial := 1;
       set_self_team(TEAM_RAIDERS);
