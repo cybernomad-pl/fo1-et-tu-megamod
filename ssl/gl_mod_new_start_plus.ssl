@@ -1,14 +1,17 @@
 /*
     fo1_mod_new_start_plus -- fo1-et-tu-megamod
-    On NEW GAME start (not load), gives Vault Dweller starting loadout:
+    Grants starting kit ONCE on first game_loaded tick.
+
+    NOTE 2026-04-18: is_loading_game metarule returned FALSE on LOAD SAVE,
+    causing duplicate gifting. Rolled back to save_array idempotency guard
+    -- sfall persists save_array to the save file, so "given" flag survives
+    load and we never re-gift.
+
+    Loadout:
       Main quest:     WATER_CHIP
-      Mod mechanics:  ELECTRONIC_LOCKPICKS (lockpick), RADIO (radio)
-      Gang wear:      CURED_LEATHER_ARMOR (combat jacket, player)
-                      MIRROR_SHADES (style)
-                      COMBAT_KNIFE (melee)
+      Mod mechanics:  ELECTRONIC_LOCKPICKS, RADIO
+      Gang wear:      CURED_LEATHER_ARMOR, MIRROR_SHADES, COMBAT_KNIFE
                       3x LEATHER_JACKET (for gang members to wear)
-    LIGHTER/SHOVEL/ROPE belong to fo1_mod_outdoorsman.
-    Motorcycle + trunk weapons belong to fo1_mod_biker.
 */
 
 #include "define.h"
@@ -17,13 +20,23 @@
 #include "sfall/define_extra.h"
 #include "sfall/define_lite.h"
 
+#define LOG(s, k, v) set_ini_setting("new_start_plus.ini|" + s + "|" + k, v)
+
 procedure start;
 
 procedure start begin
+    variable given_arr;
+
     if game_loaded then begin
-        // is_loading_game = TRUE -> save load (skip, don't re-gift)
-        // is_loading_game = FALSE -> NEW GAME -> gift starting items
-        if not(is_loading_game) then begin
+        LOG("start", "is_loading_game", is_loading_game);
+        LOG("start", "game_loaded", 1);
+
+        given_arr := load_array("new_start_plus_given");
+        LOG("start", "given_arr_null", (given_arr == 0));
+        if (given_arr != 0) then LOG("start", "given_flag", given_arr["given"]);
+
+        if (given_arr == 0 or given_arr["given"] != 1) then begin
+            LOG("start", "gifting", 1);
             // Core mod items
             add_obj_to_inven(dude_obj, create_object(PID_WATER_CHIP, 0, 0));
             add_obj_to_inven(dude_obj, create_object(PID_ELECTRONIC_LOCKPICKS, 0, 0));
@@ -37,6 +50,15 @@ procedure start begin
             add_obj_to_inven(dude_obj, create_object(PID_LEATHER_JACKET, 0, 0));
             add_obj_to_inven(dude_obj, create_object(PID_LEATHER_JACKET, 0, 0));
             display_msg("You check your pack. Shades, combat jacket, knife, spare jackets.");
+
+            // Persist "given" so LOAD SAVE never re-gifts.
+            given_arr := create_array_map;
+            given_arr["given"] := 1;
+            save_array("new_start_plus_given", given_arr);
+            LOG("start", "given_saved", 1);
+        end
+        else begin
+            LOG("start", "already_given_skip", 1);
         end
     end
 end

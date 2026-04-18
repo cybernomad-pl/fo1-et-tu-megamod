@@ -64,6 +64,7 @@ procedure start;
 procedure useobj_handler;
 procedure useobjon_handler;
 procedure gamemode_handler;
+procedure keypress_handler;
 procedure map_update_p_proc;
 procedure handle_lighter(variable item);
 procedure handle_shovel_on_firepit;
@@ -125,9 +126,9 @@ procedure start begin
         last_map_idx := cur_map_index;
 
         // NEW GAME only -- give LIGHTER / SHOVEL / ROPE once.
-        if not(is_loading_game) then begin
-            call give_camping_kit;
-        end
+        // is_loading_game proved unreliable (2026-04-18: fired FALSE on load),
+        // using save_array guard instead (persists in save file).
+        call give_camping_kit;
 
         // Enable USE action on lighter
         set_proto_data(PID_LIGHTER, PROTO_IT_FLAGS,
@@ -137,8 +138,40 @@ procedure start begin
         register_hook_proc(HOOK_USEOBJ, useobj_handler);
         register_hook_proc(HOOK_USEOBJON, useobjon_handler);
         register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
+        register_hook_proc(HOOK_KEYPRESS, keypress_handler);
         LOG("start", "loaded", 1);
     end
+end
+
+// ============================================================
+// HOOK_KEYPRESS -- "K" = rest shortcut when camp available.
+// Avoids fiddly USE on the player bedroll sprite.
+// ============================================================
+procedure keypress_handler begin
+    variable pressed;
+    variable key;
+
+    pressed := get_sfall_arg;
+    key := get_sfall_arg;
+
+    if (pressed == 0) then return;         // release event
+    if (key != 37) then return;            // DIK_K only
+    if (get_game_mode != 0) then return;   // overworld only, not dialog/inv
+
+    if not(is_wilderness) then begin
+        display_msg("You need to be at a camp in the wild to rest.");
+        return;
+    end
+    if not(map_has_campfire) then begin
+        display_msg("Light a campfire first.");
+        return;
+    end
+    if (combat_is_initialized) then begin
+        display_msg("Can't rest during combat.");
+        return;
+    end
+
+    call handle_player_bedroll_rest;
 end
 
 // ============================================================
@@ -174,44 +207,84 @@ end
 // HOOK_USEOBJON -- shovel on tracked firepit
 // ============================================================
 procedure useobjon_handler begin
+    variable arg0;
+    variable arg1;
+    variable arg2;
     variable user;
     variable item;
     variable target;
     variable map_key;
     variable tracked_fire;
 
-    // HOOK_USEOBJON arg order: (user, used_item, target)
-    user := get_sfall_arg;
-    item := get_sfall_arg;
-    target := get_sfall_arg;
+    LOG("shv", "A_entry", 1);
 
-    if (user != dude_obj) then return;
-    if (item == 0 or target == 0) then return;
-    if (obj_pid(item) != PID_SHOVEL) then return;
-    if (obj_pid(target) != PID_FIRE_PIT) then return;
+    // Dump raw args BEFORE any interpretation so we can learn sfall order.
+    arg0 := get_sfall_arg;
+    arg1 := get_sfall_arg;
+    arg2 := get_sfall_arg;
+    LOG("shv", "raw_arg0_obj", arg0);
+    LOG("shv", "raw_arg1_obj", arg1);
+    LOG("shv", "raw_arg2_obj", arg2);
+    LOG("shv", "raw_arg0_pid", obj_pid(arg0));
+    LOG("shv", "raw_arg1_pid", obj_pid(arg1));
+    LOG("shv", "raw_arg2_pid", obj_pid(arg2));
+    LOG("shv", "dude_obj", dude_obj);
+    LOG("shv", "dude_pid", obj_pid(dude_obj));
+
+    // Heuristic: find which arg is the shovel and which is the firepit.
+    // user := whichever remaining arg is the dude (or first critter).
+    if (obj_pid(arg0) == PID_SHOVEL) then item := arg0;
+    else if (obj_pid(arg1) == PID_SHOVEL) then item := arg1;
+    else if (obj_pid(arg2) == PID_SHOVEL) then item := arg2;
+    else item := 0;
+
+    if (obj_pid(arg0) == PID_FIRE_PIT) then target := arg0;
+    else if (obj_pid(arg1) == PID_FIRE_PIT) then target := arg1;
+    else if (obj_pid(arg2) == PID_FIRE_PIT) then target := arg2;
+    else target := 0;
+
+    LOG("shv", "B_item_found", item);
+    LOG("shv", "B_target_found", target);
+
+    if (item == 0) then begin
+        LOG("shv", "Z_no_shovel_in_args", 1);
+        return;
+    end
+    if (target == 0) then begin
+        LOG("shv", "Z_no_firepit_in_args", 1);
+        return;
+    end
 
     // Must be OUR tracked campfire (not random firepit from map).
     map_key := "" + cur_map_index;
     tracked_fire := firepit_obj_map[map_key];
+    LOG("shv", "C_tracked_fire", tracked_fire);
 
     // No camp on this map -- silent pass, let engine handle vanilla firepit.
-    if (tracked_fire == 0) then return;
+    if (tracked_fire == 0) then begin
+        LOG("shv", "Z_no_tracked_fire", 1);
+        return;
+    end
 
     // Accept either the primary firepit OR the aux fire2 stacked on
     // the same tile (player can't tell them apart -- both are "our fire").
     if (target != tracked_fire
         and tile_num(target) != tile_num(tracked_fire)) then begin
+        LOG("shv", "Z_wrong_tile", tile_num(target));
         display_msg("This fire isn't part of your camp.");
         return;
     end
 
     if (combat_is_initialized) then begin
+        LOG("shv", "Z_combat", 1);
         display_msg("No time to put out the fire right now.");
         return;
     end
 
+    LOG("shv", "D_invoking_handler", 1);
     call handle_shovel_on_firepit;
     set_sfall_return(-1);
+    LOG("shv", "Z_done", 1);
 end
 
 // ============================================================
@@ -284,26 +357,33 @@ end
 procedure handle_lighter(variable item) begin
     variable arr;
 
-    // One campfire per map rule: if we already have a camp here,
-    // the lighter does NOTHING. Player must shovel it out to reset.
-    if (map_has_campfire) then begin
-        display_msg("A campfire already burns nearby. Put it out with a shovel first.");
-        set_sfall_return(-1);
-        return;
-    end
+    LOG("ltr", "A_entry", cur_map_index);
+    LOG("ltr", "A_is_wild", is_wilderness);
+    LOG("ltr", "A_has_camp", map_has_campfire);
+    LOG("ltr", "A_combat", combat_is_initialized);
+    LOG("ltr", "A_lit_state", lighter_lit);
+    LOG("ltr", "A_map_is_encounter", map_is_encounter);
 
     if (lighter_lit == 0) then begin
         lighter_lit := 1;
         set_object_data(item, OBJ_DATA_LIGHT_DISTANCE, 8);
         set_object_data(item, OBJ_DATA_LIGHT_INTENSITY, 65536);
         display_msg("You flick the lighter open. A small flame pushes back the dark.");
+        LOG("ltr", "B_turned_on", 1);
 
-        // In wilderness: light a real campfire + camp the party.
-        // Anywhere else: lighter just toggles its own flame.
-        if (is_wilderness) then begin
-            if not(combat_is_initialized) then begin
-                call create_campfire_adjacent;
-            end
+        // Create campfire only in wilderness AND no existing camp.
+        if (is_wilderness
+            and not(map_has_campfire)
+            and not(combat_is_initialized)) then begin
+            LOG("ltr", "C_creating_camp", 1);
+            call create_campfire_adjacent;
+            play_sfx("FLAMETHR");
+        end
+        else begin
+            LOG("ltr", "C_no_camp_gate", 0);
+            if not(is_wilderness) then LOG("ltr", "C_fail_not_wild", 1);
+            if (map_has_campfire) then LOG("ltr", "C_fail_has_camp", 1);
+            if (combat_is_initialized) then LOG("ltr", "C_fail_combat", 1);
         end
     end
     else begin
@@ -311,6 +391,7 @@ procedure handle_lighter(variable item) begin
         set_object_data(item, OBJ_DATA_LIGHT_DISTANCE, 0);
         set_object_data(item, OBJ_DATA_LIGHT_INTENSITY, 0);
         display_msg("You snap the lighter shut. Darkness closes in.");
+        LOG("ltr", "B_turned_off", 1);
     end
 
     tile_refresh_display;
@@ -339,6 +420,9 @@ procedure handle_shovel_on_firepit begin
     map_key := "" + cur_map_index;
 
     gfade_out(600);
+
+    // Sizzle of dirt smothering flames (sfall vanilla STEAM.ACM).
+    play_sfx("STEAM");
 
     // 1. Destroy tracked firepit (primary). Remember its tile so we can
     //    sweep any stacked second firepit (aux light source).
@@ -561,14 +645,27 @@ procedure create_campfire_adjacent begin
     // ring = slot / 6, dir = slot % 6, dist = RING_START_DIST + ring*RING_STEP.
 
     // Player bedroll: slot 0 (ring 0, dir 0) -- same ring/step system as NPCs.
+    // Try PID_BED_2 first (distinct sprite if available), fallback to BED_1.
     player_bedroll_tile := tile_num_in_direction(fire_tile, 0, RING_START_DIST);
-    player_bedroll := create_object(PID_BED_1, player_bedroll_tile, dude_elevation);
+    player_bedroll := create_object(PID_BED_2, player_bedroll_tile, dude_elevation);
+    LOG("camp", "pbed_try_bed2", player_bedroll);
+    if (player_bedroll == 0) then begin
+        player_bedroll := create_object(PID_BED_1, player_bedroll_tile, dude_elevation);
+        LOG("camp", "pbed_fallback_bed1", player_bedroll);
+    end
     if (player_bedroll != 0) then begin
         resize_array(bedrolls_arr, len_array(bedrolls_arr) + 1);
         bedrolls_arr[len_array(bedrolls_arr) - 1] := player_bedroll;
-        // Track player bedroll separately so USE on it triggers rest.
         player_bedroll_map["" + cur_map_index] := player_bedroll;
         save_array("campfire_player_bedroll", player_bedroll_map);
+        // Visual marker: subtle glow so player can find it among identical
+        // NPC bedrolls. Glow is belt-and-braces in case PID_BED_2 sprite
+        // is identical to PID_BED_1 in this game's proto.
+        set_object_data(player_bedroll, OBJ_DATA_LIGHT_DISTANCE, 2);
+        set_object_data(player_bedroll, OBJ_DATA_LIGHT_INTENSITY, 32768);
+    end
+    else begin
+        LOG("camp", "pbed_FAIL_both_pids", player_bedroll_tile);
     end
 
     // Party NPCs: slot 1, 2, 3, ... (each slot -> ring and direction via spiral).
@@ -584,10 +681,8 @@ procedure create_campfire_adjacent begin
                 bedroll_tile := tile_num_in_direction(fire_tile, dir_idx,
                     RING_START_DIST + ring * RING_STEP);
 
-                if ((idx % 2) == 0) then
-                    bedroll_pid := PID_BED_1;
-                else
-                    bedroll_pid := PID_BED_2;
+                // NPC always PID_BED_1 (player uses PID_BED_2 for visual distinction)
+                bedroll_pid := PID_BED_1;
 
                 bedroll := create_object(bedroll_pid, bedroll_tile, dude_elevation);
                 // Only put NPC to sleep if their bedroll actually materialized.
@@ -717,8 +812,24 @@ end
 // STARTING KIT -- LIGHTER, SHOVEL, ROPE. Called only on NEW GAME.
 // ============================================================
 procedure give_camping_kit begin
+    variable given_arr;
+
+    given_arr := load_array("outdoorsman_kit_given");
+    LOG("kit", "given_arr_null", (given_arr == 0));
+    if (given_arr != 0) then LOG("kit", "given_flag", given_arr["given"]);
+
+    if (given_arr != 0 and given_arr["given"] == 1) then begin
+        LOG("kit", "skip_already_given", 1);
+        return;
+    end
+
+    LOG("kit", "gifting", 1);
     add_obj_to_inven(dude_obj, create_object(PID_LIGHTER, 0, 0));
     add_obj_to_inven(dude_obj, create_object(PID_SHOVEL, 0, 0));
     add_obj_to_inven(dude_obj, create_object(PID_ROPE, 0, 0));
     display_msg("You pack lighter, shovel and rope for the road.");
+
+    given_arr := create_array_map;
+    given_arr["given"] := 1;
+    save_array("outdoorsman_kit_given", given_arr);
 end

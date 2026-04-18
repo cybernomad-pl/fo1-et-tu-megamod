@@ -53,6 +53,12 @@
 #define FID_HAROBE   (16777218)   // robe
 #define FID_HAROBB   (16777353)   // dark robe
 
+// Female punk (Theresa) sprite FIDs (from artfid.h).
+#define FID_NFPJMP   (16777338)   // Punk Girl Vault Suit
+#define FID_NFPGLA   (16777308)   // Female punk leather armor
+#define FID_NFPGMT   (16777309)   // Female punk metal armor
+#define FID_HFCMBL   (16777343)   // Female, Dark ("Black") Combat Armor
+
 procedure start;
 procedure gamemode_handler;
 procedure invenwield_handler;
@@ -183,6 +189,20 @@ procedure compute_target_fid(variable sid, variable worn_pid) begin
             or worn_pid == PID_ADVANCED_POWER_ARMOR_MK2) then return FID_HMBMAX;
         // Robes
         if (worn_pid == PID_BRIDGEKEEPERS_ROBE) then return FID_HAROBB;
+    end
+
+    // THERESA: female punk sprite set (faction leader, V13 rebels)
+    if (sid == SCRIPT_THERESA) then begin
+        if (worn_pid == 0) then return FID_NFPJMP;  // vault suit default
+        if (worn_pid == PID_LEATHER_ARMOR
+            or worn_pid == PID_LEATHER_JACKET
+            or worn_pid == PID_LEATHER_ARMOR_MK_II
+            or worn_pid == PID_CURED_LEATHER_ARMOR) then return FID_NFPGLA;
+        if (worn_pid == PID_METAL_ARMOR
+            or worn_pid == PID_METAL_ARMOR_MK_II) then return FID_NFPGMT;
+        if (worn_pid == PID_COMBAT_ARMOR
+            or worn_pid == PID_COMBAT_ARMOR_MK_II
+            or worn_pid == PID_BROTHERHOOD_COMBAT_ARMOR) then return FID_HFCMBL;
     end
 
     return 0;
