@@ -130,7 +130,9 @@ procedure start begin
         // using save_array guard instead (persists in save file).
         call give_camping_kit;
 
-        // Enable USE action on lighter
+        // Enable USE action on lighter (affects NEW create_object instances).
+        // Existing lighter obj from old save may still miss USE flag on its
+        // own OBJ_DATA -- player should use hotkey L as a fallback.
         set_proto_data(PID_LIGHTER, PROTO_IT_FLAGS,
             get_proto_data(PID_LIGHTER, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
         // Shovel already has USE_ON via other mods (gl_shovel.ssl)
@@ -150,28 +152,59 @@ end
 procedure keypress_handler begin
     variable pressed;
     variable key;
+    variable arr;
 
     pressed := get_sfall_arg;
     key := get_sfall_arg;
 
     if (pressed == 0) then return;         // release event
-    if (key != 37) then return;            // DIK_K only
     if (get_game_mode != 0) then return;   // overworld only, not dialog/inv
 
-    if not(is_wilderness) then begin
-        display_msg("You need to be at a camp in the wild to rest.");
-        return;
-    end
-    if not(map_has_campfire) then begin
-        display_msg("Light a campfire first.");
-        return;
-    end
-    if (combat_is_initialized) then begin
-        display_msg("Can't rest during combat.");
+    // DIK_K (37) = rest at camp
+    if (key == 37) then begin
+        if not(is_wilderness) then begin
+            display_msg("You need to be at a camp in the wild to rest.");
+            return;
+        end
+        if not(map_has_campfire) then begin
+            display_msg("Light a campfire first.");
+            return;
+        end
+        if (combat_is_initialized) then begin
+            display_msg("Can't rest during combat.");
+            return;
+        end
+        call handle_player_bedroll_rest;
         return;
     end
 
-    call handle_player_bedroll_rest;
+    // DIK_L (38) = lighter toggle (fallback when USE action on lighter fails)
+    if (key == 38) then begin
+        if (obj_is_carrying_obj_pid(dude_obj, PID_LIGHTER) == 0) then begin
+            display_msg("You don't have a lighter.");
+            return;
+        end
+        // Toggle via state variable (same as useobj_handler).
+        if (lighter_lit == 0) then begin
+            lighter_lit := 1;
+            display_msg("You flick the lighter open. A small flame pushes back the dark.");
+            if (is_wilderness
+                and not(map_has_campfire)
+                and not(combat_is_initialized)) then begin
+                call create_campfire_adjacent;
+                play_sfx("FLAMETHR");
+            end
+        end
+        else begin
+            lighter_lit := 0;
+            display_msg("You snap the lighter shut. Darkness closes in.");
+        end
+        tile_refresh_display;
+        arr := create_array_map;
+        arr["lit"] := lighter_lit;
+        save_array("campfire_lighter", arr);
+        return;
+    end
 end
 
 // ============================================================
