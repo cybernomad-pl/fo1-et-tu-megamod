@@ -1,0 +1,204 @@
+================================================================================
+ fo1-et-tu-megamod  --  v6 STATE REVIEW + REFACTOR PLAN  (2026-04-18)
+================================================================================
+
+ GitHub: 14 issues + 6 epics utworzone (#3-#25)
+ Branch: wrk1/v6-phase1-stabilization -- push done (fe1b2c2)
+ PR:     #2 (phase 1 original) -- Borys decide when to merge
+
+
+================================================================================
+ STATE -- WHAT WORKS, WHAT DOESN'T  (po sesji testowej 2026-04-18)
+================================================================================
+
+ WORKING:
+   [OK] 12 starting items on NEW GAME (9 new_start_plus + 3 outdoorsman)
+   [OK] Theresa Join me (dialog)
+   [OK] Officer Join me (dialog)
+   [OK] Theresa team guard (map change, stays in party)
+   [OK] "Get up and follow me" gated on local_var(13)==0 (hides po wake)
+   [OK] 40 NPC scripts compiled + deployed to fo1_big_party_mod/
+   [OK] Save_array idempotency (new_start_plus + outdoorsman.kit)
+   [OK] Klawisz K -- rest hotkey (kod compiled, not yet user-tested)
+   [OK] 2/4 party members behave: Theresa + Medyk (patched scripts)
+
+ BROKEN (confirmed by user):
+   [XX] J hotkey blocks follow ONLY for Theresa -- pozostali NPC ignore
+        -> upset vault citizen + Officer + Medyk lose GVAR check
+        -> Issue #17 + needs audit: check each NPC script for
+           GVAR_PARTY_NO_FOLLOW in critter_p_proc
+
+   [XX] Armor FID swap -- nikomu nie dziala (regresja)
+        -> Issue #18
+        -> hipoteza: refresh_all_party loop broken po folder rename,
+           albo art_change_fid_num nie wywolane
+
+   [XX] Lighter USE w V13 indoor -- nic sie nie dzieje
+        -> Issue #19
+        -> hipoteza: HOOK_USEOBJ nie triggered, set_proto_data timing
+
+   [XX] SHOVEL USE ON firepit -- args order mismatch
+        -> Issue #5 (diagnostic deployed, raw args logging)
+
+   [XX] Tylko Diana lezy w obozie, pozostali NPC stoja
+        -> Issue #7 (diagnosis pending in create_campfire_adjacent)
+
+   [XX] Player bedroll nie spawnuje
+        -> Issue #8 (fallback PID_BED_1 deployed)
+
+   [XX] Upset Vault Citizen "follow ale nie party member" po pietrze
+        -> Issue #17 (team reset po map change, tak jak Theresa B3)
+
+ UNKNOWN:
+   [?] Czarna mapa worldmap exit -- nie testowane na nowym deploy
+   [?] Ambient loop crackle sound -- feature #9 not started
+
+
+================================================================================
+ REFACTOR PRIORITIES
+================================================================================
+
+ P0 -- CRITICAL (blokery testow / regresje)
+   1. #18 Armor FID regresja           -- sprite swap broken for all
+   2. #17 Upset vault citizen/others    -- party follow broken (J only Theresa)
+   3. #19 Lighter V13 indoor             -- torch mode broken
+
+ P1 -- HIGH (user-requested priority)
+   4. #3 Full FID mapping rewrite      -- generic per-FID, all NPCs
+   5. #7 Diana-only sleeping            -- multi-NPC anim bug
+   6. #5 SHOVEL args order              -- camp extinguish
+   7. #6 Lighter in combat              -- user-facing message
+
+ P2 -- MEDIUM (features)
+   8. #11 Biker motocykl + trunk
+   9. #13 Stat boosters
+   10. #14+#15 Firewood mechanic
+
+ P3 -- LOW
+   11. #9 Ambient loop sound (needs sfall soundplay research)
+   12. #12 Biker gang decoration
+   13. #16 Mutagenic LATER
+
+
+================================================================================
+ REWRITE DESIGN -- PER-EPIC
+================================================================================
+
+ EPIC #20 Camp system:
+   REFACTOR OUTDOORSMAN.SSL (724 linii -> structured):
+     Section 1: CONFIG (defines, includes)
+     Section 2: STATE (arrays, vars)
+     Section 3: START (hooks, proto, kit)
+     Section 4: HOOKS (useobj, useobjon, gamemode, keypress)
+     Section 5: HANDLERS (lighter, shovel, bedroll_rest)
+     Section 6: CAMPFIRE (create, flicker, sfx)
+     Section 7: BEDROLLS (spawn, cleanup, wake)
+     Section 8: HELPERS (is_wilderness, map_has_campfire)
+   ASCII separators + TOC comment on top.
+   Extract LOG to outdoorsman.h? (share with other mods -- risky).
+   Extract tile math to outdoorsman.h (ring/dir helpers).
+
+ EPIC #21 FID mapping:
+   NEW HEADER ssl/headers/fid_mapping.h:
+     // Male sprite families
+     #define FID_HMBJMP / HMBLTR / HMBMET / ...
+     // Female punk
+     #define FID_NFPJMP / NFPGLA / ...
+     // Female raider, civilian, etc. (TBD)
+
+     // Armor group -> sprite index
+     #define ARMOR_GROUP_JUMPSUIT  0
+     #define ARMOR_GROUP_LEATHER   1
+     #define ARMOR_GROUP_METAL     2
+     #define ARMOR_GROUP_COMBAT    3
+     #define ARMOR_GROUP_POWER     4
+     #define ARMOR_GROUP_ROBE      5
+
+   REWRITE gl_party_armor_ext.ssl:
+     procedure armor_pid_to_group(worn_pid) -> group_id
+     procedure base_fid_to_group_fid(base_fid, group_id) -> target_fid
+       -- table-driven lookup
+
+     procedure refresh_one(obj):
+       base_fid := detect_base_sprite(obj)  // via obj_art_fid or get_script
+       worn_pid := critter_inven_obj(obj, INVEN_TYPE_WORN)
+       group := armor_pid_to_group(worn_pid)
+       target := base_fid_to_group_fid(base_fid, group)
+       if (target != 0) then art_change_fid_num(obj, target)
+
+ EPIC #22 Party recruit & control:
+   AUDIT each NPC .ssl:
+     grep "set_self_team\|set_team" in map_enter_p_proc
+     if found: ensure "if self_team == TEAM_PLAYER return" guard
+   BULK SED for 37 NPC scripts (pattern known from THERESA.ssl).
+
+ EPIC #23 New game loadout:
+   CLEANUP:
+     - Document save_array keys (new_start_plus_given, outdoorsman_kit_given)
+     - Add new: biker_kit_given (for #11)
+     - Central "starting_kit_given" master flag? lub per-mod keys
+
+ EPIC #24 Stat boosters:
+   NEW FILE ssl/gl_mod_stat_boosters.ssl:
+     - Track base_stat per critter (save_array "booster_base_stats")
+     - On inv change: recompute boost
+     - Apply/remove +3
+
+ EPIC #25 Infrastructure:
+   - Cleanup LAMKA_*.md (just rm + commit)
+   - sync_and_build.sh script (auto-copy + compile + deploy)
+   - compile_all.sh: rename out/invasion/ -> out/npc/
+
+
+================================================================================
+ REVIEW -- 3x PASS
+================================================================================
+
+ PASS #1 -- INTENT:
+   - 14 issues cover all user feedback from testing sessions
+   - 6 epics group logically by feature area
+   - Refactor plan addresses the 3 critical P0 bugs first
+   - Save_array idempotency is correct fallback for is_loading_game failure
+
+ PASS #2 -- REGRESSIONS:
+   - FID mapping regression (#18) is serious -- was working for Medyk
+     before today's deploy. Root cause must be found before more work.
+   - Hotkey J broken for 3/4 NPCs -- need to audit critter_p_proc patches
+   - Many 37 scripts share the same patch pattern -- bulk audit/fix viable
+
+ PASS #3 -- EDGE CASES:
+   - is_loading_game may also affect outdoorsman campfire state restoration
+     across save/load -- needs verification
+   - Player bedroll PID_BED_2 fallback may just work but confuse sprite
+     identification (all bedrolls look same if PID_BED_2 = PID_BED_1 art)
+   - SHOVEL args order -- once diagnosed, fix trivially
+   - Multi-NPC animation (#7) -- might be sfall anim queue limit, may need
+     add_timer_event pacing between reg_anim calls
+
+
+================================================================================
+ NEXT STEPS  (kolejnosc rekomendowana)
+================================================================================
+
+ SHORT-TERM (1-2 sesje):
+   1. Diagnose #18 FID regression (check party_armor_ext.ini logs)
+   2. Audit all 37 NPC critter_p_proc for GVAR_PARTY_NO_FOLLOW guard (#17/J bug)
+   3. Add team guard to all NPC map_enter_p_proc (TEAM_PLAYER return) (#17)
+   4. Wait for user's next test session with new diagnostic logs to resolve #5/#6
+
+ MEDIUM-TERM (3-5 sesji):
+   5. Full FID mapping rewrite (#3) -- needs sprite set catalog first
+   6. Shovel args order fix once user provides new logs
+   7. Lighter V13 indoor fix (may be trivial once diagnostic logs in)
+   8. Biker mod (#11) -- motocykl + trunk
+
+ LONG-TERM:
+   9. Stat boosters mod (#13)
+   10. Firewood mechanic (#14/#15)
+   11. Ambient sound (#9)
+   12. Outdoorsman refactor (#25)
+
+
+================================================================================
+ EOF
+================================================================================
