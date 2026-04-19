@@ -131,11 +131,12 @@ procedure cycle_fid(variable direction) begin
         return;
     end
 
-    // Raw art_idx iteration (no catalogue filter -- every sprite accessible).
+    // Raw art_idx iteration -- full 12-bit range (0..4095).
+    // Non-existent art_idx may render as blank/crash; Borys accepts.
     cur_fid := obj_art_fid(target);
     new_art_idx := (cur_fid bwand 4095) + direction;
-    if (new_art_idx < 1) then new_art_idx := 140;    // wrap to last known
-    if (new_art_idx > 140) then new_art_idx := 1;    // wrap to first
+    if (new_art_idx < 0) then new_art_idx := 4095;
+    if (new_art_idx > 4095) then new_art_idx := 0;
     new_fid := 16777216 + new_art_idx;               // type=1 (critter)
 
     art_change_fid_num(target, new_fid);
