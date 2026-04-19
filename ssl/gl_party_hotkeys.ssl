@@ -3,7 +3,7 @@
 
     HOTKEYS:
       J (36) -- toggle GVAR_PARTY_NO_FOLLOW (party hold/follow)
-      M (50) -- FID BROWSER: cycle forward (next sprite) on nearest party
+      F (33) -- FID BROWSER: cycle forward (next sprite) on nearest party
       N (49) -- FID BROWSER: cycle backward (prev sprite) on nearest party
 
     FID Browser:
@@ -12,8 +12,7 @@
       name and idx in the message log. Use to discover which sprite
       suits which NPC.
 
-    party_orders.ini hotkeys taken: H(35) F(33) G(34) R(19) T(20)
-                                    X(45) 0(11) D(32) Ctrl+B(48+29)
+    party_orders mod disabled (didn't work on our recruits).
 */
 #include "define.h"
 #include "command.h"
@@ -65,8 +64,8 @@ procedure keypress_handler begin
         return;
     end
 
-    // M (50) -- FID browser cycle forward
-    if (key == 50) then begin
+    // F (33) -- FID browser cycle forward
+    if (key == 33) then begin
         call cycle_fid(1);
         return;
     end
