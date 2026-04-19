@@ -198,7 +198,7 @@ procedure talk_p_proc begin
    set_tma_data(NAME, 1000, -1, -1, TMA_MSG_DONTKNOW_START, TMA_MSG_DONTKNOW_END);
 
    // Wake up if sleeping in camp (GVAR_PARTY_NO_FOLLOW set by outdoorsman).
-   if (Tandi_In_Party and global_var(GVAR_PARTY_NO_FOLLOW) == 1 and local_var(13) == 0) then begin
+   if (Tandi_In_Party and global_var(GVAR_PARTY_NO_FOLLOW) == 1 and local_var(13) == 0 and is_critter_prone(self_obj)) then begin
       reg_anim_begin();
       reg_anim_animate(self_obj, ANIM_back_to_standing, -1);
       reg_anim_end();

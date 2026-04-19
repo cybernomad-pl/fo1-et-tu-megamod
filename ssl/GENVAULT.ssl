@@ -440,7 +440,7 @@ procedure NodeCampWakeUp;
 
 procedure NodePartyMain begin
    Reply_Blank;
-   if (global_var(GVAR_PARTY_NO_FOLLOW) == 1 and local_var(13) == 0) then begin
+   if (global_var(GVAR_PARTY_NO_FOLLOW) == 1 and local_var(13) == 0 and is_critter_prone(self_obj)) then begin
       NOption("Get up and follow me.", NodeCampWakeUp, 4);
    end
    NOption("Follow me.", NodePartyFollow, 4);
