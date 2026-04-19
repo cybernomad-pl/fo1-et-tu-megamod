@@ -831,9 +831,6 @@ end
 // PLAYER BEDROLL REST -- USE on player bedroll = rest until morning
 // ============================================================
 procedure handle_player_bedroll_rest begin
-    variable hour;
-    variable hours_to_morning;
-
     if (combat_is_initialized) then begin
         display_msg("Not a good time to sleep.");
         return;
@@ -846,14 +843,9 @@ procedure handle_player_bedroll_rest begin
     reg_anim_animate(dude_obj, ANIM_magic_hands_ground, -1);
     reg_anim_end();
 
-    // Advance time to 06:00. game_time_hour is 0-23. One hour = 36000 ticks.
-    hour := game_time_hour / 100;  // HHMM format -> HH
-    if (hour >= 6) then
-        hours_to_morning := (24 - hour) + 6;
-    else
-        hours_to_morning := 6 - hour;
-
-    game_time_advance(hours_to_morning * 36000);
+    // Fixed 7 hours rest (Borys 2026-04-19: lepiej 7h niz do rana).
+    // 1 hour = 36000 ticks (10 ticks/sec * 3600 sec).
+    game_time_advance(7 * 36000);
 
     // Heal dude: restore HP to max via stat_current.
     critter_heal(dude_obj, get_critter_stat(dude_obj, STAT_max_hp));
