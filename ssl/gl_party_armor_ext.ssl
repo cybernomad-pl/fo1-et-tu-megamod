@@ -1,35 +1,38 @@
 /*
-    Party Armor Extension -- fo1-et-tu-megamod  v2
+    Party Armor Extension -- fo1-et-tu-megamod  v3 (per-FID table-driven)
 
-    PURPOSE
-      Runtime FID override for custom party NPCs (Medyk first) whose
-      sprites don't change when they wear armor. Vanilla sfall
-      party_armor.ini matches by proto PID and our custom NPCs share
-      generic proto PIDs with mook NPCs, so engine-level mapping fails.
+    GENERIC per-FID mapping. Detects source sprite family from obj's base
+    FID (low 12 bits = critters.lst art index), maps (family, armor_group)
+    to target FID via lookup table. No per-SCRIPT_ID branches.
 
-    DESIGN
-      Match by SCRIPT ID (unique per NPC type) via get_script(obj).
-      For each recognized TEAM_PLAYER critter, map worn_armor PID ->
-      target FID, then art_change_fid_num(obj, fid). Same strategy
-      as gl_mod_tandi.ssl.
+    DESIGN (Borys 2026-04-18):
+      1. On first encounter, capture obj's base FID from obj_art_fid.
+         Store in save_array "party_fid_src" keyed by obj_id.
+      2. On HOOK_INVENWIELD or HOOK_GAMEMODECHANGE:
+           - resolve family from source FID (art_index)
+           - resolve armor_group from worn PID
+           - lookup target FID in (family, group) table
+           - art_change_fid_num if differs from current
 
-    BORYS GUIDANCE (2026-04-17)
-      Medyk = "black male jumpsuit vault" = hmbjmp (same as black-style
-      player). Full black male sprite set:
-         hmbjmp (FID 16777224) -- jumpsuit / vault suit / no armor
-         HMBLTR (FID 16777349) -- leather
-         hmbmet (FID 16777225) -- metal
-         hmcmbt (FID 16777226) -- combat (MK1, no black variant)
-         hmcmbl (FID 16777344) -- combat MK2 (brotherhood / black)
-         hapowr (FID 16777217) -- power (no black variant)
-         HMBMAX (FID 16777348) -- advanced power
-         harobe (FID 16777218) -- robe
-         HAROBB (FID 16777353) -- dark/bridgekeeper robe
+    SUPPORTED FAMILIES (9):
+      HM_WHITE   -- hero male black hair (default player)
+      HM_BLACK   -- Medyk, czarny player
+      HM_BALD    -- Bald dude (Tycho variant / generic bald)
+      HM_LONG    -- Long hair dude (non-Ian)
+      IAN        -- specifically Ian sprite set
+      TYCHO      -- specifically Tycho sprite set
+      HF_WHITE   -- default female player
+      NFP_PUNK   -- female punk (Katja, Theresa, Diana, Gwen)
+      NF_NICE    -- black-haired female NPC (non-player)
+
+    ARMOR GROUPS (11):
+      0 NONE        1 JUMPSUIT     2 LEATHER_JACKET  3 LEATHER_ARMOR
+      4 METAL       5 COMBAT       6 COMBAT_DARK     7 BROTHERHOOD
+      8 POWER       9 ADV_POWER    10 ROBE
 
     HOOKS
-      HOOK_GAMEMODECHANGE -- refresh party FIDs on map change / inventory
-                             close (catches armor swap during loadout).
-      HOOK_INVENWIELD     -- refresh one NPC on armor wield/unwield.
+      HOOK_GAMEMODECHANGE  -- refresh all party on dialog close / map / combat
+      HOOK_INVENWIELD      -- refresh one NPC on armor wield
 */
 
 #include "define.h"
@@ -42,35 +45,56 @@
 
 #define LOG(s, k, v) set_ini_setting("party_armor_ext.ini|" + s + "|" + k, v)
 
-// Black male sprite FIDs (Medyk/Officer set). See artfid.h.
-#define FID_HMBJMP   (16777224)   // jumpsuit / vault / default
-#define FID_HMBMAX   (16777348)   // Black dude leather JACKET (clothing)
-#define FID_HMBLTR   (16777349)   // Black dude leather ARMOR (protective)
-#define FID_HMBMET   (16777225)   // Black dude metal
-#define FID_HMCMB2   (16777351)   // Black dude Combat MK1
-#define FID_HMCMB3   (16777352)   // Black dude Combat MK2/BoS (dark)
-#define FID_HAPOWR   (16777217)   // Power armor (generic, not black specific)
-#define FID_HAROBB   (16777353)   // Black dude purple robe
+// ============================================================
+// FAMILY IDs
+// ============================================================
+#define FAM_NONE      (0)
+#define FAM_HM_WHITE  (1)
+#define FAM_HM_BLACK  (2)
+#define FAM_HM_BALD   (3)
+#define FAM_HM_LONG   (4)
+#define FAM_IAN       (5)
+#define FAM_TYCHO     (6)
+#define FAM_HF_WHITE  (7)
+#define FAM_NFP_PUNK  (8)
+#define FAM_NF_NICE   (9)
 
-// Female punk (Theresa, Diana, Gwen, Katja) sprite FIDs.
-#define FID_NFPJMP   (16777338)   // Punk Girl Vault Suit
-#define FID_NFPGLA   (16777308)   // Female punk leather armor
-#define FID_NFPGMT   (16777309)   // Female punk metal armor
-#define FID_HFCMBL   (16777343)   // Female, Dark ("Black") Combat Armor
+// ============================================================
+// ARMOR GROUPS
+// ============================================================
+#define ARM_NONE        (0)
+#define ARM_JUMPSUIT    (1)
+#define ARM_LJ          (2)
+#define ARM_LA          (3)
+#define ARM_METAL       (4)
+#define ARM_COMBAT      (5)
+#define ARM_COMBAT_DARK (6)
+#define ARM_BROTHERHOOD (7)
+#define ARM_POWER       (8)
+#define ARM_ADV_POWER   (9)
+#define ARM_ROBE        (10)
 
 procedure start;
 procedure gamemode_handler;
 procedure invenwield_handler;
 procedure refresh_all_party;
 procedure refresh_one(variable obj);
-procedure compute_target_fid(variable sid, variable worn_pid);
-procedure dump_party_members;
+procedure pid_to_armor_group(variable worn_pid);
+procedure fid_to_family(variable fid);
+procedure family_armor_to_fid(variable family, variable group);
+procedure get_source_fid(variable obj);
 
 variable last_map_idx;
+variable party_fid_src;   // map<obj_id_string, source_fid>
 
 procedure start begin
     if game_loaded then begin
         last_map_idx := cur_map_index;
+        party_fid_src := load_array("party_fid_src");
+        if (party_fid_src == 0) then begin
+            party_fid_src := create_array_map;
+            save_array("party_fid_src", party_fid_src);
+        end
         register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
         register_hook_proc(HOOK_INVENWIELD, invenwield_handler);
         LOG("start", "loaded", 1);
@@ -78,28 +102,18 @@ procedure start begin
 end
 
 // ============================================================
-// HOOK_GAMEMODECHANGE -- runs on load, map change, inven open/close.
-// Refresh all party FIDs (catches armor swaps in inventory).
+// HOOK handlers
 // ============================================================
 procedure gamemode_handler begin
     LOG("gm", "A_entry", cur_map_index);
-    LOG("gm", "A_last_idx", last_map_idx);
     call refresh_all_party;
     LOG("gm", "B_after_refresh", 1);
-
-    // Dump on map change (for diagnostics).
     if (cur_map_index != last_map_idx) then begin
         last_map_idx := cur_map_index;
-        call dump_party_members;
-        LOG("gm", "C_after_dump", 1);
     end
     LOG("gm", "Z_exit", cur_map_index);
 end
 
-// ============================================================
-// HOOK_INVENWIELD -- fires on wield/unwield. Args: (obj, item, slot).
-// Refresh that one NPC's FID.
-// ============================================================
 procedure invenwield_handler begin
     variable obj;
     obj := get_sfall_arg;
@@ -109,152 +123,259 @@ procedure invenwield_handler begin
 end
 
 // ============================================================
-// REFRESH ALL PARTY -- iter LIST_CRITTERS, update each TEAM_PLAYER
+// Iter all party members, refresh each
 // ============================================================
 procedure refresh_all_party begin
     variable lst;
     variable obj;
     variable iter_count;
 
-    LOG("rap", "A_entry", cur_map_index);
     iter_count := 0;
     lst := list_begin(LIST_CRITTERS);
     obj := list_next(lst);
     while (obj) do begin
         iter_count := iter_count + 1;
         if (obj != 0 and not(is_critter_dead(obj))) then begin
-            if (get_team(obj) == TEAM_PLAYER) then begin
+            if (get_team(obj) == TEAM_PLAYER and obj != dude_obj) then begin
                 call refresh_one(obj);
             end
         end
         obj := list_next(lst);
     end
     list_end(lst);
-    LOG("rap", "Z_exit_iter", iter_count);
+    LOG("rap", "iter", iter_count);
 end
 
 // ============================================================
-// REFRESH ONE -- compute target FID, apply if mapped.
+// Refresh one NPC's sprite based on source family + worn armor
 // ============================================================
 procedure refresh_one(variable obj) begin
-    variable sid;
+    variable src_fid;
+    variable family;
     variable worn_obj;
     variable worn_pid;
+    variable armor_group;
     variable target_fid;
 
-    sid := get_script(obj);
-    if (sid == 0) then return;
+    src_fid := get_source_fid(obj);
+    if (src_fid == 0) then return;
+
+    family := fid_to_family(src_fid);
+    if (family == FAM_NONE) then return;   // unsupported sprite
 
     worn_obj := critter_inven_obj(obj, INVEN_TYPE_WORN);
     if (worn_obj != 0) then worn_pid := obj_pid(worn_obj);
     else worn_pid := 0;
 
-    target_fid := compute_target_fid(sid, worn_pid);
-    if (target_fid == 0) then return;  // no override for this NPC
+    armor_group := pid_to_armor_group(worn_pid);
+    target_fid := family_armor_to_fid(family, armor_group);
+    if (target_fid == 0) then return;      // no mapping for this combo
 
-    // Apply only if different (avoid redundant state churn).
     if (obj_art_fid(obj) != target_fid) then begin
         art_change_fid_num(obj, target_fid);
     end
 end
 
 // ============================================================
-// COMPUTE_TARGET_FID -- map (script_id, worn_armor_pid) -> FID
-// Returns 0 if no override applies (engine keeps default).
+// Source FID lookup/capture (first time seen -> save to array)
 // ============================================================
-procedure compute_target_fid(variable sid, variable worn_pid) begin
-    // MEDIC + OFFICER: black male sprite set (hmb* family)
-    if (sid == SCRIPT_MEDIC or sid == SCRIPT_OFFICER) then begin
-        // Jumpsuit / no armor / vault suit
-        if (worn_pid == 0) then return FID_HMBJMP;
-        // Leather JACKET (clothing) -> dedicated "black dude LJ" sprite
-        if (worn_pid == PID_LEATHER_JACKET) then return FID_HMBMAX;
-        // Leather ARMOR (protective)
-        if (worn_pid == PID_LEATHER_ARMOR
-            or worn_pid == PID_LEATHER_ARMOR_MK_II
-            or worn_pid == PID_CURED_LEATHER_ARMOR) then return FID_HMBLTR;
-        // Metal
-        if (worn_pid == PID_METAL_ARMOR
-            or worn_pid == PID_METAL_ARMOR_MK_II) then return FID_HMBMET;
-        // Combat MK1 (black dude)
-        if (worn_pid == PID_COMBAT_ARMOR) then return FID_HMCMB2;
-        // Combat MK2 / Brotherhood (black dude dark)
-        if (worn_pid == PID_COMBAT_ARMOR_MK_II
-            or worn_pid == PID_BROTHERHOOD_COMBAT_ARMOR) then return FID_HMCMB3;
-        // Power (no black-specific variant, use generic hero)
-        if (worn_pid == PID_POWERED_ARMOR
-            or worn_pid == PID_HARDENED_POWER_ARMOR
-            or worn_pid == PID_ADVANCED_POWER_ARMOR
-            or worn_pid == PID_ADVANCED_POWER_ARMOR_MK2) then return FID_HAPOWR;
-        // Robes (black dude purple robe)
-        if (worn_pid == PID_BRIDGEKEEPERS_ROBE) then return FID_HAROBB;
-    end
+procedure get_source_fid(variable obj) begin
+    variable key;
+    variable stored;
+    variable cur_fid;
 
-    // THERESA + DIANA + GWEN: female punk (irokezka) sprite set
-    if (sid == SCRIPT_THERESA
-        or sid == SCRIPT_DIANA
-        or sid == SCRIPT_GWEN) then begin
-        // Jumpsuit / leather jacket (clothing) -> base punk suit
-        if (worn_pid == 0
-            or worn_pid == PID_LEATHER_JACKET) then return FID_NFPJMP;
-        // Leather ARMOR
-        if (worn_pid == PID_LEATHER_ARMOR
-            or worn_pid == PID_LEATHER_ARMOR_MK_II
-            or worn_pid == PID_CURED_LEATHER_ARMOR) then return FID_NFPGLA;
-        // Metal
-        if (worn_pid == PID_METAL_ARMOR
-            or worn_pid == PID_METAL_ARMOR_MK_II) then return FID_NFPGMT;
-        // Combat (fallback to female dark)
-        if (worn_pid == PID_COMBAT_ARMOR
-            or worn_pid == PID_COMBAT_ARMOR_MK_II
-            or worn_pid == PID_BROTHERHOOD_COMBAT_ARMOR) then return FID_HFCMBL;
-    end
+    key := "" + obj;
+    stored := party_fid_src[key];
+    if (stored != 0) then return stored;
 
-    // Vault citizens / rebels / generic -- NIE mapujemy (mix male/female,
-    // wymaga per-FID detection via obj_art_fid -- faza 2 rewrite).
-    // Returning 0 keeps their native sprite (may not change on armor).
-
-    return 0;
+    // First time -- capture current art_fid as source.
+    // If NPC is wearing armor already (recruited clothed), we'll misidentify
+    // them as "family with that armor", but best effort given we don't
+    // know their true base.
+    cur_fid := obj_art_fid(obj);
+    party_fid_src[key] := cur_fid;
+    save_array("party_fid_src", party_fid_src);
+    return cur_fid;
 end
 
 // ============================================================
-// DUMP (diagnostics) -- party members on map change -> ini
+// PID -> armor_group
 // ============================================================
-procedure dump_party_members begin
-    variable lst;
-    variable obj;
-    variable section;
-    variable idx;
-    variable key;
-    variable worn_obj;
-    variable worn_pid;
+procedure pid_to_armor_group(variable worn_pid) begin
+    if (worn_pid == 0) then return ARM_NONE;
+    if (worn_pid == PID_V13_VSUIT) then return ARM_JUMPSUIT;
 
-    section := "dump_" + cur_map_index;
-    idx := 0;
+    if (worn_pid == PID_LEATHER_JACKET
+        or worn_pid == PID_CURED_LEATHER_ARMOR) then return ARM_LJ;
 
-    LOG(section, "_map", cur_map_index);
+    if (worn_pid == PID_LEATHER_ARMOR
+        or worn_pid == PID_LEATHER_ARMOR_MK_II) then return ARM_LA;
 
-    lst := list_begin(LIST_CRITTERS);
-    obj := list_next(lst);
-    while (obj) do begin
-        if (obj != 0 and not(is_critter_dead(obj))) then begin
-            if (get_team(obj) == TEAM_PLAYER) then begin
-                key := "" + idx;
-                worn_obj := critter_inven_obj(obj, INVEN_TYPE_WORN);
-                if (worn_obj != 0) then worn_pid := obj_pid(worn_obj);
-                else worn_pid := 0;
+    if (worn_pid == PID_METAL_ARMOR
+        or worn_pid == PID_METAL_ARMOR_MK_II
+        or worn_pid == PID_TESLA_ARMOR) then return ARM_METAL;
 
-                LOG(section, key + "_sid",      get_script(obj));
-                LOG(section, key + "_pid",      obj_pid(obj));
-                LOG(section, key + "_fid",      obj_art_fid(obj));
-                LOG(section, key + "_worn_pid", worn_pid);
-                LOG(section, key + "_obj_id",   obj);
-                idx := idx + 1;
-            end
-        end
-        obj := list_next(lst);
+    if (worn_pid == PID_COMBAT_ARMOR) then return ARM_COMBAT;
+    if (worn_pid == PID_COMBAT_ARMOR_MK_II) then return ARM_COMBAT_DARK;
+    if (worn_pid == PID_BROTHERHOOD_COMBAT_ARMOR) then return ARM_BROTHERHOOD;
+
+    if (worn_pid == PID_POWERED_ARMOR
+        or worn_pid == PID_HARDENED_POWER_ARMOR) then return ARM_POWER;
+
+    if (worn_pid == PID_ADVANCED_POWER_ARMOR
+        or worn_pid == PID_ADVANCED_POWER_ARMOR_MK2) then return ARM_ADV_POWER;
+
+    if (worn_pid == PID_PURPLE_ROBE
+        or worn_pid == PID_BRIDGEKEEPERS_ROBE) then return ARM_ROBE;
+
+    return ARM_NONE;
+end
+
+// ============================================================
+// FID -> family  (by art_index = low 12 bits)
+// ============================================================
+procedure fid_to_family(variable fid) begin
+    variable art_idx;
+    art_idx := fid bwand 4095;   // 0xFFF
+
+    // HM_WHITE: HMJMPS=11, HMLTHR=12, HMMAXX=13, HMMETL=14, HMCMBT=10,
+    //           HMCMBL=128, HMBROH=84, HAPOWR=1, HANPWR=87, HAROBE=2
+    if (art_idx == 11 or art_idx == 12 or art_idx == 13 or art_idx == 14
+        or art_idx == 10 or art_idx == 128 or art_idx == 84 or art_idx == 1
+        or art_idx == 87 or art_idx == 2) then return FAM_HM_WHITE;
+
+    // HM_BLACK: HMBJMP=8, HMBMAX=132, HMBLTR=133, HMBMET=9,
+    //           HMCMB2=135, HMCMB3=136, HAROBB=137
+    if (art_idx == 8 or art_idx == 132 or art_idx == 133 or art_idx == 9
+        or art_idx == 135 or art_idx == 136 or art_idx == 137) then return FAM_HM_BLACK;
+
+    // HM_BALD: NMBJMP=123, HMMAXB=90, NMCAMA=91, HMGLCM=139
+    if (art_idx == 123 or art_idx == 90 or art_idx == 91 or art_idx == 139) then return FAM_HM_BALD;
+
+    // HM_LONG: NMLJMP=124, HMLHMX=131, HMLHLR=88, HMLHMT=89
+    if (art_idx == 124 or art_idx == 131 or art_idx == 88 or art_idx == 89) then return FAM_HM_LONG;
+
+    // IAN: NMMAXX=45, HMIANJ=61, HMIANC=73, HMIANP=74, HMIANR=75
+    if (art_idx == 45 or art_idx == 61 or art_idx == 73 or art_idx == 74
+        or art_idx == 75) then return FAM_IAN;
+
+    // TYCHO: NMLTHR=44, HMTYCL=62, HMTYCM=69, HMTYCC=70, HMTYCP=71,
+    //        HMTYCR=76, NMMETL=138
+    if (art_idx == 44 or art_idx == 62 or art_idx == 69 or art_idx == 70
+        or art_idx == 71 or art_idx == 76 or art_idx == 138) then return FAM_TYCHO;
+
+    // HF_WHITE: HFJMPS=4, HFLTHR=5, HFMETL=7, HFCMBT=3, HFCMBL=127,
+    //           HFBROH=85, HFMAXX=6
+    if (art_idx == 4 or art_idx == 5 or art_idx == 7 or art_idx == 3
+        or art_idx == 127 or art_idx == 85 or art_idx == 6) then return FAM_HF_WHITE;
+
+    // NFP_PUNK: NFPJMP=122, NFPGLA=92, NFPGMT=93
+    if (art_idx == 122 or art_idx == 92 or art_idx == 93) then return FAM_NFP_PUNK;
+
+    // NF_NICE: NFNICE=118
+    if (art_idx == 118) then return FAM_NF_NICE;
+
+    return FAM_NONE;
+end
+
+// ============================================================
+// Target FID lookup table (family, armor_group) -> fid
+// Returns 0 if no mapping (keep current sprite).
+// ============================================================
+procedure family_armor_to_fid(variable family, variable group) begin
+    // --------- HM_WHITE (hero male black-hair) ---------
+    if (family == FAM_HM_WHITE) then begin
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777227; // HMJMPS
+        if (group == ARM_LJ) then return 16777229;         // HMMAXX
+        if (group == ARM_LA) then return 16777228;         // HMLTHR
+        if (group == ARM_METAL) then return 16777230;      // HMMETL
+        if (group == ARM_COMBAT) then return 16777226;     // HMCMBT
+        if (group == ARM_COMBAT_DARK) then return 16777344; // HMCMBL
+        if (group == ARM_BROTHERHOOD) then return 16777300; // HMBROH
+        if (group == ARM_POWER) then return 16777217;      // HAPOWR
+        if (group == ARM_ADV_POWER) then return 16777303;  // HANPWR
+        if (group == ARM_ROBE) then return 16777218;       // HAROBE
     end
-    list_end(lst);
 
-    LOG(section, "_count", idx);
+    // --------- HM_BLACK (Medyk, Officer, czarny player) ---------
+    if (family == FAM_HM_BLACK) then begin
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777224; // HMBJMP
+        if (group == ARM_LJ) then return 16777348;         // HMBMAX
+        if (group == ARM_LA) then return 16777349;         // HMBLTR
+        if (group == ARM_METAL) then return 16777225;      // HMBMET
+        if (group == ARM_COMBAT) then return 16777351;     // HMCMB2
+        if (group == ARM_COMBAT_DARK) then return 16777352; // HMCMB3
+        if (group == ARM_BROTHERHOOD) then return 16777352; // HMCMB3 (share)
+        if (group == ARM_POWER) then return 16777217;      // HAPOWR (fallback)
+        if (group == ARM_ADV_POWER) then return 16777217;  // HAPOWR (fallback)
+        if (group == ARM_ROBE) then return 16777353;       // HAROBB
+    end
+
+    // --------- HM_BALD ---------
+    if (family == FAM_HM_BALD) then begin
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777339; // NMBJMP
+        if (group == ARM_LJ) then return 16777306;         // HMMAXB
+        if (group == ARM_METAL) then return 16777307;      // NMCAMA
+        if (group == ARM_COMBAT or group == ARM_COMBAT_DARK) then return 16777355; // HMGLCM
+    end
+
+    // --------- HM_LONG ---------
+    if (family == FAM_HM_LONG) then begin
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777340; // NMLJMP
+        if (group == ARM_LJ) then return 16777347;         // HMLHMX
+        if (group == ARM_LA) then return 16777304;         // HMLHLR
+        if (group == ARM_METAL) then return 16777305;      // HMLHMT
+    end
+
+    // --------- IAN (specific) ---------
+    if (family == FAM_IAN) then begin
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777261; // NMMAXX
+        if (group == ARM_LJ) then return 16777277;         // HMIANJ
+        if (group == ARM_LA) then return 16777291;         // HMIANR
+        if (group == ARM_METAL) then return 16777290;      // HMIANP
+        if (group == ARM_COMBAT or group == ARM_COMBAT_DARK) then return 16777289; // HMIANC
+    end
+
+    // --------- TYCHO (specific) ---------
+    if (family == FAM_TYCHO) then begin
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777260; // NMLTHR (base)
+        if (group == ARM_LA) then return 16777260;         // NMLTHR (already leather)
+        if (group == ARM_METAL) then return 16777354;      // NMMETL
+        if (group == ARM_COMBAT) then return 16777286;     // HMTYCC
+        if (group == ARM_COMBAT_DARK) then return 16777285; // HMTYCM
+        if (group == ARM_POWER) then return 16777287;      // HMTYCP
+        if (group == ARM_ROBE) then return 16777292;       // HMTYCR
+    end
+
+    // --------- HF_WHITE ---------
+    if (family == FAM_HF_WHITE) then begin
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777220; // HFJMPS
+        if (group == ARM_LJ) then return 16777220;         // no LJ variant -> jumpsuit
+        if (group == ARM_LA) then return 16777221;         // HFLTHR
+        if (group == ARM_METAL) then return 16777223;      // HFMETL
+        if (group == ARM_COMBAT) then return 16777219;     // HFCMBT
+        if (group == ARM_COMBAT_DARK) then return 16777343; // HFCMBL
+        if (group == ARM_BROTHERHOOD) then return 16777301; // HFBROH
+        if (group == ARM_ADV_POWER) then return 16777222;  // HFMAXX
+    end
+
+    // --------- NFP_PUNK (Theresa, Diana, Gwen, Katja) ---------
+    if (family == FAM_NFP_PUNK) then begin
+        if (group == ARM_NONE or group == ARM_JUMPSUIT or group == ARM_LJ) then return 16777338; // NFPJMP
+        if (group == ARM_LA) then return 16777308;         // NFPGLA
+        if (group == ARM_METAL) then return 16777309;      // NFPGMT
+        if (group == ARM_COMBAT or group == ARM_COMBAT_DARK or group == ARM_BROTHERHOOD) then return 16777343; // HFCMBL (fallback female dark)
+    end
+
+    // --------- NF_NICE (black-haired female NPC) ---------
+    if (family == FAM_NF_NICE) then begin
+        if (group == ARM_NONE or group == ARM_JUMPSUIT or group == ARM_LJ) then return 16777334; // NFNICE
+        // No dedicated variants -> fallback to HF_WHITE group
+        if (group == ARM_LA) then return 16777221;         // HFLTHR
+        if (group == ARM_METAL) then return 16777223;      // HFMETL
+        if (group == ARM_COMBAT) then return 16777219;     // HFCMBT
+        if (group == ARM_COMBAT_DARK or group == ARM_BROTHERHOOD) then return 16777343; // HFCMBL
+    end
+
+    return 0;   // no mapping
 end
