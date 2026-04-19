@@ -49,7 +49,7 @@
 #include "sfall/define_extra.h"
 #include "sfall/define_lite.h"
 
-#define LOG(s, k, v) set_ini_setting("party_armor_ext.ini|" + s + "|" + k, v)
+#define LOG(s, k, v) set_ini_setting("testing.ini|armor_" + s + "|" + k, v)
 
 // ============================================================
 // SPRITE SET IDs

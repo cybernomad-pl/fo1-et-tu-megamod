@@ -20,7 +20,7 @@
 #include "sfall/define_extra.h"
 #include "sfall/define_lite.h"
 
-#define LOG(s, k, v) set_ini_setting("party_hotkeys.ini|" + s + "|" + k, v)
+#define LOG(s, k, v) set_ini_setting("testing.ini|hotkeys_" + s + "|" + k, v)
 
 procedure start;
 procedure keypress_handler;
@@ -122,6 +122,11 @@ procedure cycle_fid(variable direction) begin
     variable cur_idx;
     variable cat_size;
     variable new_fid;
+    variable worn_obj;
+    variable worn_pid;
+    variable worn_name;
+    variable section;
+    variable sid;
 
     target := find_nearest_party;
     if (target == 0) then begin
@@ -144,9 +149,42 @@ procedure cycle_fid(variable direction) begin
     new_fid := fid_catalogue_at(cur_idx);
     art_change_fid_num(target, new_fid);
 
-    display_msg(obj_name(target) + ": sprite " + fid_catalogue_name(cur_idx)
-        + " (idx " + (new_fid bwand 4095) + ", slot " + cur_idx
-        + "/" + cat_size + ")");
+    worn_obj := critter_inven_obj(target, INVEN_TYPE_WORN);
+    if (worn_obj != 0) then begin
+        worn_pid  := obj_pid(worn_obj);
+        worn_name := obj_name(worn_obj);
+    end
+    else begin
+        worn_pid  := 0;
+        worn_name := "(none)";
+    end
+
+    // Append log to testing.ini with unique per-event key (not overwritten).
+    // Counter stored in save_array so history persists across saves.
+    variable cnt_arr;
+    variable counter;
+    cnt_arr := load_array("fid_log_counter");
+    if (cnt_arr == 0) then cnt_arr := create_array_map;
+    counter := cnt_arr["n"] + 1;
+    cnt_arr["n"] := counter;
+    save_array("fid_log_counter", cnt_arr);
+
+    sid := get_script(target);
+    // Zero-pad counter so sections stay in insertion order when sorted.
+    section := "cycle_e" + (10000 + counter);
+    LOG(section, "name",      obj_name(target));
+    LOG(section, "sid",       sid);
+    LOG(section, "pid",       obj_pid(target));
+    LOG(section, "worn_pid",  worn_pid);
+    LOG(section, "worn_name", worn_name);
+    LOG(section, "fid",       new_fid);
+    LOG(section, "art_idx",   new_fid bwand 4095);
+    LOG(section, "sprite",    fid_catalogue_name(cur_idx));
+    LOG(section, "slot",      cur_idx);
+
+    display_msg(obj_name(target) + " [" + worn_name + "] -> "
+        + fid_catalogue_name(cur_idx) + " (idx " + (new_fid bwand 4095)
+        + ", slot " + cur_idx + "/" + cat_size + ")");
 end
 
 // ============================================================

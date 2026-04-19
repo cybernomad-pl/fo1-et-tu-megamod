@@ -20,7 +20,7 @@
 #include "sfall/define_extra.h"
 #include "sfall/define_lite.h"
 
-#define LOG(s, k, v) set_ini_setting("new_start_plus.ini|" + s + "|" + k, v)
+#define LOG(s, k, v) set_ini_setting("testing.ini|newstart_" + s + "|" + k, v)
 
 procedure start;
 

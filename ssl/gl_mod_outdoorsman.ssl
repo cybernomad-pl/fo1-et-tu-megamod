@@ -40,7 +40,7 @@
 #include "sfall/define_lite.h"
 #include "sfall/lib.arrays.h"
 
-#define LOG(s, k, v) set_ini_setting("outdoorsman.ini|" + s + "|" + k, v)
+#define LOG(s, k, v) set_ini_setting("testing.ini|outd_" + s + "|" + k, v)
 
 #define XP_CAMPFIRE_LIGHT    (15)
 #define XP_CAMPFIRE_SMOTHER  (10)
