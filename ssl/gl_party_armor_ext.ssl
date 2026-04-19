@@ -284,8 +284,10 @@ procedure fid_to_set(variable fid) begin
         or art_idx == 33 or art_idx == 34 or art_idx == 35 or art_idx == 36
         or art_idx == 37 or art_idx == 38) then return SET_HF_WHITE;
 
-    // Unknown -- ultimate fallback to default male player sprite set
-    return SET_HM_WHITE;
+    // Unknown sprite -- NO FALLBACK. Return SET_NONE so refresh_one
+    // skips this NPC (keeps native sprite untouched). If new critter
+    // types appear, their art_idx must be explicitly catalogued above.
+    return SET_NONE;
 end
 
 // ============================================================

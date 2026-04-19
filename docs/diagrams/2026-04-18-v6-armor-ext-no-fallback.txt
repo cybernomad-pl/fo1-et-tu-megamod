@@ -1,0 +1,157 @@
+================================================================================
+ fo1-et-tu-megamod  --  PARTY_ARMOR_EXT v6 phase 2.3 (ZERO FALLBACK)
+================================================================================
+
+
+================================================================================
+ DISPATCHER FLOW (refresh_one)
+================================================================================
+
+                +-----------------------+
+                | refresh_one(obj)      |
+                +----------+------------+
+                           |
+                           v
+                    cur_fid := obj_art_fid(obj)
+                           |
+                           v
+                +-----------------------+
+                | set_id := fid_to_set  |
+                |         (cur_fid)     |
+                +-----+-----------+-----+
+                      |           |
+              KNOWN   |           |  UNKNOWN
+                      |           v
+                      |     set_id == SET_NONE
+                      |           |
+                      |           v
+                      |     [RETURN]  sprite untouched
+                      |     Katalog musi byc rozbudowany -- nie zgadujemy
+                      v
+              worn_obj := critter_inven_obj(obj, WORN)
+              worn_pid := obj_pid(worn_obj) or 0
+                      |
+                      v
+              group := pid_to_armor_group(worn_pid)
+                      |
+                      v
+              target := set_armor_to_fid(set_id, group)
+                      |
+                +-----+------+
+                |            |
+               != 0         == 0
+                |            |
+                v            v
+          target == cur     [RETURN]  no mapping for this combo
+                |
+         +------+------+
+         |             |
+        YES           NO
+         |             |
+         v             v
+      [RETURN]   art_change_fid_num(obj, target)
+
+
+================================================================================
+ ZASADA: ZERO FALLBACKOW
+================================================================================
+
+   fid_to_set(unknown_art_idx)    -> return SET_NONE
+   set_armor_to_fid(unmapped)     -> return 0
+
+   Konsekwencja w refresh_one:
+     SET_NONE -> skip (keep native sprite)
+     target == 0 -> skip
+
+   Gdy nowy sprite NPC pojawi sie (modded / quest / encounter), jego
+   art_idx NIE znajdzie sie w katalogu -> SET_NONE -> sprite NIE zmieniany.
+   Borys widzi "on ma inny sprite nawet po zalozeniu armor" -> bug report
+   -> rozszerzamy katalog o nowy art_idx -> fix explicit.
+
+   NIE zgadujemy. NIE mapujemy na "najblizsza kategorie male". Obiekt
+   pozostaje na native sprite dopoki ktos go nie skataloguje.
+
+
+================================================================================
+ CO TO ROZWIAZUJE
+================================================================================
+
+ BEZ FALLBACKU (teraz):
+   [OK] Nieznany sprite = widoczny sygnal ze katalog niepelny
+   [OK] Zaden NPC nie dostaje ZLY sprite po zalozeniu armor
+   [OK] Debug latwy: tylko art_idx w katalogu dostaje zmiane
+
+ Z FALLBACKIEM (poprzednio):
+   [XX] Nieznany sprite mapowany na HM_WHITE = losowy NPC dostaje
+        playerowy sprite bez powodu
+   [XX] Trudno wykryc ze catalog niepelny
+   [XX] Silent misbehavior
+
+
+================================================================================
+ KATALOG SETOW (nadal 10 pokrytych)
+================================================================================
+
+   SET_HM_WHITE  : 11 base + 25 generic male NPC variants
+                   (HMJMPS, HMLTHR, HMMAXX, HMMETL, HMCMBT, HMCMBL,
+                    HMBROH, HMWARR, HAPOWR, HANPWR, HAROBE
+                    + NMPEAS, NMGANG, NMCOPP, NMLOSR, NMBPEA, itd.)
+   SET_HM_BLACK  : 8 variants (HMBJMP/HMBMET/HMBMAX/HMBLTR/HMMET2/
+                   HMCMB2/HMCMB3/HAROBB)
+   SET_HM_BALD   : 4 variants (NMBJMP/HMMAXB/NMCAMA/HMGLCM)
+   SET_HM_LONG   : 4 variants (NMLJMP/HMLHMX/HMLHLR/HMLHMT)
+   SET_IAN       : 5 variants (NMMAXX/HMIANJ/HMIANC/HMIANP/HMIANR)
+   SET_TYCHO     : 8 variants (NMLTHR/HMTYCL/HMTYCM/HMTYCC/HMTYCP/
+                   HMTYCR/NMMETL/HMCMB4)
+   SET_HF_WHITE  : 11 base + 6 generic female NPC
+                   (HFJMPS/HFLTHR/HFMETL/HFCMBT/HFCMBL/HFBROH/HFMAXX/
+                    HFPRIM/NFCHLD/NFVALT/NFPRIM + NFPEAS/NFTRMP/NFBRLP/
+                    NFMAXX/NFMETL/NFVRED)
+   SET_NFP_PUNK  : 3 variants (NFPJMP/NFPGLA/NFPGMT)
+   SET_NF_NICE   : 3 variants (NFLYNN/NFASIA/NFNICE)
+   SET_MUTANT    : 8 humanoid mutants (MALIEU/MAMSTR/MALIEN/MABRAN/
+                   MAGUNN/MABOS2/MABOSS/MAQUEN)
+
+   Ponad 70 art_idx explicitly mapped.
+
+
+================================================================================
+ ZMIANY W v6 phase 2.3
+================================================================================
+
+ [+] is_dude guard w invenwield_handler (dude ma wlasny sprite system)
+ [+] Rename FAMILY -> SET (clean technical naming)
+ [-] Usuniete save_array "party_fid_src" + get_source_fid (stateless)
+ [-] Usuniete "return SET_HM_WHITE" ultimate fallback
+ [!] KATALOG jest JEDYNYM zrodlem prawdy. SET_NONE = nie mapujemy.
+
+ CLAUDE.md update:
+ - Nowa sekcja: ZERO FALLBACKOW / DEFAULT-ELSE
+ - Zasada na zawsze: nie zgaduj, kataloguj explicit.
+
+
+================================================================================
+ REVIEW 3x PASS
+================================================================================
+
+ PASS 1 -- Intent:
+   [OK] Zero fallbackow
+   [OK] is_dude check
+   [OK] SET naming (nie sitcom)
+   [OK] Per-FID mapping bez save_array
+
+ PASS 2 -- Regressions:
+   [OK] Znani NPCzy (Medyk/Theresa/Officer/Diana/Gwen) dalej obsluzeni
+   [OK] Nieznani -> no-op (lepiej niz mis-detect)
+
+ PASS 3 -- Edge:
+   [OK] Modded sprite bez katalogu -> SET_NONE -> skip. Engine zachowuje
+        vanilla sprite. Bug visibility: user raportuje -> dodajemy
+        art_idx do katalogu.
+   [OK] Puste worn slot (ARM_NONE) z SET_MUTANT -> MALIEU. OK (mutant
+        base sprite).
+
+
+================================================================================
+ EOF
+================================================================================
