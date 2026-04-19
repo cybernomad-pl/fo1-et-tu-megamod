@@ -88,6 +88,7 @@ procedure invenwield_handler;
 procedure refresh_all_party;
 procedure refresh_one(variable obj);
 procedure pid_to_armor_group(variable worn_pid);
+procedure fid_to_base(variable fid);
 procedure fid_to_set(variable fid);
 procedure set_armor_to_fid(variable set_id, variable group);
 
@@ -147,6 +148,7 @@ end
 // ============================================================
 procedure refresh_one(variable obj) begin
     variable cur_fid;
+    variable base_fid;
     variable art_idx;
     variable set_id;
     variable worn_obj;
@@ -156,37 +158,21 @@ procedure refresh_one(variable obj) begin
     variable target_fid;
     variable section;
     variable sid;
-    variable source_cache;
-    variable obj_key;
-    variable source_fid;
 
     cur_fid := obj_art_fid(obj);
     art_idx := cur_fid bwand 4095;
     sid := get_script(obj);
 
-    // PER-SOURCE-FID mapping. First time we see an NPC, its current
-    // sprite is its base (jumpsuit/underwear). Remember that FID as
-    // source forever. Later, when NPC wears armor, current FID changes
-    // to armored variant (possibly shared with other sets) -- but we
-    // derive set_id from stored SOURCE, not current.
-    source_cache := load_array("party_source_fid");
-    if (source_cache == 0) then source_cache := create_array_map;
-    obj_key := "" + obj;
-    source_fid := source_cache[obj_key];
-
-    if (source_fid == 0) then begin
-        // First sighting -- capture current FID as source ONLY if
-        // fid_to_set recognises it (avoids capturing shared armor FID
-        // as source).
-        if (fid_to_set(cur_fid) != SET_NONE) then begin
-            source_fid := cur_fid;
-            source_cache[obj_key] := source_fid;
-            save_array("party_source_fid", source_cache);
-        end
-    end
-
-    if (source_fid == 0) then set_id := SET_NONE;
-    else set_id := fid_to_set(source_fid);
+    // Per Borys spec: take current FID, look up its BASE (jumpsuit of
+    // same sprite family) via static fid_to_base map. Then base -> set
+    // -> (set + armor_group) -> target FID. No per-obj state.
+    //
+    // Shared armor FIDs (e.g. HFCMBT idx 3 = female combat) map to
+    // canonical female base (HFJMPS). NPCs that pass through shared
+    // sprite transition to canonical family -- accepted trade-off.
+    base_fid := fid_to_base(cur_fid);
+    if (base_fid == 0) then set_id := SET_NONE;
+    else set_id := fid_to_set(base_fid);
 
     // Full data dump -- grouped by sid for easy parsing.
     section := "npc_" + sid;
@@ -484,4 +470,84 @@ procedure set_armor_to_fid(variable set_id, variable group) begin
     end
 
     return 0;
+end
+
+// ============================================================
+// FID -> BASE FID (reverse lookup, static map).
+// Each known sprite variant maps to the base jumpsuit FID of its
+// family. Shared armor sprites map to canonical female/male base.
+// Returns 0 if FID unknown (refresh_one skips).
+// ============================================================
+procedure fid_to_base(variable fid) begin
+    variable idx;
+    idx := fid bwand 4095;
+
+    // HM_BLACK (Medyk, Officer): HMBJMP=8, HMBMET=9, HMBMAX=132,
+    // HMBLTR=133, HMMET2=134, HMCMB2=135, HMCMB3=136, HAROBB=137
+    if (idx == 8 or idx == 9 or idx == 132 or idx == 133 or idx == 134
+        or idx == 135 or idx == 136 or idx == 137) then return 16777224; // HMBJMP
+
+    // HM_BALD: NMBJMP=123, HMMAXB=90, NMCAMA=91, HMGLCM=139
+    if (idx == 123 or idx == 90 or idx == 91 or idx == 139) then return 16777339;
+
+    // HM_LONG: NMLJMP=124, HMLHMX=131, HMLHLR=88, HMLHMT=89
+    if (idx == 124 or idx == 131 or idx == 88 or idx == 89) then return 16777340;
+
+    // IAN: NMMAXX=45, HMIANJ=61, HMIANC=73, HMIANP=74, HMIANR=75
+    if (idx == 45 or idx == 61 or idx == 73 or idx == 74 or idx == 75) then return 16777261;
+
+    // TYCHO: NMLTHR=44, HMTYCL=62, HMTYCM=69, HMTYCC=70, HMTYCP=71,
+    // HMTYCR=76, NMMETL=138, HMCMB4=140
+    if (idx == 44 or idx == 62 or idx == 69 or idx == 70 or idx == 71
+        or idx == 76 or idx == 138 or idx == 140) then return 16777260;
+
+    // NFP_PUNK (irokezka Theresa/Diana/Gwen): NFPJMP=122, NFPGLA=92,
+    // NFPGMT=93, NFMAXX=34 (female LJ shared with hero female? Borys
+    // explicitly mapped LJ=34 for Theresa, so treat 34 as punk base)
+    if (idx == 92 or idx == 93 or idx == 122 or idx == 34) then return 16777338;
+
+    // HM_WHITE (hero male + most male NPC): jumpsuit + armor variants
+    // HMJMPS=11, HMLTHR=12, HMMAXX=13, HMMETL=14, HMCMBT=10, HMCMBL=128,
+    // HMBROH=84, HMWARR=130, HAPOWR=1, HANPWR=87, HAROBE=2
+    // Shared: idx 143 (power shared male), idx 144 (purple robe shared male)
+    if (idx == 1 or idx == 2 or idx == 10 or idx == 11 or idx == 12
+        or idx == 13 or idx == 14 or idx == 84 or idx == 87 or idx == 128
+        or idx == 130 or idx == 143 or idx == 144) then return 16777227;
+
+    // HF_WHITE (hero female + shared female targets):
+    // HFJMPS=4, HFLTHR=5, HFMAXX=6, HFMETL=7, HFCMBT=3, HFCMBL=127,
+    // HFBROH=85, HFPRIM=86
+    // Shared female: idx 105 grey robe, idx 30 female power
+    if (idx == 3 or idx == 4 or idx == 5 or idx == 6 or idx == 7
+        or idx == 30 or idx == 85 or idx == 86 or idx == 105
+        or idx == 127) then return 16777220;
+
+    // NF_NICE specific: NFNICE=118, NFASIA=116, NFLYNN=106
+    if (idx == 106 or idx == 116 or idx == 118) then return 16777334;
+
+    // MUTANT: MALIEU=18, MAMSTR=50, MALIEN=80, MABRAN=99, MAGUNN=101,
+    // MABOS2=102, MABOSS=107, MAQUEN=108, MAROBE=120
+    if (idx == 18 or idx == 50 or idx == 80 or idx == 99 or idx == 101
+        or idx == 102 or idx == 107 or idx == 108 or idx == 120) then return 16777234;
+
+    // Generic male NPC sprites -> HMJMPS (canonical):
+    // NMBPEA=39, NMBRLP=40, NMBSNP=41, NMGRCH=42, NMLOSR=43,
+    // NMOVER=46, NMOVR2=47, NMPEAS=48, NMGZMO=49, NMDOCC=57,
+    // NMWARR=64, NMBONC=77, NMBRSR=78, NMASIA=82, NMMEXI=95,
+    // NMNICE=96, NMCOPP=109, NMMYRN=110, NMLABB=111, NMFATT=113,
+    // NMRGNG=114, NMGANG=115, NMOLDD=119, NMBGRY=125, NMLGRY=126
+    if (idx == 39 or idx == 40 or idx == 41 or idx == 42 or idx == 43
+        or idx == 46 or idx == 47 or idx == 48 or idx == 49 or idx == 57
+        or idx == 64 or idx == 77 or idx == 78 or idx == 82 or idx == 95
+        or idx == 96 or idx == 109 or idx == 110 or idx == 111 or idx == 113
+        or idx == 114 or idx == 115 or idx == 119 or idx == 125
+        or idx == 126) then return 16777227;   // HMJMPS
+
+    // Generic female NPC sprites -> HFJMPS (canonical):
+    // NFBRLP=33, NFPEAS=36, NFTRMP=37, NFVRED=38, NFCHLD=72,
+    // NFVALT=98, NFPRIM=121
+    if (idx == 33 or idx == 36 or idx == 37 or idx == 38 or idx == 72
+        or idx == 98 or idx == 121) then return 16777220;   // HFJMPS
+
+    return 0;   // unknown sprite, refresh_one skips
 end
