@@ -315,11 +315,9 @@ procedure useobjon_handler begin
         return;
     end
 
-    if (combat_is_initialized) then begin
-        LOG("shv", "Z_combat", 1);
-        display_msg("No time to put out the fire right now.");
-        return;
-    end
+    // NOTE: combat_is_initialized check removed (Borys 2026-04-19).
+    // Shovel on firepit works in combat too -- allows tactical
+    // extinguish via NPC as a combat action.
 
     LOG("shv", "D_invoking_handler", 1);
     call handle_shovel_on_firepit;
