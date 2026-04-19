@@ -194,6 +194,7 @@ procedure keypress_handler begin
             return;
         end
         // Toggle via state variable (same as useobj_handler).
+        play_sfx("BUTIN3");   // Borys: lighter click sound
         if (lighter_lit == 0) then begin
             lighter_lit := 1;
             display_msg("You flick the lighter open. A small flame pushes back the dark.");
@@ -422,6 +423,8 @@ procedure handle_lighter(variable item) begin
     LOG("ltr", "A_combat", combat_is_initialized);
     LOG("ltr", "A_lit_state", lighter_lit);
     LOG("ltr", "A_map_is_encounter", map_is_encounter);
+
+    play_sfx("BUTIN3");   // Borys: lighter click sound
 
     if (lighter_lit == 0) then begin
         lighter_lit := 1;
@@ -878,21 +881,10 @@ procedure map_update_p_proc begin
         call flicker_campfire;
     end
 
-    // Fire crackling ambient: every ~100 ticks (~10 sec) if camp active,
-    // play a random MAFIRE* short sfx. Adds ambient life to the camp.
-    if ((flicker_counter % 100) == 0 and map_has_campfire) then begin
-        roll := random(0, 9);
-        if (roll == 0) then crackle_sfx := "MAFIREAA";
-        else if (roll == 1) then crackle_sfx := "MAFIREAN";
-        else if (roll == 2) then crackle_sfx := "MAFIREAO";
-        else if (roll == 3) then crackle_sfx := "MAFIREBA";
-        else if (roll == 4) then crackle_sfx := "MAFIREBF";
-        else if (roll == 5) then crackle_sfx := "MAFIREBL";
-        else if (roll == 6) then crackle_sfx := "MAFIRECH";
-        else if (roll == 7) then crackle_sfx := "MAFIREZA";
-        else if (roll == 8) then crackle_sfx := "MAFIREZQ";
-        else crackle_sfx := "MAFIREZR";
-        play_sfx(crackle_sfx);
+    // Fire ambient: every ~300 ticks (~30 sec) if camp active,
+    // play FLARE.ACM (4.4s pop -- Borys empirical pick).
+    if ((flicker_counter % 300) == 0 and map_has_campfire) then begin
+        play_sfx("FLARE");
     end
 end
 
