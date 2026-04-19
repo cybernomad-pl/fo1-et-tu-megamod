@@ -872,19 +872,10 @@ end
 // MAP UPDATE (sfall auto-called) -- flicker throttle
 // ============================================================
 procedure map_update_p_proc begin
-    variable crackle_sfx;
-    variable roll;
-
     flicker_counter := flicker_counter + 1;
     // Throttle: flicker every ~3rd tick (subtle, not strobing).
     if ((flicker_counter % 3) == 0) then begin
         call flicker_campfire;
-    end
-
-    // Fire ambient: every ~300 ticks (~30 sec) if camp active,
-    // play FLARE.ACM (4.4s pop -- Borys empirical pick).
-    if ((flicker_counter % 300) == 0 and map_has_campfire) then begin
-        play_sfx("FLARE");
     end
 end
 
