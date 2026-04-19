@@ -156,20 +156,37 @@ procedure refresh_one(variable obj) begin
     variable target_fid;
     variable section;
     variable sid;
+    variable source_cache;
+    variable obj_key;
+    variable source_fid;
 
     cur_fid := obj_art_fid(obj);
     art_idx := cur_fid bwand 4095;
     sid := get_script(obj);
 
-    // PER-SCRIPT_ID mapping (primary). Each known NPC has a fixed SET
-    // regardless of current FID. Shared armor sprites (e.g. female
-    // combat idx 3) don't confuse identity this way.
-    set_id := SET_NONE;
-    if (sid == SCRIPT_MEDIC) then set_id := SET_HM_BLACK;
-    else if (sid == SCRIPT_OFFICER) then set_id := SET_HF_WHITE;
-    else if (sid == SCRIPT_THERESA) then set_id := SET_NFP_PUNK;
-    else if (sid == SCRIPT_DIANA) then set_id := SET_NFP_PUNK;
-    else if (sid == SCRIPT_GWEN) then set_id := SET_NFP_PUNK;
+    // PER-SOURCE-FID mapping. First time we see an NPC, its current
+    // sprite is its base (jumpsuit/underwear). Remember that FID as
+    // source forever. Later, when NPC wears armor, current FID changes
+    // to armored variant (possibly shared with other sets) -- but we
+    // derive set_id from stored SOURCE, not current.
+    source_cache := load_array("party_source_fid");
+    if (source_cache == 0) then source_cache := create_array_map;
+    obj_key := "" + obj;
+    source_fid := source_cache[obj_key];
+
+    if (source_fid == 0) then begin
+        // First sighting -- capture current FID as source ONLY if
+        // fid_to_set recognises it (avoids capturing shared armor FID
+        // as source).
+        if (fid_to_set(cur_fid) != SET_NONE) then begin
+            source_fid := cur_fid;
+            source_cache[obj_key] := source_fid;
+            save_array("party_source_fid", source_cache);
+        end
+    end
+
+    if (source_fid == 0) then set_id := SET_NONE;
+    else set_id := fid_to_set(source_fid);
 
     // Full data dump -- grouped by sid for easy parsing.
     section := "npc_" + sid;
