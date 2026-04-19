@@ -7,10 +7,9 @@
       ] (27) -- FID BROWSER: cycle forward  (next sprite) on nearest party
 
     FID Browser:
-      Selects the nearest TEAM_PLAYER critter (not dude). Applies art_change
-      across a catalogue of 71 known humanoid art_idx. Displays sprite
-      name and idx in the message log. Use to discover which sprite
-      suits which NPC.
+      Selects the nearest TEAM_PLAYER critter (not dude). Cycles through
+      raw art_idx 1..140 (no filtering -- every sprite accessible).
+      Logs name/pid/worn/fid/art_idx to testing.ini per press.
 
     party_orders mod disabled (didn't work on our recruits).
 */
@@ -27,9 +26,6 @@ procedure keypress_handler;
 procedure gamemode_handler;
 procedure find_nearest_party;
 procedure cycle_fid(variable direction);
-procedure fid_catalogue_size;
-procedure fid_catalogue_at(variable i);
-procedure fid_catalogue_name(variable i);
 
 variable last_map_index;
 
@@ -118,15 +114,16 @@ end
 
 procedure cycle_fid(variable direction) begin
     variable target;
-    variable fid_arr;
-    variable cur_idx;
-    variable cat_size;
+    variable cur_fid;
+    variable new_art_idx;
     variable new_fid;
     variable worn_obj;
     variable worn_pid;
     variable worn_name;
     variable section;
     variable sid;
+    variable cnt_arr;
+    variable counter;
 
     target := find_nearest_party;
     if (target == 0) then begin
@@ -134,19 +131,13 @@ procedure cycle_fid(variable direction) begin
         return;
     end
 
-    cat_size := fid_catalogue_size;
-    fid_arr := load_array("fid_browser_idx");
-    if (fid_arr == 0) then fid_arr := create_array_map;
+    // Raw art_idx iteration (no catalogue filter -- every sprite accessible).
+    cur_fid := obj_art_fid(target);
+    new_art_idx := (cur_fid bwand 4095) + direction;
+    if (new_art_idx < 1) then new_art_idx := 140;    // wrap to last known
+    if (new_art_idx > 140) then new_art_idx := 1;    // wrap to first
+    new_fid := 16777216 + new_art_idx;               // type=1 (critter)
 
-    cur_idx := fid_arr["" + target];
-    cur_idx := cur_idx + direction;
-    if (cur_idx < 0) then cur_idx := cat_size - 1;
-    if (cur_idx >= cat_size) then cur_idx := 0;
-
-    fid_arr["" + target] := cur_idx;
-    save_array("fid_browser_idx", fid_arr);
-
-    new_fid := fid_catalogue_at(cur_idx);
     art_change_fid_num(target, new_fid);
 
     worn_obj := critter_inven_obj(target, INVEN_TYPE_WORN);
@@ -159,10 +150,7 @@ procedure cycle_fid(variable direction) begin
         worn_name := "(none)";
     end
 
-    // Append log to testing.ini with unique per-event key (not overwritten).
-    // Counter stored in save_array so history persists across saves.
-    variable cnt_arr;
-    variable counter;
+    // Append log to testing.ini with unique per-event key.
     cnt_arr := load_array("fid_log_counter");
     if (cnt_arr == 0) then cnt_arr := create_array_map;
     counter := cnt_arr["n"] + 1;
@@ -170,7 +158,6 @@ procedure cycle_fid(variable direction) begin
     save_array("fid_log_counter", cnt_arr);
 
     sid := get_script(target);
-    // Zero-pad counter so sections stay in insertion order when sorted.
     section := "cycle_e" + (10000 + counter);
     LOG(section, "name",      obj_name(target));
     LOG(section, "sid",       sid);
@@ -178,190 +165,7 @@ procedure cycle_fid(variable direction) begin
     LOG(section, "worn_pid",  worn_pid);
     LOG(section, "worn_name", worn_name);
     LOG(section, "fid",       new_fid);
-    LOG(section, "art_idx",   new_fid bwand 4095);
-    LOG(section, "sprite",    fid_catalogue_name(cur_idx));
-    LOG(section, "slot",      cur_idx);
+    LOG(section, "art_idx",   new_art_idx);
 
-    display_msg(obj_name(target) + " [" + worn_name + "] -> "
-        + fid_catalogue_name(cur_idx) + " (idx " + (new_fid bwand 4095)
-        + ", slot " + cur_idx + "/" + cat_size + ")");
-end
-
-// ============================================================
-// FID catalogue -- 71 known humanoid art_idx (from artfid.h)
-// ============================================================
-procedure fid_catalogue_size begin
-    return 71;
-end
-
-procedure fid_catalogue_at(variable i) begin
-    // HM_WHITE (hero male black hair)
-    if (i == 0) then return 16777227;  // HMJMPS
-    if (i == 1) then return 16777228;  // HMLTHR
-    if (i == 2) then return 16777229;  // HMMAXX (leather jacket)
-    if (i == 3) then return 16777230;  // HMMETL
-    if (i == 4) then return 16777226;  // HMCMBT
-    if (i == 5) then return 16777344;  // HMCMBL (combat dark)
-    if (i == 6) then return 16777300;  // HMBROH (BoS)
-    if (i == 7) then return 16777217;  // HAPOWR (power)
-    if (i == 8) then return 16777303;  // HANPWR (adv power)
-    if (i == 9) then return 16777218;  // HAROBE
-
-    // HM_BLACK
-    if (i == 10) then return 16777224; // HMBJMP
-    if (i == 11) then return 16777348; // HMBMAX (black LJ)
-    if (i == 12) then return 16777349; // HMBLTR (black leather)
-    if (i == 13) then return 16777225; // HMBMET (black metal)
-    if (i == 14) then return 16777350; // HMMET2 (black pants variant)
-    if (i == 15) then return 16777351; // HMCMB2 (black combat)
-    if (i == 16) then return 16777352; // HMCMB3 (black combat dark)
-    if (i == 17) then return 16777353; // HAROBB (black robe)
-
-    // HM_BALD
-    if (i == 18) then return 16777339; // NMBJMP (bald jump)
-    if (i == 19) then return 16777306; // HMMAXB (bald LJ)
-    if (i == 20) then return 16777307; // NMCAMA (bald metal)
-    if (i == 21) then return 16777355; // HMGLCM (bald combat)
-
-    // HM_LONG
-    if (i == 22) then return 16777340; // NMLJMP
-    if (i == 23) then return 16777347; // HMLHMX
-    if (i == 24) then return 16777304; // HMLHLR
-    if (i == 25) then return 16777305; // HMLHMT
-
-    // IAN
-    if (i == 26) then return 16777261; // NMMAXX
-    if (i == 27) then return 16777277; // HMIANJ
-    if (i == 28) then return 16777289; // HMIANC
-    if (i == 29) then return 16777290; // HMIANP
-    if (i == 30) then return 16777291; // HMIANR
-
-    // TYCHO
-    if (i == 31) then return 16777260; // NMLTHR
-    if (i == 32) then return 16777278; // HMTYCL
-    if (i == 33) then return 16777285; // HMTYCM
-    if (i == 34) then return 16777286; // HMTYCC
-    if (i == 35) then return 16777287; // HMTYCP
-    if (i == 36) then return 16777292; // HMTYCR
-    if (i == 37) then return 16777354; // NMMETL
-    if (i == 38) then return 16777356; // HMCMB4
-
-    // HF_WHITE
-    if (i == 39) then return 16777220; // HFJMPS
-    if (i == 40) then return 16777221; // HFLTHR
-    if (i == 41) then return 16777223; // HFMETL
-    if (i == 42) then return 16777219; // HFCMBT
-    if (i == 43) then return 16777343; // HFCMBL
-    if (i == 44) then return 16777301; // HFBROH
-    if (i == 45) then return 16777222; // HFMAXX (APA)
-    if (i == 46) then return 16777302; // HFPRIM
-
-    // NFP_PUNK
-    if (i == 47) then return 16777338; // NFPJMP
-    if (i == 48) then return 16777308; // NFPGLA
-    if (i == 49) then return 16777309; // NFPGMT
-
-    // NF_NICE + generic female NPC
-    if (i == 50) then return 16777334; // NFNICE
-    if (i == 51) then return 16777332; // NFASIA
-    if (i == 52) then return 16777322; // NFLYNN
-    if (i == 53) then return 16777337; // NFPRIM
-    if (i == 54) then return 16777314; // NFVALT
-    if (i == 55) then return 16777288; // NFCHLD
-    if (i == 56) then return 16777252; // NFPEAS
-    if (i == 57) then return 16777253; // NFTRMP
-
-    // MUTANT
-    if (i == 58) then return 16777234; // MALIEU (Lieutenant)
-    if (i == 59) then return 16777266; // MAMSTR (Master)
-    if (i == 60) then return 16777296; // MALIEN
-    if (i == 61) then return 16777315; // MABRAN
-    if (i == 62) then return 16777317; // MAGUNN
-    if (i == 63) then return 16777318; // MABOS2
-    if (i == 64) then return 16777323; // MABOSS (Horrigan-like)
-    if (i == 65) then return 16777324; // MAQUEN
-    if (i == 66) then return 16777336; // MAROBE (mutant robe)
-
-    // Misc / others
-    if (i == 67) then return 16777346; // HMWARR (hero primitive male)
-    if (i == 68) then return 16777280; // NMWARR (NPC primitive male)
-    if (i == 69) then return 16777341; // NMBGRY (black guy dark shirt)
-    if (i == 70) then return 16777342; // NMLGRY (loser dark shirt)
-
-    return 16777227;  // safety: HMJMPS
-end
-
-procedure fid_catalogue_name(variable i) begin
-    if (i == 0)  then return "HMJMPS";
-    if (i == 1)  then return "HMLTHR";
-    if (i == 2)  then return "HMMAXX(LJ)";
-    if (i == 3)  then return "HMMETL";
-    if (i == 4)  then return "HMCMBT";
-    if (i == 5)  then return "HMCMBL";
-    if (i == 6)  then return "HMBROH";
-    if (i == 7)  then return "HAPOWR";
-    if (i == 8)  then return "HANPWR";
-    if (i == 9)  then return "HAROBE";
-    if (i == 10) then return "HMBJMP";
-    if (i == 11) then return "HMBMAX(blk-LJ)";
-    if (i == 12) then return "HMBLTR(blk-LA)";
-    if (i == 13) then return "HMBMET";
-    if (i == 14) then return "HMMET2";
-    if (i == 15) then return "HMCMB2";
-    if (i == 16) then return "HMCMB3";
-    if (i == 17) then return "HAROBB";
-    if (i == 18) then return "NMBJMP(bald)";
-    if (i == 19) then return "HMMAXB(bald-LJ)";
-    if (i == 20) then return "NMCAMA(bald-MT)";
-    if (i == 21) then return "HMGLCM(bald-CM)";
-    if (i == 22) then return "NMLJMP(long)";
-    if (i == 23) then return "HMLHMX(long-LJ)";
-    if (i == 24) then return "HMLHLR(long-LA)";
-    if (i == 25) then return "HMLHMT(long-MT)";
-    if (i == 26) then return "NMMAXX(Ian-base)";
-    if (i == 27) then return "HMIANJ";
-    if (i == 28) then return "HMIANC";
-    if (i == 29) then return "HMIANP";
-    if (i == 30) then return "HMIANR";
-    if (i == 31) then return "NMLTHR(Tycho)";
-    if (i == 32) then return "HMTYCL";
-    if (i == 33) then return "HMTYCM";
-    if (i == 34) then return "HMTYCC";
-    if (i == 35) then return "HMTYCP";
-    if (i == 36) then return "HMTYCR";
-    if (i == 37) then return "NMMETL";
-    if (i == 38) then return "HMCMB4";
-    if (i == 39) then return "HFJMPS";
-    if (i == 40) then return "HFLTHR";
-    if (i == 41) then return "HFMETL";
-    if (i == 42) then return "HFCMBT";
-    if (i == 43) then return "HFCMBL";
-    if (i == 44) then return "HFBROH";
-    if (i == 45) then return "HFMAXX(APA)";
-    if (i == 46) then return "HFPRIM";
-    if (i == 47) then return "NFPJMP(punk)";
-    if (i == 48) then return "NFPGLA(punk-LA)";
-    if (i == 49) then return "NFPGMT(punk-MT)";
-    if (i == 50) then return "NFNICE";
-    if (i == 51) then return "NFASIA";
-    if (i == 52) then return "NFLYNN";
-    if (i == 53) then return "NFPRIM";
-    if (i == 54) then return "NFVALT";
-    if (i == 55) then return "NFCHLD";
-    if (i == 56) then return "NFPEAS";
-    if (i == 57) then return "NFTRMP";
-    if (i == 58) then return "MALIEU(Mut-Lt)";
-    if (i == 59) then return "MAMSTR(Mut-Master)";
-    if (i == 60) then return "MALIEN";
-    if (i == 61) then return "MABRAN";
-    if (i == 62) then return "MAGUNN";
-    if (i == 63) then return "MABOS2";
-    if (i == 64) then return "MABOSS(Horrigan)";
-    if (i == 65) then return "MAQUEN";
-    if (i == 66) then return "MAROBE(Mut-Robe)";
-    if (i == 67) then return "HMWARR";
-    if (i == 68) then return "NMWARR";
-    if (i == 69) then return "NMBGRY";
-    if (i == 70) then return "NMLGRY";
-    return "?";
+    display_msg(obj_name(target) + " [" + worn_name + "] -> idx " + new_art_idx);
 end
