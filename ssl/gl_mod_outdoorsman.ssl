@@ -521,10 +521,16 @@ procedure handle_shovel_on_firepit begin
     variable lst;
     variable scanned;
 
+    // Combat check (Borys 2026-04-20: jednak blokuj w combat)
+    if (combat_is_initialized) then begin
+        display_msg("No time to put out the fire right now.");
+        return;
+    end
+
     map_key := "" + cur_map_index;
 
-    // No fade -- Borys 2026-04-19: extinguish should be instant, not
-    // a transition sequence (reduces crash risk in combat too).
+    // Short fade for feedback (Borys: lepsze niz brak fade)
+    gfade_out(300);
     play_sfx("STEAM");
 
     // 1. Destroy tracked firepit (primary). Remember its tile so we can
@@ -607,7 +613,7 @@ procedure handle_shovel_on_firepit begin
     save_array("campfire_player_bedroll", player_bedroll_map);
 
     tile_refresh_display;
-    // No fade_in -- see no gfade_out note above.
+    gfade_in(300);
 
     display_msg("You shovel dirt onto the fire. The flames die out.");
     set_global_var(GVAR_CAMP_ACTIVE, 0);
@@ -1243,17 +1249,6 @@ procedure action_any_ideas begin
         made := made + 1;
     end
 
-    // SHARP_SPEAR shortcut: SHARPENED_POLE + FLINT direct
-    if (party_has_pid(320) and party_has_pid(278)) then begin
-        call party_consume_pid(320);
-        call party_consume_pid(278);
-        item := create_object(280, 0, 0);
-        if (item != 0) then add_obj_to_inven(dude_obj, item);
-        display_msg("You knap a flint blade onto the pole -- sharpened spear.");
-        give_exp_points(35);
-        made := made + 1;
-    end
-
     // HEALING_POWDER (broc + xander)
     if (party_has_pid(271) and party_has_pid(272)) then begin
         call party_consume_pid(271);
@@ -1262,28 +1257,6 @@ procedure action_any_ideas begin
         if (item != 0) then add_obj_to_inven(dude_obj, item);
         display_msg("You grind broc flower and xander root into healing powder.");
         give_exp_points(30);
-        made := made + 1;
-    end
-
-    // CLUB (pole + rock)
-    if (party_has_pid(320) and party_has_pid(19)) then begin
-        call party_consume_pid(320);
-        call party_consume_pid(19);
-        item := create_object(5, 0, 0);
-        if (item != 0) then add_obj_to_inven(dude_obj, item);
-        display_msg("You lash a rock to a pole -- crude club.");
-        give_exp_points(20);
-        made := made + 1;
-    end
-
-    // KNIFE primitive (flint + rock)
-    if (party_has_pid(278) and party_has_pid(19)) then begin
-        call party_consume_pid(278);
-        call party_consume_pid(19);
-        item := create_object(4, 0, 0);
-        if (item != 0) then add_obj_to_inven(dude_obj, item);
-        display_msg("You chip a flint blade on a rock -- primitive knife.");
-        give_exp_points(20);
         made := made + 1;
     end
 
