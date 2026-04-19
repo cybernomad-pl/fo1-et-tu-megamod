@@ -49,15 +49,16 @@
 // FAMILY IDs
 // ============================================================
 #define FAM_NONE      (0)
-#define FAM_HM_WHITE  (1)
-#define FAM_HM_BLACK  (2)
-#define FAM_HM_BALD   (3)
-#define FAM_HM_LONG   (4)
-#define FAM_IAN       (5)
-#define FAM_TYCHO     (6)
-#define FAM_HF_WHITE  (7)
-#define FAM_NFP_PUNK  (8)
-#define FAM_NF_NICE   (9)
+#define FAM_HM_WHITE  (1)   // hero male black hair (default player)
+#define FAM_HM_BLACK  (2)   // czarny facet (Medyk / Officer / czarny player)
+#define FAM_HM_BALD   (3)   // lysy facet
+#define FAM_HM_LONG   (4)   // dluge wlosy (non-Ian)
+#define FAM_IAN       (5)   // specifically Ian sprite set
+#define FAM_TYCHO     (6)   // specifically Tycho sprite set
+#define FAM_HF_WHITE  (7)   // default female player
+#define FAM_NFP_PUNK  (8)   // female punk (Katja, Theresa, Diana, Gwen)
+#define FAM_NF_NICE   (9)   // czarnowlosa kobieta non-player
+#define FAM_MUTANT    (10)  // Super Mutant / Lieutenant / Nightkin / Horrigan
 
 // ============================================================
 // ARMOR GROUPS
@@ -236,46 +237,88 @@ end
 // ============================================================
 procedure fid_to_family(variable fid) begin
     variable art_idx;
-    art_idx := fid bwand 4095;   // 0xFFF
+    art_idx := fid bwand 4095;   // 0xFFF -- critters.lst art index
 
-    // HM_WHITE: HMJMPS=11, HMLTHR=12, HMMAXX=13, HMMETL=14, HMCMBT=10,
-    //           HMCMBL=128, HMBROH=84, HAPOWR=1, HANPWR=87, HAROBE=2
-    if (art_idx == 11 or art_idx == 12 or art_idx == 13 or art_idx == 14
-        or art_idx == 10 or art_idx == 128 or art_idx == 84 or art_idx == 1
-        or art_idx == 87 or art_idx == 2) then return FAM_HM_WHITE;
+    // === SPECIFIC families (priority match) ===
 
     // HM_BLACK: HMBJMP=8, HMBMAX=132, HMBLTR=133, HMBMET=9,
-    //           HMCMB2=135, HMCMB3=136, HAROBB=137
+    //           HMMET2=134, HMCMB2=135, HMCMB3=136, HAROBB=137
     if (art_idx == 8 or art_idx == 132 or art_idx == 133 or art_idx == 9
-        or art_idx == 135 or art_idx == 136 or art_idx == 137) then return FAM_HM_BLACK;
+        or art_idx == 134 or art_idx == 135 or art_idx == 136
+        or art_idx == 137) then return FAM_HM_BLACK;
 
     // HM_BALD: NMBJMP=123, HMMAXB=90, NMCAMA=91, HMGLCM=139
-    if (art_idx == 123 or art_idx == 90 or art_idx == 91 or art_idx == 139) then return FAM_HM_BALD;
+    if (art_idx == 123 or art_idx == 90 or art_idx == 91
+        or art_idx == 139) then return FAM_HM_BALD;
 
-    // HM_LONG: NMLJMP=124, HMLHMX=131, HMLHLR=88, HMLHMT=89
-    if (art_idx == 124 or art_idx == 131 or art_idx == 88 or art_idx == 89) then return FAM_HM_LONG;
+    // HM_LONG (generic long hair): NMLJMP=124, HMLHMX=131, HMLHLR=88, HMLHMT=89
+    if (art_idx == 124 or art_idx == 131 or art_idx == 88
+        or art_idx == 89) then return FAM_HM_LONG;
 
-    // IAN: NMMAXX=45, HMIANJ=61, HMIANC=73, HMIANP=74, HMIANR=75
+    // IAN (specific): NMMAXX=45, HMIANJ=61, HMIANC=73, HMIANP=74, HMIANR=75
     if (art_idx == 45 or art_idx == 61 or art_idx == 73 or art_idx == 74
         or art_idx == 75) then return FAM_IAN;
 
-    // TYCHO: NMLTHR=44, HMTYCL=62, HMTYCM=69, HMTYCC=70, HMTYCP=71,
-    //        HMTYCR=76, NMMETL=138
+    // TYCHO (specific): NMLTHR=44, HMTYCL=62, HMTYCM=69, HMTYCC=70,
+    //                   HMTYCP=71, HMTYCR=76, NMMETL=138, HMCMB4=140
     if (art_idx == 44 or art_idx == 62 or art_idx == 69 or art_idx == 70
-        or art_idx == 71 or art_idx == 76 or art_idx == 138) then return FAM_TYCHO;
+        or art_idx == 71 or art_idx == 76 or art_idx == 138
+        or art_idx == 140) then return FAM_TYCHO;
 
-    // HF_WHITE: HFJMPS=4, HFLTHR=5, HFMETL=7, HFCMBT=3, HFCMBL=127,
-    //           HFBROH=85, HFMAXX=6
+    // NFP_PUNK (Katja/Theresa/Diana/Gwen mohawk):
+    //   NFPJMP=122, NFPGLA=92, NFPGMT=93
+    if (art_idx == 122 or art_idx == 92
+        or art_idx == 93) then return FAM_NFP_PUNK;
+
+    // NF_NICE (czarnowlosa kobieta non-player):
+    //   NFNICE=118, NFASIA=116, NFLYNN=106, NMNICE=96 (sic - male black-hair)
+    if (art_idx == 118 or art_idx == 116 or art_idx == 106) then return FAM_NF_NICE;
+
+    // MUTANT (super mutant humanoids):
+    //   MALIEU=18, MAMSTR=50, MALIEN=80, MABOS2=102, MABOSS=107,
+    //   MAQUEN=108, MAGUNN=101, MABRAN=99
+    if (art_idx == 18 or art_idx == 50 or art_idx == 80 or art_idx == 102
+        or art_idx == 107 or art_idx == 108 or art_idx == 101
+        or art_idx == 99) then return FAM_MUTANT;
+
+    // HM_WHITE primary: HMJMPS=11, HMLTHR=12, HMMAXX=13, HMMETL=14,
+    //                   HMCMBT=10, HMCMBL=128, HMBROH=84, HMWARR=130,
+    //                   HAPOWR=1, HANPWR=87, HAROBE=2
+    if (art_idx == 11 or art_idx == 12 or art_idx == 13 or art_idx == 14
+        or art_idx == 10 or art_idx == 128 or art_idx == 84 or art_idx == 130
+        or art_idx == 1 or art_idx == 87 or art_idx == 2) then return FAM_HM_WHITE;
+
+    // HF_WHITE primary: HFJMPS=4, HFLTHR=5, HFMETL=7, HFCMBT=3,
+    //                   HFCMBL=127, HFBROH=85, HFMAXX=6, HFPRIM=86,
+    //                   NFPRIM=121, NFVALT=98, NFCHLD=72
     if (art_idx == 4 or art_idx == 5 or art_idx == 7 or art_idx == 3
-        or art_idx == 127 or art_idx == 85 or art_idx == 6) then return FAM_HF_WHITE;
+        or art_idx == 127 or art_idx == 85 or art_idx == 6 or art_idx == 86
+        or art_idx == 121 or art_idx == 98 or art_idx == 72) then return FAM_HF_WHITE;
 
-    // NFP_PUNK: NFPJMP=122, NFPGLA=92, NFPGMT=93
-    if (art_idx == 122 or art_idx == 92 or art_idx == 93) then return FAM_NFP_PUNK;
+    // === GENERIC NPC FALLBACK ===
+    // Female NPC sprites (map to HF_WHITE):
+    //   NFBRLP=33, NFMAXX=34, NFMETL=35, NFPEAS=36, NFTRMP=37, NFVRED=38
+    if (art_idx == 33 or art_idx == 34 or art_idx == 35 or art_idx == 36
+        or art_idx == 37 or art_idx == 38) then return FAM_HF_WHITE;
 
-    // NF_NICE: NFNICE=118
-    if (art_idx == 118) then return FAM_NF_NICE;
+    // Male NPC sprites (fallback to HM_WHITE):
+    //   NMBPEA=39, NMBRLP=40, NMBSNP=41, NMGRCH=42, NMLOSR=43,
+    //   NMOVER=46, NMOVR2=47, NMPEAS=48, NMGZMO=49, NMDOCC=57,
+    //   NMWARR=64, NMBONC=77, NMBRSR=78, NMASIA=82, NMMEXI=95,
+    //   NMNICE=96, NMCOPP=109, NMMYRN=110, NMLABB=111, NMFATT=113,
+    //   NMRGNG=114, NMGANG=115, NMOLDD=119, NMBGRY=125, NMLGRY=126
+    if (art_idx == 39 or art_idx == 40 or art_idx == 41 or art_idx == 42
+        or art_idx == 43 or art_idx == 46 or art_idx == 47 or art_idx == 48
+        or art_idx == 49 or art_idx == 57 or art_idx == 64 or art_idx == 77
+        or art_idx == 78 or art_idx == 82 or art_idx == 95 or art_idx == 96
+        or art_idx == 109 or art_idx == 110 or art_idx == 111 or art_idx == 113
+        or art_idx == 114 or art_idx == 115 or art_idx == 119 or art_idx == 125
+        or art_idx == 126) then return FAM_HM_WHITE;
 
-    return FAM_NONE;
+    // Unknown sprite -- ultimate fallback to default male player sprite.
+    // Safer than returning NONE (which would leave sprite as-is regardless
+    // of armor swap -- user wants SOMETHING to happen for every case).
+    return FAM_HM_WHITE;
 end
 
 // ============================================================
@@ -375,6 +418,19 @@ procedure family_armor_to_fid(variable family, variable group) begin
         if (group == ARM_METAL) then return 16777223;      // HFMETL
         if (group == ARM_COMBAT) then return 16777219;     // HFCMBT
         if (group == ARM_COMBAT_DARK or group == ARM_BROTHERHOOD) then return 16777343; // HFCMBL
+    end
+
+    // --------- MUTANT (Super Mutant humanoids) ---------
+    // No V13 jumpsuit variant. Leather maps to Mutant Lieutenant
+    // (closest existing); metal/combat maps to Lieutenant; power armor
+    // maps to MABOSS (Frank Horrigan-like easter egg).
+    if (family == FAM_MUTANT) then begin
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777234; // MALIEU (base)
+        if (group == ARM_LJ or group == ARM_LA) then return 16777234;         // MALIEU (no Nightkin FID)
+        if (group == ARM_METAL or group == ARM_COMBAT
+            or group == ARM_COMBAT_DARK or group == ARM_BROTHERHOOD) then return 16777234; // MALIEU
+        if (group == ARM_POWER or group == ARM_ADV_POWER) then return 16777323; // MABOSS (Horrigan)
+        if (group == ARM_ROBE) then return 16777336;       // MAROBE (mutant robe)
     end
 
     return 0;   // no mapping

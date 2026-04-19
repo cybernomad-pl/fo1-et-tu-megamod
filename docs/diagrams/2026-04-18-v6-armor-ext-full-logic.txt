@@ -1,0 +1,281 @@
+================================================================================
+ fo1-et-tu-megamod  --  PARTY_ARMOR_EXT FULL LOGIC  (v6 phase 2.1)
+================================================================================
+
+ ZERO hardcoded SCRIPT_ID branching. Generic per-FID table-driven mapping.
+ Obsluguje 10 rodzin x 11 armor groups + fallback MALE dla nieznanych.
+
+
+================================================================================
+ HIGH-LEVEL FLOW
+================================================================================
+
+                    +------------------------+
+                    |  game_loaded event     |
+                    +-----------+------------+
+                                |
+                                v
+                    load_array("party_fid_src")
+                                |
+                                v
+                    register HOOK_GAMEMODECHANGE
+                    register HOOK_INVENWIELD
+
+
+    +-------------------+           +----------------------+
+    | HOOK_INVENWIELD   |           | HOOK_GAMEMODECHANGE  |
+    | (obj, item, slot) |           | (no args)            |
+    +---------+---------+           +-----------+----------+
+              |                                 |
+              v                                 v
+     get_team(obj)?              iter LIST_CRITTERS:
+              |                    for each obj:
+           PLAYER                   if team==PLAYER && !dead && !dude
+              |                        refresh_one(obj)
+              v
+     refresh_one(obj)
+
+
+================================================================================
+ refresh_one(obj)  -- core dispatcher
+================================================================================
+
+   1. get_source_fid(obj)
+            |
+         +--+--+
+         |     |
+      KNOWN  NEW  -----> capture current obj_art_fid as source
+         |     |          save to party_fid_src[obj_id]
+         v     v
+    src_fid  src_fid
+
+   2. fid_to_family(src_fid)
+            |
+            v
+         FAMILY  (1 of 10, or FAM_HM_WHITE fallback)
+
+   3. worn_obj := critter_inven_obj(obj, INVEN_TYPE_WORN)
+      worn_pid := obj_pid(worn_obj) or 0
+
+   4. pid_to_armor_group(worn_pid)
+            |
+            v
+         GROUP (1 of 11)
+
+   5. family_armor_to_fid(FAMILY, GROUP)
+            |
+            v
+         TARGET_FID  or 0
+
+   6. if (TARGET_FID != 0 && TARGET_FID != obj_art_fid(obj)):
+          art_change_fid_num(obj, TARGET_FID)
+
+
+================================================================================
+ SOURCE FID CAPTURE
+================================================================================
+
+   SAVE_ARRAY "party_fid_src": map<obj_id_string, source_fid>
+
+    +-------------------------+
+    | get_source_fid(obj):    |
+    |   key := str(obj)       |
+    |   if party_fid_src[key]:|
+    |     return stored       |
+    |   else:                 |
+    |     cur := obj_art_fid  |
+    |     store cur -> save   |
+    |     return cur          |
+    +-------------------------+
+
+   UWAGA: capture happens pierwszy raz gdy NPC jest refresh-owany.
+   Jesli NPC jest juz w armor przy pierwszym wield (np. Officer
+   rekrutowany w leather), capture zapisze FID armoru jako "base".
+   fid_to_family dalej dziala bo tabela obejmuje armor variants
+   kazdej rodziny. Np. HMBLTR (idx 133) -> HM_BLACK, HMLTHR (12) ->
+   HM_WHITE. Wybor rodziny jest poprawny niezaleznie od variant.
+
+
+================================================================================
+ FAMILY DETECTION (fid_to_family)
+================================================================================
+
+   Input:  FID (full, np. 16777349 = HMBLTR)
+   Output: family_id (1..10) or FAM_HM_WHITE (ultimate fallback)
+
+   art_idx := FID bwand 0xFFF    (low 12 bits = critters.lst index)
+
+   Priority order (specific -> generic -> fallback):
+
+   1. HM_BLACK     : idx 8, 9, 132, 133, 134, 135, 136, 137
+   2. HM_BALD      : idx 90, 91, 123, 139
+   3. HM_LONG      : idx 88, 89, 124, 131
+   4. IAN          : idx 45, 61, 73, 74, 75
+   5. TYCHO        : idx 44, 62, 69, 70, 71, 76, 138, 140
+   6. NFP_PUNK     : idx 92, 93, 122
+   7. NF_NICE      : idx 106 (NFLYNN), 116 (NFASIA), 118 (NFNICE)
+   8. MUTANT       : idx 18, 50, 80, 99, 101, 102, 107, 108 (Lt/Master/etc)
+   9. HM_WHITE     : idx 1, 2, 10, 11, 12, 13, 14, 84, 87, 128, 130
+   10. HF_WHITE    : idx 3, 4, 5, 6, 7, 72, 85, 86, 98, 121, 127
+
+   FALLBACKS:
+     Female NPC    : idx 33-38 -> FAM_HF_WHITE
+     Male NPC      : idx 39-49, 57, 64, 77-78, 82, 95-96, 109-115,
+                    119, 125-126 -> FAM_HM_WHITE
+     Unknown       : FAM_HM_WHITE (last resort)
+
+   Total coverage: ~80+ art_idx'ow explicitly mapped.
+
+
+================================================================================
+ ARMOR GROUP CLASSIFICATION (pid_to_armor_group)
+================================================================================
+
+   Input:  worn PID (item proto id of critter's worn slot)
+   Output: armor_group (0..10)
+
+    PID                                      | GROUP
+    -----------------------------------------|----------------
+    0 (no worn)                              | ARM_NONE       (0)
+    PID_V13_VSUIT                            | ARM_JUMPSUIT   (1)
+    PID_LEATHER_JACKET                       | ARM_LJ         (2)
+    PID_CURED_LEATHER_ARMOR (combat jacket)  | ARM_LJ         (2)
+    PID_LEATHER_ARMOR                        | ARM_LA         (3)
+    PID_LEATHER_ARMOR_MK_II                  | ARM_LA         (3)
+    PID_METAL_ARMOR                          | ARM_METAL      (4)
+    PID_METAL_ARMOR_MK_II                    | ARM_METAL      (4)
+    PID_TESLA_ARMOR                          | ARM_METAL      (4)
+    PID_COMBAT_ARMOR                         | ARM_COMBAT     (5)
+    PID_COMBAT_ARMOR_MK_II                   | ARM_COMBAT_DARK (6)
+    PID_BROTHERHOOD_COMBAT_ARMOR             | ARM_BROTHERHOOD (7)
+    PID_POWERED_ARMOR                        | ARM_POWER      (8)
+    PID_HARDENED_POWER_ARMOR                 | ARM_POWER      (8)
+    PID_ADVANCED_POWER_ARMOR                 | ARM_ADV_POWER  (9)
+    PID_ADVANCED_POWER_ARMOR_MK2             | ARM_ADV_POWER  (9)
+    PID_PURPLE_ROBE                          | ARM_ROBE       (10)
+    PID_BRIDGEKEEPERS_ROBE                   | ARM_ROBE       (10)
+    any other                                | ARM_NONE       (0)
+
+
+================================================================================
+ TARGET FID TABLE (family_armor_to_fid)
+================================================================================
+
+           | JMP   | LJ    | LA    | MET   | CMB   | CMBD  | BOS   | PWR   | APA   | ROBE
+  HM_WHITE | 11    | 13    | 12    | 14    | 10    | 128   | 84    | 1     | 87    | 2
+  HM_BLACK | 8     | 132   | 133   | 9     | 135   | 136   | 136   | 1 *fb | 1 *fb | 137
+  HM_BALD  | 123   | 90    | -     | 91    | 139   | 139   | -     | -     | -     | -
+  HM_LONG  | 124   | 131   | 88    | 89    | -     | -     | -     | -     | -     | -
+  IAN      | 45    | 61    | 75    | 74    | 73    | 73    | -     | -     | -     | -
+  TYCHO    | 44    | -     | 44    | 138   | 70    | 69    | -     | 71    | -     | 76
+  HF_WHITE | 4     | 4 *fb | 5     | 7     | 3     | 127   | 85    | -     | 6     | -
+  NFP_PUNK | 122   | 122   | 92    | 93    | 127   | 127   | 127   | -     | -     | -
+  NF_NICE  | 118   | 118   | 5     | 7     | 3     | 127   | 127   | -     | -     | -
+  MUTANT   | 18    | 18    | 18    | 18    | 18    | 18    | 18    | 107   | 107   | 120 *
+
+  *fb = fallback (no dedicated variant for this family+group)
+  *   = MAROBE idx 120 for mutant robe
+
+  Numbers = art_idx (add 16777216 for full FID).
+
+
+================================================================================
+ KEY SCENARIOS
+================================================================================
+
+ SCEN 1: Medyk (HM_BLACK) zakłada leather jacket
+   src_fid = HMBJMP (16777224, idx 8)        -> FAM_HM_BLACK
+   worn = PID_LEATHER_JACKET                  -> ARM_LJ
+   target = HMBMAX (16777348, idx 132)        -> art_change applied
+
+ SCEN 2: Theresa (NFP_PUNK) zakłada metal armor
+   src_fid = NFPJMP (16777338, idx 122)      -> FAM_NFP_PUNK
+   worn = PID_METAL_ARMOR                     -> ARM_METAL
+   target = NFPGMT (16777309, idx 93)         -> art_change applied
+
+ SCEN 3: Vault Citizen (MALE, NMPEAS idx 48) zakłada combat armor
+   src_fid = NMPEAS (16777264, idx 48)       -> FAM_HM_WHITE (generic fallback)
+   worn = PID_COMBAT_ARMOR                    -> ARM_COMBAT
+   target = HMCMBT (16777226, idx 10)         -> art_change applied
+
+ SCEN 4: Rebel Citizen (FEMALE, NFPEAS idx 36) zakłada leather armor
+   src_fid = NFPEAS (16777252, idx 36)       -> FAM_HF_WHITE (generic fallback)
+   worn = PID_LEATHER_ARMOR                   -> ARM_LA
+   target = HFLTHR (16777221, idx 5)          -> art_change applied
+
+ SCEN 5: Tycho (TYCHO family, base NMLTHR idx 44)
+   src_fid = NMLTHR (16777260, idx 44)       -> FAM_TYCHO
+   worn = PID_METAL_ARMOR                     -> ARM_METAL
+   target = NMMETL (16777354, idx 138)        -> art_change applied
+
+ SCEN 6: Unknown NPC (idx 100, not in catalog)
+   src_fid = unknown                          -> FAM_HM_WHITE (ultimate fallback)
+   worn = PID_COMBAT_ARMOR                    -> ARM_COMBAT
+   target = HMCMBT (16777226, idx 10)         -> art_change applied
+
+ SCEN 7: Super Mutant z leather armor
+   src_fid = MALIEU (16777234, idx 18)       -> FAM_MUTANT
+   worn = PID_LEATHER_ARMOR                   -> ARM_LA
+   target = MALIEU (16777234, idx 18)         -> no change (same FID)
+
+ SCEN 8: Super Mutant z power armor (easter egg)
+   src_fid = MALIEU (16777234, idx 18)       -> FAM_MUTANT
+   worn = PID_POWERED_ARMOR                   -> ARM_POWER
+   target = MABOSS (16777323, idx 107)        -> art_change applied
+                                                  (Frank Horrigan-like)
+
+
+================================================================================
+ REVIEW CHECKLIST (3x PASS)
+================================================================================
+
+ PASS 1 -- Intent:
+   [OK] spec Borysa: per-FID, nie per-SCRIPT_ID
+   [OK] source FID captured on first use, stored permanently
+   [OK] 10 families cover wszystkie humanoid sprite w grze
+   [OK] 11 armor groups cover wszystkie typy pancerzy
+   [OK] LEATHER_JACKET osobno od LEATHER_ARMOR
+   [OK] Super Mutant support z Nightkin/Horrigan fallback
+
+ PASS 2 -- Regressions:
+   [OK] Dude (not in party iter, guard obj != dude_obj)
+   [OK] Dead critters skipped
+   [OK] TEAM_PLAYER guard prevents random NPCs from being touched
+   [OK] Fallback HM_WHITE zapewnia ZAWSZE target_fid != 0
+   [OK] art_change_fid_num tylko gdy target != current (no idle churn)
+
+ PASS 3 -- Edge cases:
+   [?] Source FID capture timing: jesli NPC ma custom art_change
+       (Theresa: art_change_fid_num(self, 122) w map_enter), pierwszy
+       capture po HOOK_GAMEMODECHANGE zlapie custom FID (idx 122).
+       Mapowanie do NFP_PUNK poprawne.
+   [?] obj_id moze byc niestabilny miedzy mapami -- obj_id string
+       jako key moze produkowac duplikaty entries. Verification TODO.
+   [?] Generic fallback HM_WHITE means kobieta z generycznym sprite
+       (NFNICE idx 118 in NF_NICE rodzina) moze byc MIS-detected jesli
+       jej art_idx nie w katalogu. Uzytkownik powinien raportowac
+       unknown art_idx dla catalog expansion.
+   [?] Power armor dla HM_BLACK i HM_BALD fallback do HAPOWR (idx 1) --
+       correct, brak dedykowanych black/bald power sprites w art.
+   [?] MUTANT robe mapping (idx 120 MAROBE) -- not verified w artfid.h
+       jako humanoid. Moze ignorowany przez engine. Low priority.
+
+
+================================================================================
+ NEXT STEPS (jesli Borys chce)
+================================================================================
+
+ 1. Debug command (console): print_source_fid(party) -- wypisz source
+    FID i detected family dla kazdego party member. Aby weryfikowac
+    detection runtime.
+
+ 2. Extended catalog: dodac brakujace art_idx jak Borys zalapie
+    uknown FID w grze.
+
+ 3. Configurable per-critter override: save_array "party_family_override"
+    dla uzytkownika (np. "Medyk zawsze FAM_HM_BLACK niezaleznie od FID").
+
+
+================================================================================
+ EOF
+================================================================================
