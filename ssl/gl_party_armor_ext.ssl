@@ -420,17 +420,19 @@ procedure set_armor_to_fid(variable set_id, variable group) begin
         if (group == ARM_ROBE_PURPLE or group == ARM_ROBE_GREY) then return 16777292;       // HMTYCR
     end
 
-    // --------- SET_HF_WHITE (Borys 2026-04-18 empirical) ---------
+    // --------- SET_HF_WHITE (Officer, default female black hair) ---------
+    // Borys 2026-04-18: HF prefix = Hero Female -- jej LJ jest HFMAXX (6)
+    // nie NFMAXX (34 = NPC female mohawk leather jacket).
     if (set_id == SET_HF_WHITE) then begin
         if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777220; // HFJMPS (4)
-        if (group == ARM_LJ) then return 16777250;         // NFMAXX (34)
+        if (group == ARM_LJ) then return 16777222;         // HFMAXX (6, hero female LJ)
         if (group == ARM_LA) then return 16777221;         // HFLTHR (5)
         if (group == ARM_METAL) then return 16777223;      // HFMETL (7)
-        if (group == ARM_COMBAT) then return 16777219;     // HFCMBT (3, Borys: combat kobiety)
+        if (group == ARM_COMBAT) then return 16777219;     // HFCMBT (3)
         if (group == ARM_COMBAT_DARK) then return 16777343; // HFCMBL (127)
-        if (group == ARM_BROTHERHOOD) then return 16777343; // HFCMBL (127, Borys: brotherhood kobiety)
-        if (group == ARM_POWER) then return 16777246;      // idx 30 (Borys: power kobiety)
-        if (group == ARM_ADV_POWER) then return 16777222;  // HFMAXX (6)
+        if (group == ARM_BROTHERHOOD) then return 16777343; // HFCMBL (127)
+        if (group == ARM_POWER) then return 16777246;      // idx 30
+        if (group == ARM_ADV_POWER) then return 16777246;  // fallback idx 30 (no dedicated APA)
         if (group == ARM_ROBE_GREY) then return 16777321;  // HASROB (105)
         if (group == ARM_ROBE_PURPLE) then return 16777360; // idx 144
     end
