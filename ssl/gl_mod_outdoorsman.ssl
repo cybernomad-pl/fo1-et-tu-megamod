@@ -235,13 +235,11 @@ procedure useobj_handler begin
         return;
     end
 
-    // USE on player bedroll -> rest until morning.
+    // USE on any bedroll -> rest until morning. (Tracked check removed
+    // -- any PID_BED_1/BED_2 works, simpler for player.)
     if (obj_pid(item) == PID_BED_1 or obj_pid(item) == PID_BED_2) then begin
-        tracked_bedroll := player_bedroll_map["" + cur_map_index];
-        if (tracked_bedroll != 0 and item == tracked_bedroll) then begin
-            call handle_player_bedroll_rest;
-            set_sfall_return(-1);
-        end
+        call handle_player_bedroll_rest;
+        set_sfall_return(-1);
     end
 end
 
@@ -372,11 +370,24 @@ procedure gamemode_handler begin
     last_no_follow := cur_nf;
     LOG("gm", "C_after_edge_detect", 1);
 
-    // On map change: reset lighter state (fresh map, new lighter obj).
-    // LVAR 13 (wake override per NPC) auto-resets in each NPC's
-    // critter_p_proc when GVAR_PARTY_NO_FOLLOW transitions 1->0.
+    // On map change: reset lighter state AND physically turn off any
+    // wielded lighter (hand slots emit light when OBJ_DATA_LIGHT_DISTANCE
+    // is set). LVAR 13 (wake override per NPC) auto-resets in each
+    // NPC's critter_p_proc when GVAR_PARTY_NO_FOLLOW transitions 1->0.
     if (cur_map_index != last_map_idx) then begin
+        variable left_h;
+        variable right_h;
         lighter_lit := 0;
+        left_h := critter_inven_obj(dude_obj, INVEN_TYPE_LEFT_HAND);
+        right_h := critter_inven_obj(dude_obj, INVEN_TYPE_RIGHT_HAND);
+        if (left_h != 0 and obj_pid(left_h) == PID_LIGHTER) then begin
+            set_object_data(left_h, OBJ_DATA_LIGHT_DISTANCE, 0);
+            set_object_data(left_h, OBJ_DATA_LIGHT_INTENSITY, 0);
+        end
+        if (right_h != 0 and obj_pid(right_h) == PID_LIGHTER) then begin
+            set_object_data(right_h, OBJ_DATA_LIGHT_DISTANCE, 0);
+            set_object_data(right_h, OBJ_DATA_LIGHT_INTENSITY, 0);
+        end
         LOG("gm", "lighter_reset_on_mapchange", 1);
     end
 
