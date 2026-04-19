@@ -79,7 +79,8 @@
 #define ARM_BROTHERHOOD (7)
 #define ARM_POWER       (8)
 #define ARM_ADV_POWER   (9)
-#define ARM_ROBE        (10)
+#define ARM_ROBE_PURPLE (10)  // Cathedral purple robe
+#define ARM_ROBE_GREY   (11)  // Bridgekeeper / sand grey robe
 
 procedure start;
 procedure gamemode_handler;
@@ -155,11 +156,28 @@ procedure refresh_one(variable obj) begin
     variable target_fid;
     variable section;
     variable sid;
+    variable cache_arr;
+    variable obj_key;
 
     cur_fid := obj_art_fid(obj);
     art_idx := cur_fid bwand 4095;
     set_id := fid_to_set(cur_fid);
     sid := get_script(obj);
+
+    // Cache: last known valid set_id per obj. Handles "shared" armor
+    // sprites (e.g. idx 145 = female combat used by HF_WHITE and NFP_PUNK)
+    // -- current FID alone can't distinguish owning set, so we remember
+    // the last time fid_to_set returned a valid answer.
+    cache_arr := load_array("party_set_cache");
+    if (cache_arr == 0) then cache_arr := create_array_map;
+    obj_key := "" + obj;
+    if (set_id != SET_NONE) then begin
+        cache_arr[obj_key] := set_id;
+        save_array("party_set_cache", cache_arr);
+    end
+    else begin
+        set_id := cache_arr[obj_key];   // fallback to last known
+    end
 
     // Full data dump -- grouped by sid for easy parsing.
     section := "npc_" + sid;
@@ -231,8 +249,8 @@ procedure pid_to_armor_group(variable worn_pid) begin
     if (worn_pid == PID_ADVANCED_POWER_ARMOR
         or worn_pid == PID_ADVANCED_POWER_ARMOR_MK2) then return ARM_ADV_POWER;
 
-    if (worn_pid == PID_PURPLE_ROBE
-        or worn_pid == PID_BRIDGEKEEPERS_ROBE) then return ARM_ROBE;
+    if (worn_pid == PID_PURPLE_ROBE) then return ARM_ROBE_PURPLE;
+    if (worn_pid == PID_BRIDGEKEEPERS_ROBE) then return ARM_ROBE_GREY;
 
     return ARM_NONE;
 end
@@ -275,8 +293,10 @@ procedure fid_to_set(variable fid) begin
         or art_idx == 140) then return SET_TYCHO;
 
     // SET_NFP_PUNK: NFPJMP=122, NFPGLA=92, NFPGMT=93
-    if (art_idx == 92 or art_idx == 93
-        or art_idx == 122) then return SET_NFP_PUNK;
+    // Plus shared female sprites when punk is in cross-gender armor:
+    //   NFMAXX=34 (LJ), HASROB=105 (grey robe), 144 (purple robe),
+    //   145 (combat armor)
+    if (art_idx == 92 or art_idx == 93 or art_idx == 122) then return SET_NFP_PUNK;
 
     // SET_NF_NICE: NFLYNN=106, NFASIA=116, NFNICE=118
     if (art_idx == 106 or art_idx == 116
@@ -397,31 +417,38 @@ procedure set_armor_to_fid(variable set_id, variable group) begin
     // --------- SET_HF_WHITE ---------
     if (set_id == SET_HF_WHITE) then begin
         if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777220; // HFJMPS
-        if (group == ARM_LJ) then return 16777220;         // fallback: jumpsuit
+        if (group == ARM_LJ) then return 16777250;         // NFMAXX (idx 34, female leather jacket)
         if (group == ARM_LA) then return 16777221;         // HFLTHR
         if (group == ARM_METAL) then return 16777223;      // HFMETL
-        if (group == ARM_COMBAT) then return 16777219;     // HFCMBT
-        if (group == ARM_COMBAT_DARK) then return 16777343; // HFCMBL
+        if (group == ARM_COMBAT or group == ARM_COMBAT_DARK) then return 16777361; // idx 145 (female combat)
         if (group == ARM_BROTHERHOOD) then return 16777301; // HFBROH
         if (group == ARM_ADV_POWER) then return 16777222;  // HFMAXX
+        if (group == ARM_ROBE_GREY) then return 16777321;  // HASROB (idx 105, grey robe)
+        if (group == ARM_ROBE_PURPLE) then return 16777360; // idx 144 (purple robe female)
     end
 
-    // --------- SET_NFP_PUNK ---------
+    // --------- SET_NFP_PUNK (Borys empirical mapping 2026-04-18) ---------
     if (set_id == SET_NFP_PUNK) then begin
-        if (group == ARM_NONE or group == ARM_JUMPSUIT or group == ARM_LJ) then return 16777338; // NFPJMP
-        if (group == ARM_LA) then return 16777308;         // NFPGLA
-        if (group == ARM_METAL) then return 16777309;      // NFPGMT
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777338; // NFPJMP (idx 122)
+        if (group == ARM_LJ) then return 16777250;         // NFMAXX (idx 34, female LJ)
+        if (group == ARM_LA) then return 16777308;         // NFPGLA (idx 92)
+        if (group == ARM_METAL) then return 16777309;      // NFPGMT (idx 93)
         if (group == ARM_COMBAT or group == ARM_COMBAT_DARK
-            or group == ARM_BROTHERHOOD) then return 16777343; // HFCMBL (fallback)
+            or group == ARM_BROTHERHOOD) then return 16777361; // idx 145 (female combat)
+        if (group == ARM_ROBE_GREY) then return 16777321;  // HASROB (idx 105, grey robe)
+        if (group == ARM_ROBE_PURPLE) then return 16777360; // idx 144 (purple robe)
     end
 
     // --------- SET_NF_NICE ---------
     if (set_id == SET_NF_NICE) then begin
-        if (group == ARM_NONE or group == ARM_JUMPSUIT or group == ARM_LJ) then return 16777334; // NFNICE
-        if (group == ARM_LA) then return 16777221;         // HFLTHR (fallback)
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777334; // NFNICE
+        if (group == ARM_LJ) then return 16777250;         // NFMAXX (idx 34)
+        if (group == ARM_LA) then return 16777221;         // HFLTHR
         if (group == ARM_METAL) then return 16777223;      // HFMETL
-        if (group == ARM_COMBAT) then return 16777219;     // HFCMBT
-        if (group == ARM_COMBAT_DARK or group == ARM_BROTHERHOOD) then return 16777343; // HFCMBL
+        if (group == ARM_COMBAT or group == ARM_COMBAT_DARK
+            or group == ARM_BROTHERHOOD) then return 16777361; // idx 145
+        if (group == ARM_ROBE_GREY) then return 16777321;  // HASROB (idx 105)
+        if (group == ARM_ROBE_PURPLE) then return 16777360; // idx 144
     end
 
     // --------- SET_MUTANT ---------

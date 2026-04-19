@@ -131,13 +131,13 @@ procedure cycle_fid(variable direction) begin
         return;
     end
 
-    // Raw art_idx iteration -- full 12-bit range (0..4095).
-    // Non-existent art_idx may render as blank/crash; Borys accepts.
+    // Raw art_idx iteration. Cap at 200 -- Borys confirmed sprites wrap
+    // past ~145, iterating 0..4095 is pointless.
     cur_fid := obj_art_fid(target);
     new_art_idx := (cur_fid bwand 4095) + direction;
-    if (new_art_idx < 0) then new_art_idx := 4095;
-    if (new_art_idx > 4095) then new_art_idx := 0;
-    new_fid := 16777216 + new_art_idx;               // type=1 (critter)
+    if (new_art_idx < 1) then new_art_idx := 200;
+    if (new_art_idx > 200) then new_art_idx := 1;
+    new_fid := 16777216 + new_art_idx;
 
     art_change_fid_num(target, new_fid);
 
