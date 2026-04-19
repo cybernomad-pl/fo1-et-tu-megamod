@@ -328,15 +328,19 @@ procedure fid_to_set(variable fid) begin
         or art_idx == 114 or art_idx == 115 or art_idx == 119 or art_idx == 125
         or art_idx == 126) then return SET_HM_WHITE;
 
+    // Redhead NFMETL (idx 35) -- Borys: incomplete animations (missing
+    // weapon anims). Force into SET_NF_NICE so refresh_one re-maps to
+    // the black-haired female sprite with full anim (HFMETL idx 7 etc.).
+    if (art_idx == 35) then return SET_NF_NICE;
+
     // SET_HF_WHITE (hero female + generic female NPC fallback):
     //   HFCMBT=3, HFJMPS=4, HFLTHR=5, HFMAXX=6, HFMETL=7, HFPRIM=86,
     //   HFBROH=85, HFCMBL=127, NFCHLD=72, NFVALT=98, NFPRIM=121
-    //   Generic female NPC: NFBRLP=33, NFMAXX=34, NFMETL=35,
-    //     NFPEAS=36, NFTRMP=37, NFVRED=38
+    //   Generic female NPC: NFBRLP=33, NFMAXX=34, NFPEAS=36, NFTRMP=37, NFVRED=38
     if (art_idx == 3 or art_idx == 4 or art_idx == 5 or art_idx == 6
         or art_idx == 7 or art_idx == 72 or art_idx == 85 or art_idx == 86
         or art_idx == 98 or art_idx == 121 or art_idx == 127
-        or art_idx == 33 or art_idx == 34 or art_idx == 35 or art_idx == 36
+        or art_idx == 33 or art_idx == 34 or art_idx == 36
         or art_idx == 37 or art_idx == 38) then return SET_HF_WHITE;
 
     // Unknown sprite -- NO FALLBACK. Return SET_NONE so refresh_one
@@ -350,32 +354,34 @@ end
 // Returns 0 if no mapping for this combination (keep current sprite).
 // ============================================================
 procedure set_armor_to_fid(variable set_id, variable group) begin
-    // --------- SET_HM_WHITE ---------
+    // --------- SET_HM_WHITE (Borys 2026-04-18 confirmed) ---------
     if (set_id == SET_HM_WHITE) then begin
-        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777227; // HMJMPS
-        if (group == ARM_LJ) then return 16777229;         // HMMAXX
-        if (group == ARM_LA) then return 16777228;         // HMLTHR
-        if (group == ARM_METAL) then return 16777230;      // HMMETL
-        if (group == ARM_COMBAT) then return 16777226;     // HMCMBT
-        if (group == ARM_COMBAT_DARK) then return 16777344; // HMCMBL
-        if (group == ARM_BROTHERHOOD) then return 16777300; // HMBROH
-        if (group == ARM_POWER) then return 16777217;      // HAPOWR
-        if (group == ARM_ADV_POWER) then return 16777303;  // HANPWR
-        if (group == ARM_ROBE_PURPLE or group == ARM_ROBE_GREY) then return 16777218;       // HAROBE
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777227; // HMJMPS (11)
+        if (group == ARM_LJ) then return 16777229;         // HMMAXX (13)
+        if (group == ARM_LA) then return 16777228;         // HMLTHR (12)
+        if (group == ARM_METAL) then return 16777230;      // HMMETL (14)
+        if (group == ARM_COMBAT) then return 16777226;     // HMCMBT (10, Borys: faceci combat)
+        if (group == ARM_COMBAT_DARK) then return 16777344; // HMCMBL (128)
+        if (group == ARM_BROTHERHOOD) then return 16777344; // HMCMBL (128, Borys: brotherhood faceci)
+        if (group == ARM_POWER) then return 16777359;      // idx 143 (Borys: power faceci)
+        if (group == ARM_ADV_POWER) then return 16777303;  // HANPWR (87)
+        if (group == ARM_ROBE_PURPLE) then return 16777360; // idx 144 (Borys: purple robe faceci)
+        if (group == ARM_ROBE_GREY) then return 16777321;  // HASROB (105)
     end
 
-    // --------- SET_HM_BLACK ---------
+    // --------- SET_HM_BLACK (Medyk -- Borys 2026-04-18 confirmed) ---------
     if (set_id == SET_HM_BLACK) then begin
-        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777224; // HMBJMP
-        if (group == ARM_LJ) then return 16777348;         // HMBMAX
-        if (group == ARM_LA) then return 16777349;         // HMBLTR
-        if (group == ARM_METAL) then return 16777225;      // HMBMET
-        if (group == ARM_COMBAT) then return 16777351;     // HMCMB2
-        if (group == ARM_COMBAT_DARK) then return 16777352; // HMCMB3
-        if (group == ARM_BROTHERHOOD) then return 16777352; // HMCMB3 (share)
-        if (group == ARM_POWER) then return 16777217;      // HAPOWR (no black variant)
-        if (group == ARM_ADV_POWER) then return 16777217;  // HAPOWR (no black variant)
-        if (group == ARM_ROBE_PURPLE or group == ARM_ROBE_GREY) then return 16777353;       // HAROBB
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777224; // HMBJMP (8)
+        if (group == ARM_LJ) then return 16777348;         // HMBMAX (132)
+        if (group == ARM_LA) then return 16777349;         // HMBLTR (133)
+        if (group == ARM_METAL) then return 16777225;      // HMBMET (9)
+        if (group == ARM_COMBAT) then return 16777351;     // HMCMB2 (135)
+        if (group == ARM_COMBAT_DARK) then return 16777352; // HMCMB3 (136)
+        if (group == ARM_BROTHERHOOD) then return 16777352; // HMCMB3 (136, brotherhood)
+        if (group == ARM_POWER) then return 16777359;      // idx 143 (faceci power)
+        if (group == ARM_ADV_POWER) then return 16777359;  // idx 143 (fallback)
+        if (group == ARM_ROBE_PURPLE) then return 16777353; // HAROBB (137)
+        if (group == ARM_ROBE_GREY) then return 16777321;  // HASROB (105)
     end
 
     // --------- SET_HM_BALD ---------
@@ -414,40 +420,46 @@ procedure set_armor_to_fid(variable set_id, variable group) begin
         if (group == ARM_ROBE_PURPLE or group == ARM_ROBE_GREY) then return 16777292;       // HMTYCR
     end
 
-    // --------- SET_HF_WHITE ---------
+    // --------- SET_HF_WHITE (Borys 2026-04-18 empirical) ---------
     if (set_id == SET_HF_WHITE) then begin
-        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777220; // HFJMPS
-        if (group == ARM_LJ) then return 16777250;         // NFMAXX (idx 34, female leather jacket)
-        if (group == ARM_LA) then return 16777221;         // HFLTHR
-        if (group == ARM_METAL) then return 16777223;      // HFMETL
-        if (group == ARM_COMBAT or group == ARM_COMBAT_DARK) then return 16777361; // idx 145 (female combat)
-        if (group == ARM_BROTHERHOOD) then return 16777301; // HFBROH
-        if (group == ARM_ADV_POWER) then return 16777222;  // HFMAXX
-        if (group == ARM_ROBE_GREY) then return 16777321;  // HASROB (idx 105, grey robe)
-        if (group == ARM_ROBE_PURPLE) then return 16777360; // idx 144 (purple robe female)
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777220; // HFJMPS (4)
+        if (group == ARM_LJ) then return 16777250;         // NFMAXX (34)
+        if (group == ARM_LA) then return 16777221;         // HFLTHR (5)
+        if (group == ARM_METAL) then return 16777223;      // HFMETL (7)
+        if (group == ARM_COMBAT) then return 16777219;     // HFCMBT (3, Borys: combat kobiety)
+        if (group == ARM_COMBAT_DARK) then return 16777343; // HFCMBL (127)
+        if (group == ARM_BROTHERHOOD) then return 16777343; // HFCMBL (127, Borys: brotherhood kobiety)
+        if (group == ARM_POWER) then return 16777246;      // idx 30 (Borys: power kobiety)
+        if (group == ARM_ADV_POWER) then return 16777222;  // HFMAXX (6)
+        if (group == ARM_ROBE_GREY) then return 16777321;  // HASROB (105)
+        if (group == ARM_ROBE_PURPLE) then return 16777360; // idx 144
     end
 
-    // --------- SET_NFP_PUNK (Borys empirical mapping 2026-04-18) ---------
+    // --------- SET_NFP_PUNK (Borys 2026-04-18 empirical) ---------
     if (set_id == SET_NFP_PUNK) then begin
-        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777338; // NFPJMP (idx 122)
-        if (group == ARM_LJ) then return 16777250;         // NFMAXX (idx 34, female LJ)
-        if (group == ARM_LA) then return 16777308;         // NFPGLA (idx 92)
-        if (group == ARM_METAL) then return 16777309;      // NFPGMT (idx 93)
-        if (group == ARM_COMBAT or group == ARM_COMBAT_DARK
-            or group == ARM_BROTHERHOOD) then return 16777361; // idx 145 (female combat)
-        if (group == ARM_ROBE_GREY) then return 16777321;  // HASROB (idx 105, grey robe)
-        if (group == ARM_ROBE_PURPLE) then return 16777360; // idx 144 (purple robe)
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777338; // NFPJMP (122)
+        if (group == ARM_LJ) then return 16777250;         // NFMAXX (34)
+        if (group == ARM_LA) then return 16777308;         // NFPGLA (92)
+        if (group == ARM_METAL) then return 16777309;      // NFPGMT (93)
+        if (group == ARM_COMBAT) then return 16777219;     // HFCMBT (3, shared female)
+        if (group == ARM_COMBAT_DARK) then return 16777343; // HFCMBL (127)
+        if (group == ARM_BROTHERHOOD) then return 16777343; // HFCMBL (127)
+        if (group == ARM_POWER) then return 16777246;      // idx 30 (shared female)
+        if (group == ARM_ROBE_GREY) then return 16777321;  // HASROB (105)
+        if (group == ARM_ROBE_PURPLE) then return 16777360; // idx 144
     end
 
-    // --------- SET_NF_NICE ---------
+    // --------- SET_NF_NICE (shared female fallback) ---------
     if (set_id == SET_NF_NICE) then begin
-        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777334; // NFNICE
-        if (group == ARM_LJ) then return 16777250;         // NFMAXX (idx 34)
-        if (group == ARM_LA) then return 16777221;         // HFLTHR
-        if (group == ARM_METAL) then return 16777223;      // HFMETL
-        if (group == ARM_COMBAT or group == ARM_COMBAT_DARK
-            or group == ARM_BROTHERHOOD) then return 16777361; // idx 145
-        if (group == ARM_ROBE_GREY) then return 16777321;  // HASROB (idx 105)
+        if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777334; // NFNICE (118)
+        if (group == ARM_LJ) then return 16777250;         // NFMAXX (34)
+        if (group == ARM_LA) then return 16777221;         // HFLTHR (5)
+        if (group == ARM_METAL) then return 16777223;      // HFMETL (7)
+        if (group == ARM_COMBAT) then return 16777219;     // HFCMBT (3)
+        if (group == ARM_COMBAT_DARK) then return 16777343; // HFCMBL (127)
+        if (group == ARM_BROTHERHOOD) then return 16777343; // HFCMBL (127)
+        if (group == ARM_POWER) then return 16777246;      // idx 30
+        if (group == ARM_ROBE_GREY) then return 16777321;  // HASROB (105)
         if (group == ARM_ROBE_PURPLE) then return 16777360; // idx 144
     end
 
