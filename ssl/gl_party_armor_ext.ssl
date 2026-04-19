@@ -361,7 +361,7 @@ procedure set_armor_to_fid(variable set_id, variable group) begin
         if (group == ARM_BROTHERHOOD) then return 16777300; // HMBROH
         if (group == ARM_POWER) then return 16777217;      // HAPOWR
         if (group == ARM_ADV_POWER) then return 16777303;  // HANPWR
-        if (group == ARM_ROBE) then return 16777218;       // HAROBE
+        if (group == ARM_ROBE_PURPLE or group == ARM_ROBE_GREY) then return 16777218;       // HAROBE
     end
 
     // --------- SET_HM_BLACK ---------
@@ -375,7 +375,7 @@ procedure set_armor_to_fid(variable set_id, variable group) begin
         if (group == ARM_BROTHERHOOD) then return 16777352; // HMCMB3 (share)
         if (group == ARM_POWER) then return 16777217;      // HAPOWR (no black variant)
         if (group == ARM_ADV_POWER) then return 16777217;  // HAPOWR (no black variant)
-        if (group == ARM_ROBE) then return 16777353;       // HAROBB
+        if (group == ARM_ROBE_PURPLE or group == ARM_ROBE_GREY) then return 16777353;       // HAROBB
     end
 
     // --------- SET_HM_BALD ---------
@@ -411,7 +411,7 @@ procedure set_armor_to_fid(variable set_id, variable group) begin
         if (group == ARM_COMBAT) then return 16777286;     // HMTYCC
         if (group == ARM_COMBAT_DARK) then return 16777285; // HMTYCM
         if (group == ARM_POWER) then return 16777287;      // HMTYCP
-        if (group == ARM_ROBE) then return 16777292;       // HMTYCR
+        if (group == ARM_ROBE_PURPLE or group == ARM_ROBE_GREY) then return 16777292;       // HMTYCR
     end
 
     // --------- SET_HF_WHITE ---------
@@ -458,7 +458,7 @@ procedure set_armor_to_fid(variable set_id, variable group) begin
             or group == ARM_METAL or group == ARM_COMBAT
             or group == ARM_COMBAT_DARK or group == ARM_BROTHERHOOD) then return 16777234; // MALIEU
         if (group == ARM_POWER or group == ARM_ADV_POWER) then return 16777323; // MABOSS (Horrigan)
-        if (group == ARM_ROBE) then return 16777336;       // MAROBE
+        if (group == ARM_ROBE_PURPLE or group == ARM_ROBE_GREY) then return 16777336;       // MAROBE
     end
 
     return 0;
