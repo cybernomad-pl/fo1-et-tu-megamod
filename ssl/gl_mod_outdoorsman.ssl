@@ -75,6 +75,7 @@ procedure create_campfire_adjacent;
 procedure cleanup_pending_bedrolls;
 procedure flicker_campfire;
 procedure give_camping_kit;
+procedure refresh_lighter_flags;
 
 procedure start begin
     if game_loaded then begin
@@ -130,13 +131,15 @@ procedure start begin
         // using save_array guard instead (persists in save file).
         call give_camping_kit;
 
-        // Enable USE action on lighter + bedrolls (scenery protos).
+        // Enable USE action on lighter proto (items, OK).
+        // Bedroll USE removed: scenery USE requires attached script with
+        // use_p_proc, which sfall can't assign from SSL. Players use K
+        // hotkey for rest instead.
         set_proto_data(PID_LIGHTER, PROTO_IT_FLAGS,
             get_proto_data(PID_LIGHTER, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
-        set_proto_data(PID_BED_1, PROTO_IT_FLAGS,
-            get_proto_data(PID_BED_1, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
-        set_proto_data(PID_BED_2, PROTO_IT_FLAGS,
-            get_proto_data(PID_BED_2, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+        // Force USE flag on any existing lighter in dude's inventory
+        // (proto change doesn't retroactively update obj instances).
+        call refresh_lighter_flags;
         // Shovel already has USE_ON via other mods (gl_shovel.ssl)
 
         register_hook_proc(HOOK_USEOBJ, useobj_handler);
@@ -737,12 +740,6 @@ procedure create_campfire_adjacent begin
     // Slot 12..17 = ring 2 (dist 11). etc.
     // ring = slot / 6, dir = slot % 6, dist = RING_START_DIST + ring*RING_STEP.
 
-    // Ensure bedroll protos have USE action flag (may reset across sessions).
-    set_proto_data(PID_BED_1, PROTO_IT_FLAGS,
-        get_proto_data(PID_BED_1, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
-    set_proto_data(PID_BED_2, PROTO_IT_FLAGS,
-        get_proto_data(PID_BED_2, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
-
     // Player bedroll: slot 0 (ring 0, dir 0) -- same ring/step system as NPCs.
     // Try PID_BED_2 first (distinct sprite if available), fallback to BED_1.
     player_bedroll_tile := tile_num_in_direction(fire_tile, 0, RING_START_DIST);
@@ -757,10 +754,9 @@ procedure create_campfire_adjacent begin
         bedrolls_arr[len_array(bedrolls_arr) - 1] := player_bedroll;
         player_bedroll_map["" + cur_map_index] := player_bedroll;
         save_array("campfire_player_bedroll", player_bedroll_map);
-        // Force USE action flag on obj instance (proto may not inherit
-        // reliably across sessions).
-        set_object_data(player_bedroll, OBJ_DATA_FLAGS,
-            get_object_data(player_bedroll, OBJ_DATA_FLAGS) bwor ITEM_ACTION_USE);
+        // No USE flag forcing -- bedroll is scenery, USE requires
+        // attached script (not achievable from sfall SSL). K hotkey
+        // is the rest mechanic instead.
     end
     else begin
         LOG("camp", "pbed_FAIL_both_pids", player_bedroll_tile);
@@ -787,9 +783,6 @@ procedure create_campfire_adjacent begin
                 // If tile was blocked (bedroll==0), skip this NPC (stays standing,
                 // stays in party follow) -- spiral will retry next slot.
                 if (bedroll != 0) then begin
-                    // Force USE flag on obj instance.
-                    set_object_data(bedroll, OBJ_DATA_FLAGS,
-                        get_object_data(bedroll, OBJ_DATA_FLAGS) bwor ITEM_ACTION_USE);
                     resize_array(bedrolls_arr, len_array(bedrolls_arr) + 1);
                     bedrolls_arr[len_array(bedrolls_arr) - 1] := bedroll;
 
@@ -928,4 +921,29 @@ procedure give_camping_kit begin
     given_arr := create_array_map;
     given_arr["given"] := 1;
     save_array("outdoorsman_kit_given", given_arr);
+end
+
+// ============================================================
+// REFRESH LIGHTER FLAGS -- iter dude inv, force ITEM_ACTION_USE
+// on every PID_LIGHTER obj. Compensates for proto -> obj inheritance
+// quirks after save/load and proto edits.
+// ============================================================
+procedure refresh_lighter_flags begin
+    variable i;
+    variable item;
+    variable count;
+
+    count := 0;
+    i := 0;
+    item := inven_ptr(dude_obj, i);
+    while (item) do begin
+        if (obj_pid(item) == PID_LIGHTER) then begin
+            set_object_data(item, OBJ_DATA_FLAGS,
+                get_object_data(item, OBJ_DATA_FLAGS) bwor ITEM_ACTION_USE);
+            count := count + 1;
+        end
+        i := i + 1;
+        item := inven_ptr(dude_obj, i);
+    end
+    LOG("ltr", "refresh_count", count);
 end
