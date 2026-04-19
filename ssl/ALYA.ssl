@@ -342,9 +342,31 @@ procedure NodePartyDone begin
 end
 
 procedure NodeCampWakeUp begin
+   variable bed_lst;
+   variable bed_obj;
+   variable best_bed;
+   variable best_d;
+   variable d;
    set_local_var(13, 1);
    reg_anim_begin();
    reg_anim_animate(self_obj, ANIM_back_to_standing, -1);
    reg_anim_end();
+   // Take nearest bedroll with us (remove it from map).
+   best_bed := 0;
+   best_d := 99999;
+   bed_lst := list_begin(LIST_SCENERY);
+   bed_obj := list_next(bed_lst);
+   while (bed_obj) do begin
+      if (bed_obj != 0 and (obj_pid(bed_obj) == PID_BED_1 or obj_pid(bed_obj) == PID_BED_2)) then begin
+         d := tile_distance_objs(bed_obj, self_obj);
+         if (d < best_d) then begin
+            best_bed := bed_obj;
+            best_d := d;
+         end
+      end
+      bed_obj := list_next(bed_lst);
+   end
+   list_end(bed_lst);
+   if (best_bed != 0) then destroy_object(best_bed);
    display_msg(obj_name(self_obj) + " gets up and follows you.");
 end
