@@ -49,6 +49,12 @@
 #define RING_START_DIST      (5)   // first ring distance from fire
 #define RING_STEP            (3)   // extra distance per outer ring
 
+// Shared GVARs for NPC dialog -> camp action triggers.
+#define GVAR_CAMP_ACTIVE     (5019)  // 1 when campfire exists on current map
+#define GVAR_CAMP_NPC_ACTION (5020)  // 1=make, 2=pack, 3=hunt, 4=gather
+
+#define PID_IGUANA_ON_A_STICK (81)   // hunt reward
+
 variable lighter_lit;
 variable campfire_map;       // "<map_idx>" -> fire tile
 variable firepit_obj_map;    // "<map_idx>" -> firepit obj_id (for USE ON match)
@@ -76,6 +82,9 @@ procedure cleanup_pending_bedrolls;
 procedure flicker_campfire;
 procedure give_camping_kit;
 procedure refresh_lighter_flags;
+procedure handle_camp_npc_action;
+procedure action_gather_firewood;
+procedure action_hunt;
 
 procedure start begin
     if game_loaded then begin
@@ -585,6 +594,7 @@ procedure handle_shovel_on_firepit begin
     // No fade_in -- see no gfade_out note above.
 
     display_msg("You shovel dirt onto the fire. The flames die out.");
+    set_global_var(GVAR_CAMP_ACTIVE, 0);
     give_exp_points(XP_CAMPFIRE_SMOTHER);
 end
 
@@ -831,6 +841,7 @@ procedure create_campfire_adjacent begin
     save_array("campfire_sleepers", sleepers_map);
 
     display_msg("You make camp. The fire crackles. The party settles in for the night.");
+    set_global_var(GVAR_CAMP_ACTIVE, 1);
     give_exp_points(XP_CAMPFIRE_LIGHT);
     LOG("camp", "lit_tile", fire_tile);
     LOG("camp", "lit_map", cur_map_index);
@@ -898,6 +909,10 @@ procedure map_update_p_proc begin
     if ((flicker_counter % 3) == 0) then begin
         call flicker_campfire;
     end
+    // Poll NPC-triggered camp actions (via GVAR).
+    if (global_var(GVAR_CAMP_NPC_ACTION) != 0) then begin
+        call handle_camp_npc_action;
+    end
 end
 
 // ============================================================
@@ -943,4 +958,82 @@ procedure refresh_lighter_flags begin
     LOG("ltr", "proto_before", before);
     LOG("ltr", "proto_after", after);
     LOG("ltr", "has_use_bit", after bwand 2048);
+end
+
+// ============================================================
+// NPC -> outdoorsman action dispatcher (via GVAR_CAMP_NPC_ACTION).
+// ============================================================
+procedure handle_camp_npc_action begin
+    variable action;
+    action := global_var(GVAR_CAMP_NPC_ACTION);
+    set_global_var(GVAR_CAMP_NPC_ACTION, 0);   // consume trigger
+    LOG("npc_action", "code", action);
+
+    if (action == 1) then begin      // MAKE CAMP
+        if (is_wilderness and not(map_has_campfire) and not(combat_is_initialized)) then begin
+            call create_campfire_adjacent;
+            play_sfx("FLAMETHR");
+        end
+    end
+    else if (action == 2) then begin  // PACK UP CAMP
+        if (map_has_campfire) then begin
+            call handle_shovel_on_firepit;
+        end
+    end
+    else if (action == 3) then begin  // WE'RE GOING HUNTING
+        call action_hunt;
+    end
+    else if (action == 4) then begin  // GATHER FIREWOOD
+        call action_gather_firewood;
+    end
+end
+
+// ============================================================
+// ACTION: GATHER FIREWOOD -- +1 PID_FIREWOOD to dude inv.
+// ============================================================
+procedure action_gather_firewood begin
+    variable firewood;
+    firewood := create_object(PID_FIREWOOD, 0, 0);
+    if (firewood != 0) then begin
+        add_obj_to_inven(dude_obj, firewood);
+        display_msg("You gathered a piece of firewood.");
+    end
+end
+
+// ============================================================
+// ACTION: HUNT -- outdoorsman skill check from party highest.
+// Success: +1 iguana on a stick + 50 XP. Failure: empty msg.
+// ============================================================
+procedure action_hunt begin
+    variable lst;
+    variable obj;
+    variable sk;
+    variable highest;
+    variable roll;
+    variable meat;
+
+    highest := has_skill(dude_obj, SKILL_OUTDOORSMAN);
+    lst := list_begin(LIST_CRITTERS);
+    obj := list_next(lst);
+    while (obj) do begin
+        if (obj != 0 and obj != dude_obj
+            and get_team(obj) == TEAM_PLAYER
+            and not(is_critter_dead(obj))) then begin
+            sk := has_skill(obj, SKILL_OUTDOORSMAN);
+            if (sk > highest) then highest := sk;
+        end
+        obj := list_next(lst);
+    end
+    list_end(lst);
+
+    roll := roll_vs_skill(dude_obj, SKILL_OUTDOORSMAN, highest - has_skill(dude_obj, SKILL_OUTDOORSMAN));
+    if (is_success(roll)) then begin
+        meat := create_object(PID_IGUANA_ON_A_STICK, 0, 0);
+        if (meat != 0) then add_obj_to_inven(dude_obj, meat);
+        give_exp_points(50);
+        display_msg("The hunt was successful. You bring back an iguana on a stick (+50 XP).");
+    end
+    else begin
+        display_msg("The hunt was a bust. No game today.");
+    end
 end
