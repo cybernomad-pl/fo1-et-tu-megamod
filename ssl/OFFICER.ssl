@@ -441,43 +441,43 @@ procedure NodePartyMain begin
    NOption("Follow me.", NodePartyFollow, 4);
    NOption("Wait here.", NodePartyWait, 4);
    NOption("Holster weapon.", NodePartyHolster, 4);
-   // Camp dialog options (outdoorsman mod -- 5019=active, 5020=action trigger)
-   if (map_is_encounter) then begin
-      NOption("Gather firewood.", CampGatherTrigger, 4);
-      if (global_var(5019) == 0) then begin
-         NOption("Make camp.", CampMakeTrigger, 4);
-      end
-   end
-   if (global_var(5019) == 1) then begin
-      NOption("Pack up camp.", CampPackTrigger, 4);
-      NOption("We're going hunting.", CampHuntTrigger, 4);
-   end
+   // Camp dialog options (gates off for debug)
+   NOption("Make camp.", CampMakeTrigger, 4);
+   NOption("Pack up camp.", CampPackTrigger, 4);
+   NOption("Gather firewood.", CampGatherTrigger, 4);
+   NOption("We're going hunting.", CampHuntTrigger, 4);
    NOption("Search for something useful.", CampSearchTrigger, 4);
    NOption("Any ideas?", CampIdeasTrigger, 4);
    NOption("[Done]", NodePartyDone, 4);
 end
 
 procedure CampMakeTrigger begin
+   display_msg("[TRIGGER] Make camp (GVAR 5020 := 1)");
    set_global_var(5020, 1);
 end
 
 procedure CampPackTrigger begin
+   display_msg("[TRIGGER] Pack camp (GVAR 5020 := 2)");
    set_global_var(5020, 2);
 end
 
 procedure CampHuntTrigger begin
+   display_msg("[TRIGGER] Hunt (GVAR 5020 := 3)");
    set_global_var(5020, 3);
 end
 
 procedure CampGatherTrigger begin
+   display_msg("[TRIGGER] Gather firewood (GVAR 5020 := 4)");
    set_global_var(5020, 4);
 end
 
 procedure CampSearchTrigger begin
+   display_msg("[TRIGGER] Search useful (GVAR 5020 := 5)");
    set_global_var(5020, 5);
 end
 
 procedure CampIdeasTrigger begin
+   display_msg("[TRIGGER] Any ideas (GVAR 5020 := 6)");
    set_global_var(5020, 6);
 end
 
