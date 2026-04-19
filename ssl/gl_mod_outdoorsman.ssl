@@ -158,7 +158,12 @@ procedure keypress_handler begin
     key := get_sfall_arg;
 
     if (pressed == 0) then return;         // release event
-    if (get_game_mode != 0) then return;   // overworld only, not dialog/inv
+
+    LOG("key", "pressed_key", key);
+    LOG("key", "game_mode", get_game_mode);
+
+    // Block in dialog/inventory/char screen/pipboy/etc. (keep worldmap+localmap allowed)
+    if ((get_game_mode bwand (DIALOG bwor INVENTORY bwor CHARSCREEN bwor PIPBOY bwor ESCMENU bwor SAVEGAME bwor LOADGAME)) != 0) then return;
 
     // DIK_K (37) = rest at camp
     if (key == 37) then begin
@@ -180,6 +185,8 @@ procedure keypress_handler begin
 
     // DIK_L (38) = lighter toggle (fallback when USE action on lighter fails)
     if (key == 38) then begin
+        LOG("key", "L_invoked", 1);
+        LOG("key", "L_has_lighter", obj_is_carrying_obj_pid(dude_obj, PID_LIGHTER));
         if (obj_is_carrying_obj_pid(dude_obj, PID_LIGHTER) == 0) then begin
             display_msg("You don't have a lighter.");
             return;

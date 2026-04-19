@@ -42,18 +42,17 @@
 
 #define LOG(s, k, v) set_ini_setting("party_armor_ext.ini|" + s + "|" + k, v)
 
-// Black male sprite FIDs (medyk set). See header comment.
+// Black male sprite FIDs (Medyk/Officer set). See artfid.h.
 #define FID_HMBJMP   (16777224)   // jumpsuit / vault / default
-#define FID_HMBLTR   (16777349)   // leather
-#define FID_HMBMET   (16777225)   // metal
-#define FID_HMCMBT   (16777226)   // combat MK1
-#define FID_HMCMBL   (16777344)   // combat MK2 / BoS / black
-#define FID_HAPOWR   (16777217)   // power armor (no black variant)
-#define FID_HMBMAX   (16777348)   // advanced power (black)
-#define FID_HAROBE   (16777218)   // robe
-#define FID_HAROBB   (16777353)   // dark robe
+#define FID_HMBMAX   (16777348)   // Black dude leather JACKET (clothing)
+#define FID_HMBLTR   (16777349)   // Black dude leather ARMOR (protective)
+#define FID_HMBMET   (16777225)   // Black dude metal
+#define FID_HMCMB2   (16777351)   // Black dude Combat MK1
+#define FID_HMCMB3   (16777352)   // Black dude Combat MK2/BoS (dark)
+#define FID_HAPOWR   (16777217)   // Power armor (generic, not black specific)
+#define FID_HAROBB   (16777353)   // Black dude purple robe
 
-// Female punk (Theresa) sprite FIDs (from artfid.h).
+// Female punk (Theresa, Diana, Gwen, Katja) sprite FIDs.
 #define FID_NFPJMP   (16777338)   // Punk Girl Vault Suit
 #define FID_NFPGLA   (16777308)   // Female punk leather armor
 #define FID_NFPGMT   (16777309)   // Female punk metal armor
@@ -164,12 +163,12 @@ end
 // Returns 0 if no override applies (engine keeps default).
 // ============================================================
 procedure compute_target_fid(variable sid, variable worn_pid) begin
-    // MEDIC + OFFICER: black male sprite set (both share hmb* family).
-    // LEATHER JACKET (clothing) -> keep jumpsuit sprite (not armor).
+    // MEDIC + OFFICER: black male sprite set (hmb* family)
     if (sid == SCRIPT_MEDIC or sid == SCRIPT_OFFICER) then begin
-        // Jumpsuit / no armor / vault suit / clothing
-        if (worn_pid == 0
-            or worn_pid == PID_LEATHER_JACKET) then return FID_HMBJMP;
+        // Jumpsuit / no armor / vault suit
+        if (worn_pid == 0) then return FID_HMBJMP;
+        // Leather JACKET (clothing) -> dedicated "black dude LJ" sprite
+        if (worn_pid == PID_LEATHER_JACKET) then return FID_HMBMAX;
         // Leather ARMOR (protective)
         if (worn_pid == PID_LEATHER_ARMOR
             or worn_pid == PID_LEATHER_ARMOR_MK_II
@@ -177,27 +176,25 @@ procedure compute_target_fid(variable sid, variable worn_pid) begin
         // Metal
         if (worn_pid == PID_METAL_ARMOR
             or worn_pid == PID_METAL_ARMOR_MK_II) then return FID_HMBMET;
-        // Combat MK1
-        if (worn_pid == PID_COMBAT_ARMOR) then return FID_HMCMBT;
-        // Combat MK2 / Brotherhood (black sprite)
+        // Combat MK1 (black dude)
+        if (worn_pid == PID_COMBAT_ARMOR) then return FID_HMCMB2;
+        // Combat MK2 / Brotherhood (black dude dark)
         if (worn_pid == PID_COMBAT_ARMOR_MK_II
-            or worn_pid == PID_BROTHERHOOD_COMBAT_ARMOR) then return FID_HMCMBL;
-        // Power
+            or worn_pid == PID_BROTHERHOOD_COMBAT_ARMOR) then return FID_HMCMB3;
+        // Power (no black-specific variant, use generic hero)
         if (worn_pid == PID_POWERED_ARMOR
-            or worn_pid == PID_HARDENED_POWER_ARMOR) then return FID_HAPOWR;
-        // Advanced Power (black)
-        if (worn_pid == PID_ADVANCED_POWER_ARMOR
-            or worn_pid == PID_ADVANCED_POWER_ARMOR_MK2) then return FID_HMBMAX;
-        // Robes
+            or worn_pid == PID_HARDENED_POWER_ARMOR
+            or worn_pid == PID_ADVANCED_POWER_ARMOR
+            or worn_pid == PID_ADVANCED_POWER_ARMOR_MK2) then return FID_HAPOWR;
+        // Robes (black dude purple robe)
         if (worn_pid == PID_BRIDGEKEEPERS_ROBE) then return FID_HAROBB;
     end
 
-    // THERESA + DIANA (raider mohawk, also punk female) + GWEN (raider female):
-    // female punk sprite set.
+    // THERESA + DIANA + GWEN: female punk (irokezka) sprite set
     if (sid == SCRIPT_THERESA
         or sid == SCRIPT_DIANA
         or sid == SCRIPT_GWEN) then begin
-        // Jumpsuit / no armor / leather jacket (clothing)
+        // Jumpsuit / leather jacket (clothing) -> base punk suit
         if (worn_pid == 0
             or worn_pid == PID_LEATHER_JACKET) then return FID_NFPJMP;
         // Leather ARMOR
@@ -207,27 +204,15 @@ procedure compute_target_fid(variable sid, variable worn_pid) begin
         // Metal
         if (worn_pid == PID_METAL_ARMOR
             or worn_pid == PID_METAL_ARMOR_MK_II) then return FID_NFPGMT;
-        // Combat (black dark combat)
+        // Combat (fallback to female dark)
         if (worn_pid == PID_COMBAT_ARMOR
             or worn_pid == PID_COMBAT_ARMOR_MK_II
             or worn_pid == PID_BROTHERHOOD_COMBAT_ARMOR) then return FID_HFCMBL;
     end
 
-    // Vault citizens / rebels: same female punk set for now (Borys TBD)
-    if (sid == SCRIPT_CITIZEN
-        or sid == SCRIPT_REBEL
-        or sid == SCRIPT_GENVAULT) then begin
-        if (worn_pid == 0
-            or worn_pid == PID_LEATHER_JACKET) then return FID_NFPJMP;
-        if (worn_pid == PID_LEATHER_ARMOR
-            or worn_pid == PID_LEATHER_ARMOR_MK_II
-            or worn_pid == PID_CURED_LEATHER_ARMOR) then return FID_NFPGLA;
-        if (worn_pid == PID_METAL_ARMOR
-            or worn_pid == PID_METAL_ARMOR_MK_II) then return FID_NFPGMT;
-        if (worn_pid == PID_COMBAT_ARMOR
-            or worn_pid == PID_COMBAT_ARMOR_MK_II
-            or worn_pid == PID_BROTHERHOOD_COMBAT_ARMOR) then return FID_HFCMBL;
-    end
+    // Vault citizens / rebels / generic -- NIE mapujemy (mix male/female,
+    // wymaga per-FID detection via obj_art_fid -- faza 2 rewrite).
+    // Returning 0 keeps their native sprite (may not change on armor).
 
     return 0;
 end

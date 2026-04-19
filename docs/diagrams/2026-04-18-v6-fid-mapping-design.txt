@@ -1,0 +1,244 @@
+================================================================================
+ fo1-et-tu-megamod  --  FID MAPPING DESIGN (2026-04-18)  (Borys spec v2)
+================================================================================
+
+ CEL: Generyczny per-FID mapping. Trigger na armor wield. Pobiera
+ SOURCE FID (pierwsze wejście), zapamiętuje per-obj w save_array.
+ Na podstawie source FID + armor group -> target FID z tabeli.
+
+
+================================================================================
+ ARMOR GROUPS (10 kategorii z Borys spec)
+================================================================================
+
+   0. NONE           -- no worn, or non-armor clothing
+   1. V13_JUMPSUIT   -- PID_V13_VSUIT (536), or default when no armor
+   2. ROBE           -- PID_PURPLE_ROBE (113), sand robe, dark robe
+   3. LEATHER_JACKET -- PID_LEATHER_JACKET (74), PID_CURED_LEATHER_ARMOR (265)
+                        *** CLOTHING, not armor ***
+   4. LEATHER_ARMOR  -- PID_LEATHER_ARMOR (1), PID_LEATHER_ARMOR_MK_II (379)
+   5. METAL          -- PID_METAL_ARMOR (2), MK_II (380), TESLA (240)
+   6. COMBAT         -- PID_COMBAT_ARMOR (17), MK_II (381)
+   7. BROTHERHOOD    -- PID_BROTHERHOOD_COMBAT_ARMOR (239)
+   8. POWER          -- PID_POWERED_ARMOR (3), HARDENED (232)
+   9. ADV_POWER      -- PID_ADVANCED_POWER_ARMOR (348), MK2 (349)
+
+
+================================================================================
+ SOURCE FID FAMILIES (9 kategorii z Borys spec)
+================================================================================
+
+   FAMILY "HM_WHITE"       -- bialy facet (np. default player male black hair)
+     base: HMJMPS (16777227)
+     LJ:   HMMAXX (16777229)       // Hero Male black-hair leather jacket
+     LA:   HMLTHR (16777228)
+     MET:  HMMETL (16777230)
+     CMB:  HMCMBT (16777226)
+     BOS:  HMBROH (16777300)
+     CMBL: HMCMBL (16777344) (dark combat)
+     PWR:  HAPOWR (16777217)
+     APA:  HANPWR (16777303)   ?? (need verify)
+     ROBE: HAROBE (16777218)
+
+   FAMILY "HM_BLACK"       -- czarny facet (Medic, czarny player)
+     base: HMBJMP (16777224)
+     LJ:   HMBMAX (16777348)       // "Black dude leather jacket"
+     LA:   HMBLTR (16777349)       // "Black dude leather armor"
+     MET:  HMBMET (16777225)
+     CMB:  HMCMB2 (16777351)       // "Black dude Combat Armor"
+     CMBL: HMCMB3 (16777352)       // "Black dude, Dark Combat Armor"
+     PWR:  HAPOWR (16777217) -- brak czarnego powera? fallback
+     ROBE: HAROBB (16777353)       // "Black dude purple robe"
+
+   FAMILY "HM_BALD"        -- lysy facet (Tycho? Mr.Handy?)
+     base: NMBJMP (16777339)       // "Bald Dude Vault Suit"
+     LJ:   HMMAXB (16777306)       // "Bald leather jacket"
+     MET:  NMCAMA (16777307)       // "Bald Metal armor"
+     CMB:  HMGLCM (16777355)       // "Male Bald Combat Armor"
+
+   FAMILY "HM_LONG"        -- dluge wlosy (non-Ian -- generic long hair)
+     base: NMLJMP (16777340)       // "Long Hair Vault Suit"
+     LJ:   HMLHMX (16777347)       // "Long hair leather jacket"
+     LA:   HMLHLR (16777304)       // "Long hair leather armor"
+     MET:  HMLHMT (16777305)       // "Long hair metal armor"
+
+   FAMILY "IAN"            -- specyficznie Ian (different long hair)
+     base: NMMAXX (16777261)       // Ian base
+     LJ:   HMIANJ (16777277)
+     LA:   HMIANR (16777291)       ?? mapping -- verify
+     MET:  HMIANP (16777290)       ?? mapping -- verify
+     CMB:  HMIANC (16777289)
+
+   FAMILY "TYCHO"          -- specyficznie Tycho
+     base: NMLTHR (16777260)       // Tycho default (leather already)
+     MET:  NMMETL (16777354)
+     CMB:  HMTYCC (16777286)
+     CMBL: HMTYCM (16777285)       ?? verify
+     PWR:  HMTYCP (16777287)
+     ROBE: HMTYCR (16777292)
+
+   FAMILY "HF_WHITE"       -- biala kobieta (default female player)
+     base: HFJMPS (16777220)
+     LA:   HFLTHR (16777221)
+     MET:  HFMETL (16777223)
+     CMB:  HFCMBT (16777219)
+     BOS:  HFBROH (16777301)
+     CMBL: HFCMBL (16777343)
+     APA:  HFMAXX (16777222)
+
+   FAMILY "NFP_PUNK"       -- irokezka (Katja, Theresa, Diana, Gwen)
+     base: NFPJMP (16777338)       // "Punk Girl Vault Suit"
+     LA:   NFPGLA (16777308)       // "Female punk leather armor"
+     MET:  NFPGMT (16777309)       // "Female punk metal armor"
+     CMB:  HFCMBL (16777343)       // fallback to female dark combat
+     LJ:   NFPJMP                  // jacket = base (no armor sprite)
+
+   FAMILY "NF_NICE"        -- czarnowlosa kobieta non-player (Tandi-like)
+     base: NFNICE (16777334)
+     LA, MET, CMB: fallback to HF_WHITE equivalents if no dedicated
+
+   FAMILY "MUTANT"         -- Super Mutant (brak direct art FID w artfid.h)
+     base: MALIEU (16777234)       -- Mutant Lieutenant (poza armor)
+     LA/LJ: Nightkin FID -- NIEZNALEZIONY w artfid.h
+     MET/CMB/TESLA: MALIEU -- Lieutenant FID
+     PWR: Frank Horrigan FID -- NIEZNALEZIONY
+     UWAGA: mutant mapping requires critters.lst scan, parked do later.
+
+
+================================================================================
+ FLOW -- runtime FID swap
+================================================================================
+
+   ON game_loaded:
+     Load save_array "party_fid_src"  -- map<obj_id, base_fid>
+
+   ON HOOK_INVENWIELD (user=obj, item, slot):
+     if team != TEAM_PLAYER OR slot != WORN: return
+     call refresh_one(obj)
+
+   ON HOOK_GAMEMODECHANGE:
+     call refresh_all_party      -- catches swaps via dialog/combat
+
+   procedure refresh_one(obj):
+     worn_obj := critter_inven_obj(obj, WORN)
+     worn_pid := obj_pid(worn_obj) if worn_obj else 0
+     armor_group := pid_to_group(worn_pid)
+
+     // Look up source FID (base, pre-armor FID)
+     src_fid := party_fid_src[obj_id]
+     if src_fid == 0:
+       // Never seen before: capture current fid as source
+       src_fid := obj_art_fid(obj)
+       party_fid_src[obj_id] := src_fid
+       save_array("party_fid_src", party_fid_src)
+
+     family := src_fid_to_family(src_fid)
+     target_fid := family_armor_to_fid(family, armor_group)
+     if target_fid != 0 and target_fid != obj_art_fid(obj):
+       art_change_fid_num(obj, target_fid)
+
+
+================================================================================
+ TABLE -- FAMILY x ARMOR_GROUP -> target FID
+================================================================================
+
+                   JUMP   LJ     LA     MET    CMB    CMBL   BOS    PWR    APA    ROBE
+   HM_WHITE        JMPS   MAXX   LTHR   METL   CMBT   CMBL   BROH   HAPOWR HANPWR HAROBE
+   HM_BLACK        HMBJMP HMBMAX HMBLTR HMBMET HMCMB2 HMCMB3 HMCMB3 HAPOWR *fb    HAROBB
+   HM_BALD         NMBJMP HMMAXB *fb    NMCAMA HMGLCM *fb    *fb    *fb    *fb    *fb
+   HM_LONG         NMLJMP HMLHMX HMLHLR HMLHMT *fb    *fb    *fb    *fb    *fb    *fb
+   IAN             NMMAXX HMIANJ HMIANR HMIANP HMIANC *fb    *fb    *fb    *fb    *fb
+   TYCHO           NMLTHR *fb    NMLTHR NMMETL HMTYCC HMTYCM *fb    HMTYCP *fb    HMTYCR
+   HF_WHITE        HFJMPS *fb    HFLTHR HFMETL HFCMBT HFCMBL HFBROH *fb    HFMAXX *fb
+   NFP_PUNK        NFPJMP NFPJMP NFPGLA NFPGMT HFCMBL HFCMBL *fb    *fb    *fb    *fb
+   NF_NICE         NFNICE *fb    HFLTHR HFMETL HFCMBT HFCMBL *fb    *fb    *fb    *fb
+   MUTANT          *NOT*  Nightkin*     Lieut* Lieut* Lieut* *fb    Horrigan*     *fb
+
+   *fb = fallback to base (no change)
+   *   = FID lookup needed (not in artfid.h, requires critters.lst)
+
+
+================================================================================
+ ZASADA PER-NPC
+================================================================================
+
+ Borys ordered by source FID, nie przez SCRIPT_ID. Wiec:
+   - Theresa NFP_PUNK (bo irokezka)
+   - Diana NFP_PUNK (bo irokezka raider)
+   - Katja NFP_PUNK (vanilla)
+   - Gwen NFP_PUNK (czarnowlosa raider) -- UWAGA moze byc NF_NICE
+
+ Kazdy party NPC "discovers" base FID przy pierwszym wield.
+ Od tej pory mapping automatyczny.
+
+ Rebels/citizens (Valtctzn, Rebel, GenVault) -- MIESZANKA. Kazdy ma
+ swoj base FID (niektorzy male, niektorzy female, niektorzy bald).
+ Nasz mapping czyta ich obj_art_fid -> family detection -> proper sprite.
+ ZADEN hardcoded SCRIPT_ID!
+
+
+================================================================================
+ NA CZYM STOIMY TERAZ  (bugs od dzisiaj)
+================================================================================
+
+ [XX] Leather jacket na Medyku -> jumpsuit sprite (dziala,
+      ale Borys chce HMBMAX "Black dude leather jacket")
+ [XX] Vault citizens/rebels wszyscy na female punk -- zle (niektorzy
+      sa mezczyznami)
+ [XX] L hotkey nie dziala (diagnostic log dodany)
+ [OK] Theresa leather armor sprite (working po phase 1.6)
+ [OK] Officer leather sprite -- powinien dzialac (phase 1.6)
+
+ KIERUNEK: przepisz compute_target_fid na table-driven per-FID.
+
+
+================================================================================
+ OPEN RESEARCH
+================================================================================
+
+ 1. Nightkin / Super Mutant Lieutenant / Frank Horrigan FID
+    -- brak constants w artfid.h. Trzeba:
+       a) znalezc critters.lst w master.dat
+       b) dat2 extract + grep
+       c) alternatywnie z FO2 wiki
+
+ 2. Verify IAN/TYCHO armor variant mapping (Borys's comment list
+    matches artfid.h komentarze -- some niepewne).
+
+ 3. HF_WHITE APA, HF_BLACK variant (if exists).
+
+ 4. ROBE mapping per family -- Borys spec mentions purple/szara,
+    ale artfid.h ma HAROBE (base), HAROBB (black), HASROB (sand),
+    MAROBE (mutant). Group wszystkie do ROBE_ARMOR.
+
+
+================================================================================
+ PROPOZYCJA IMPLEMENTACJI -- KOLEJNOSC
+================================================================================
+
+ STEP 1 (dzis):
+   - Naprawic L bug (dodac LOG diag -- DONE)
+   - Naprawic leather jacket Medyk -> HMBMAX (nie HMBJMP fallback) -- QUICK
+
+ STEP 2 (faza 2):
+   - Nowy header ssl/headers/fid_mapping.h:
+     - Wszystkie FID constants (9 rodzin x 10 armor groups)
+     - Fallback table
+   - Rewrite gl_party_armor_ext.ssl:
+     - Remove SCRIPT_MEDIC / SCRIPT_THERESA branches
+     - Implement family detection via obj_art_fid
+     - Implement table lookup
+     - Save_array "party_fid_src" per-obj tracking
+
+ STEP 3 (faza 3):
+   - Research Nightkin/Lieutenant/Horrigan FIDs
+   - Extend mapping for Super Mutant family
+
+ STEP 4 (faza 4):
+   - User-facing FID debug command (Borys can assign specific NPC's family
+     via console if auto-detection fails)
+
+
+================================================================================
+ EOF
+================================================================================
