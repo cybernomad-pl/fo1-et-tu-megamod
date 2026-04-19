@@ -1,0 +1,279 @@
+================================================================================
+ fo1-et-tu-megamod  --  v6 BIKER GANG + RECRUIT FIX PLAN  (2026-04-17)
+================================================================================
+
+ CEL: Biker gang asap. Motocykl od startu, bronie w baganiku, Theresa
+ i Officer werbowalni zawsze, klawisz J zamiast 0.
+
+
+================================================================================
+ FIX 1 -- KLAWISZ J (party_hotkeys)
+================================================================================
+
+ PROBLEM: klawisz 0 kolizja z party_orders.ini (SwitchKey=11).
+ FIX: przepiac na J (DIK_J = 36).
+
+ gl_party_hotkeys.ssl:
+   if (key != 11) then return;   // STARE
+                  |
+                  v
+   if (key != 36) then return;   // NOWE (DIK_J)
+
+ EFEKT: "0" wraca do party_orders auto-loot switch, "J" dla hold/follow.
+
+
+================================================================================
+ FIX 2 -- THERESA "JOIN ME" ZAWSZE (THERESA.ssl / invasion_fix)
+================================================================================
+
+ PROBLEM:
+   talk_p_proc routing:
+     waterchip_returned -> Theresa24 -> NMessage(172) -- DEAD END
+     reaction < NEUTRAL -> Theresa14 -> NMessage(133) -- DEAD END
+   Join me niedostepne po questach.
+
+ FIX:
+   Zamienic Theresa24 z NMessage na Reply + Join me + End.
+   Zamienic Theresa14 z NMessage na Reply + Join me + End.
+
+ BEFORE:
+   procedure Theresa24 begin
+      ...set quest flag...
+      NMessage(172);   // tylko tekst, koniec
+   end
+
+ AFTER:
+   procedure Theresa24 begin
+      ...set quest flag...
+      Reply(172);
+      NOption("Join me.", NodeRecruit, 4);
+      NOption("Goodbye.", TheresaEnd, 4);
+   end
+
+   procedure Theresa14 begin
+      Reply(133);
+      NOption("Join me.", NodeRecruit, 4);
+      NOption("Goodbye.", TheresaEnd, 4);
+   end
+
+ EFEKT: "Join me." opcja dostepna na kazdym dialog node z Theresa
+        (oprocz combat / hostile / low int).
+
+
+================================================================================
+ FIX 3 -- OFFICER "JOIN ME" ZAWSZE (OFFICER.ssl / invasion_fix)
+================================================================================
+
+ PROBLEM:
+   talk_p_proc routing:
+     waterchip_returned -> Officer01 -> NMessage(101) -- DEAD END
+     armory_access + reaction > BAD -> Officer25 -> NMessage(149) -- DEAD END
+     armory_access -> Officer26 -> NMessage(150) -- DEAD END
+
+ FIX:
+   Zamienic Officer01, Officer25, Officer26 na Reply + Join me + End.
+   Zostawic Officer00 (hostile), Officer27 (armed warning).
+
+ AFTER:
+   procedure Officer01 begin
+      Reply(101);
+      NOption("Join me.", NodeRecruit, 4);
+      NOption("Goodbye.", OfficerEnd, 4);
+   end
+
+   procedure Officer25 begin
+      Reply(149);
+      NOption("Join me.", NodeRecruit, 4);
+      NOption("Goodbye.", OfficerEnd, 4);
+   end
+
+   procedure Officer26 begin
+      Reply(150);
+      NOption("Join me.", NodeRecruit, 4);
+      NOption("Goodbye.", OfficerEnd, 4);
+   end
+
+ EFEKT: Officer werbowalny po waterchipie + po otwarciu armory.
+
+
+================================================================================
+ FIX 4 -- NEW START EXPANSION (gl_mod_new_start_plus.ssl)
+================================================================================
+
+ WLASNA LOGIKA: gracz + 3 cuban kurtki = 4 party slots.
+ Broni na start: 6 (dla gracza + up to 5 gang members).
+ Amunicja: zapas dla kazdego kalibru + small energy cells.
+
+ DODATKI DO start():
+   if not(is_loading_game) then begin
+       // VANILLA items (to co juz jest):
+       add_obj_to_inven(dude, create_object(PID_WATER_CHIP));
+       add_obj_to_inven(dude, create_object(PID_ELECTRONIC_LOCKPICKS));
+       add_obj_to_inven(dude, create_object(PID_RADIO));
+
+       // NOWE -- strój na gracza:
+       add_obj_to_inven(dude, create_object(PID_CURED_LEATHER_ARMOR)); // combat jacket
+       add_obj_to_inven(dude, create_object(PID_MIRROR_SHADES));
+       add_obj_to_inven(dude, create_object(PID_COMBAT_KNIFE));
+
+       // 3x zwykla kurtka dla gang members:
+       add_obj_to_inven(dude, create_object(PID_LEATHER_JACKET));
+       add_obj_to_inven(dude, create_object(PID_LEATHER_JACKET));
+       add_obj_to_inven(dude, create_object(PID_LEATHER_JACKET));
+
+       display_msg("You check your pack. Shades, combat jacket, knife.");
+   end
+
+ OSOBNY MSG dla outdoorsman (juz jest):
+   "You pack lighter, shovel and rope for the road."
+
+
+================================================================================
+ FIX 5 -- MOTOCYKL OD STARTU + TRUNK LOADOUT (nowy mod: fo1_mod_biker)
+================================================================================
+
+ NOWY MOD: fo1_mod_biker  (nie mieszamy z new_start_plus -- clean separation)
+
+ PID-y (potwierdzone z scenepid.h):
+   PID_DRIVABLE_MOTO1 = 33556292  (scenery, jezdzalny moto)
+   PID_MOTO1_TRUNK    = ?         (szukam separately)
+   SCRIPT_MOTRCYCL    = 717       (z scripts.h)
+   SCRIPT_MOTRTRNK    = 979       (z scripts.h)
+
+ GVARy:
+   GVAR_ENABLE_MOTORCYCLE  (4998) = 1   // enable car system
+   GVAR_QUEST_MOTORCYCLE   (4996) = 20  // quest completed flag
+   GVAR_PLAYER_GOT_CAR            = 1   // car type 1 (moto1)
+
+ FLOW:
+   start() when NEW GAME:
+     set_global_var(GVAR_ENABLE_MOTORCYCLE, 1)
+     set_global_var(GVAR_QUEST_MOTORCYCLE, 20)
+     set_global_var(GVAR_PLAYER_GOT_CAR, 1)
+            |
+            v
+     Find free tile adjacent to dude in Vault 13 Entrance
+            |
+            v
+     create_object_sid(PID_DRIVABLE_MOTO1, hex, elev, SCRIPT_MOTRCYCL)
+     create_object_sid(PID_MOTO1_TRUNK,    hex, elev, SCRIPT_MOTRTRNK)
+            |
+            v
+     import variable Trunk_Ptr  // set by MOTRCYCL.int
+            |
+            v
+     Stuff Trunk_Ptr with weapons + ammo:
+       PID_LIGHT_SUPPORT_WEAPON  + 2x 5mm_JHP ammo box
+       PID_FN_FAL_NIGHT_SCOPE    + 2x 7.62mm ammo box
+       PID_PANCOR_JACKHAMMER     + 2x shotgun_shells
+       PID_223_PISTOL            + 2x 223_FMJ
+       PID_DESERT_EAGLE_EXT_MAG  + 2x 44_magnum_jhp
+       PID_SCOPED_HUNTING_RIFLE  + 2x 223_FMJ (shared)
+       4x PID_SMALL_ENERGY_CELL  // zapas
+            |
+            v
+     display_msg("Your bike. Trunk full of guns.")
+
+ RYZYKO:
+   Trunk_Ptr jest exported z MOTRCYCL.int. Timing: Trunk_Ptr moze byc 0
+   zanim MOTRCYCL.int wykona swoj start. Musze sprawdzic czy
+   create_object_sid od razu ustawia Trunk_Ptr, czy dopiero po
+   pierwszym tick.
+   FALLBACK: loadout przez add_timer_event (delay 2-3s).
+
+
+================================================================================
+ FIX 6 -- BIKER GANG MULTI-MOTO (outdoorsman extension)
+================================================================================
+
+ ZASADA: na kazdych 3 party members -> +1 motocykl w scenery.
+   1-3 party = 1 moto (gracza, w V13 start)
+   4-6 party = 2 moto
+   7-9 party = 3 moto
+   itd.
+
+ WHERE: tylko w campie (wilderness random encounter), analogicznie
+   do bedrolls. Nie wszedzie -- nie ma sensu duplikowac motocykli
+   w kazdym miescie.
+
+ FLOW (dopisane do handle_lighter w outdoorsman.ssl):
+   po stworzeniu campfire + bedrolls:
+     count_party = iter LIST_CRITTERS where team == TEAM_PLAYER
+                   and obj != dude_obj
+     extra_motos = count_party / 3  // integer div
+            |
+            v
+     for i = 0..extra_motos-1:
+        find_free_tile in ring (dir = (i*2) mod 6, dist = 8+i)
+              |
+              v
+        create_object_sid(PID_DRIVABLE_MOTO1, hex, elev, SCRIPT_MOTRCYCL)
+        // BEZ trunka -- to dekoracja "gang"
+              |
+              v
+     display_msg("Gang parks up.  " + extra_motos + " bikes join the camp.")
+
+ SHOVEL EXTINGUISH:
+   przy sprzataniu obozu, extra_motos tez zniknij (destroy_object).
+   bedrolls juz sa markowane do cleanup -- dodaj extra_motos do tej
+   samej listy.
+
+ RYZYKO:
+   Motocykle w wilderness maja swoj script (MOTRCYCL.int). Czy spawn
+   nie bedzie probowal ich "odebrac" gracza? Script pewnie reaguje
+   na use_obj_on_p_proc -- gracz moze "wsiasc" na drugi motocykl.
+   TEST: sprawdzic co sie dzieje gdy gracz kliknie use na extra moto.
+
+
+================================================================================
+ KOLEJNOSC WYKONANIA
+================================================================================
+
+   1. FIX 1 (klawisz J)                   -- 30s, 1 edit + recompile
+   2. FIX 2 (Theresa Join me)             -- 2 edits in THERESA.ssl
+   3. FIX 3 (Officer Join me)             -- 3 edits in OFFICER.ssl
+   4. FIX 4 (new start items)             -- dodac do new_start_plus.ssl
+   5. FIX 5 (motocykl + trunk)            -- NOWY mod fo1_mod_biker,
+                                             RESEARCH Trunk_Ptr timing
+   6. TEST po kazdym fixie (reload save NIE wystarczy -- new game!)
+   7. FIX 6 (extra motocykle per party)   -- rozszerzenie outdoorsman
+   8. TEST w obozie
+
+
+================================================================================
+ OTWARTE PYTANIA DO BORYSA
+================================================================================
+
+   A. TRUNK_PTR TIMING:
+      Czy probowac inline loadout, czy od razu timer 2s delay?
+      Propozycja: timer delay -- bezpieczniej.
+
+   B. EXTRA MOTOCYKLE -- WILDERNESS ONLY?
+      Proponuje tylko w campie. Duplikowanie w kazdym miescie
+      wygladaloby absurdalnie.
+
+   C. WARUNEK "3 PARTY = +1 MOTO":
+      Czy liczyc tylko ludzi, czy tez zwierzaki (DOGMEAT, BRAHMIN)?
+      Propozycja: tylko humans (obj_pid nie w (DOG, BRAHMIN, DOG2)).
+
+   D. MOTOCYKL NA EKIPE -- SCENERY CZY DRIVABLE?
+      Drivable = gracz moze "ukrasc" drugiego moto.
+      Scenery = tylko dekoracja.
+      Propozycja: scenery (NIE interaktywne). Ale to wymaga
+      osobnego PID albo set_obj_action(NONE) na spawned moto.
+      ALTERNATYWA: zostawic drivable, gracz nie bedzie klikac.
+
+   E. AMMO ILOSC W TRUNKU:
+      Ile ammo na kazda bron? 2x ammo box = ~50 naboj dla
+      wiekszosci, dla shotgun shells tez.
+      Propozycja: 2x kazdy, gracz moze dokupic.
+
+   F. COMBAT JACKET ZAKLADANY CZY W INVENTORY?
+      create_object + wear_obj(dude, obj, ARMOR_SLOT) -- zakladany.
+      Same add_obj_to_inven -- w inv, gracz sam zakladza.
+      Propozycja: w inventory, gracz decyduje.
+
+
+================================================================================
+ EOF
+================================================================================

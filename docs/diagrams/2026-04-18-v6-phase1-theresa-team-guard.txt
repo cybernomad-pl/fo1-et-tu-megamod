@@ -1,0 +1,113 @@
+================================================================================
+ fo1-et-tu-megamod  --  v6 PHASE 1 commit: Theresa team guard (B3)
+================================================================================
+
+
+================================================================================
+ PROBLEM (B3)
+================================================================================
+
+   Theresa zwerbowana -> party member (TEAM_PLAYER).
+   Gracz zmienia mape (np. wraca do V13).
+   map_enter_p_proc Theresy odpala sie.
+   Linia 188: set_self_team(TEAM_V13_REBELS)
+       |
+       v
+   Theresa wypada z party (team != TEAM_PLAYER).
+
+
+================================================================================
+ ROZWIAZANIE
+================================================================================
+
+   Dodaj guard na poczatku map_enter_p_proc (wzorzec z OFFICER.ssl:140).
+
+   BEFORE:
+     procedure map_enter_p_proc begin
+        art_change_fid_num(self_obj, 122);
+        if (v13_invaded) then ...
+        if (not local_var(4)) then set_local_var(4, self_tile);
+        home_tile := local_var(4);
+        set_self_team(TEAM_V13_REBELS);      <-- resetuje team
+        sleep_tile := home_tile;
+        ...
+     end
+
+   AFTER:
+     procedure map_enter_p_proc begin
+        // Guard: Theresa in party -> keep her in party
+        if (self_team == TEAM_PLAYER) then begin
+           return;                            <-- NEW
+        end
+        art_change_fid_num(self_obj, 122);
+        ...
+     end
+
+
+================================================================================
+ FLOW AFTER FIX
+================================================================================
+
+   Theresa w rebels (pre-recruit):
+     map_enter -> team != PLAYER -> [guard pass] ->
+       standard rebel setup (home_tile, sleep, v13_invaded, team=REBELS)
+
+   Theresa zwerbowana:
+     NodeRecruit -> party_add + set_team(TEAM_PLAYER)
+       |
+       v
+     Map change:
+       map_enter -> team == PLAYER -> [return]
+       -> brak modyfikacji team/home_tile/sleep
+       -> zostaje w party
+
+   Theresa umiera:
+     destroy_p_proc -> inc_good_critter
+     (bez zmian)
+
+
+================================================================================
+ REGRESJA CHECK
+================================================================================
+
+   [OK] critter_p_proc:
+          line 88: if team == PLAYER -> follow dude -> return
+          guard nie wplywa na tryb party.
+
+   [OK] rebel_meeting / timed_events:
+          triggered via critter_p_proc (gdy team = REBELS, 17:00).
+          Party Theresa nie wchodzi w te scieszki.
+
+   [OK] home_tile:
+          ustawiany pierwszy raz PRZED rekrutacja (team = REBELS).
+          Po rekrutacji local_var(4) jest juz set.
+          Guard pomija re-set ale home_tile JUZ istnieje w save.
+
+   [OK] FID art_change:
+          guard pomija art_change_fid_num(122).
+          Party Theresa zachowuje swoj sprite (nie reset do punk).
+
+
+================================================================================
+ DEPLOY
+================================================================================
+
+   THERESA.ssl -> megamod-build/ssl/source/
+   compile_all.sh -> out/invasion/THERESA.int (14520 bytes, 15:10)
+   cp -> fo1_mod_invasion_fix/scripts/THERESA.int
+
+
+================================================================================
+ TEST (do wykonania przez Borysa)
+================================================================================
+
+   1. Nowa gra.
+   2. Zwerbuj Theresa w V13 Living Quarters.
+   3. Zejdz do V13 Entrance -> na worldmap -> wroc do V13 Living Quarters.
+   4. Theresa powinna dalej byc w party (idze za gracza).
+   5. Zagadaj do niej: dialog party menu (NodePartyMain).
+
+
+================================================================================
+ EOF
+================================================================================

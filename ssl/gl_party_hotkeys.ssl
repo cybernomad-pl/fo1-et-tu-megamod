@@ -1,6 +1,7 @@
 /*
     Party Hold Position Hotkey -- fo1-et-tu-megamod
-    Key "0" (top-row, DX scancode 11) toggles vanilla GVAR_PARTY_NO_FOLLOW.
+    Key "J" (DX scancode 36) toggles vanilla GVAR_PARTY_NO_FOLLOW.
+    (Moved from "0" -- party_orders.ini uses SwitchKey=11 for auto-loot.)
     When set: vanilla party.h macro party_member_follow_dude skips the
     follow block, so NPCs stop running to the player and stay in place.
     Flag is RESET on every map enter (new map = new follow defaults).
@@ -10,6 +11,8 @@
 #include "sfall/sfall.h"
 #include "sfall/define_extra.h"
 #include "sfall/define_lite.h"
+
+#define LOG(s, k, v) set_ini_setting("party_hotkeys.ini|" + s + "|" + k, v)
 
 procedure start;
 procedure keypress_handler;
@@ -24,6 +27,9 @@ procedure start begin
         register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
         // Start with party following (fresh state)
         set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
+        // Disable FO2 CHA-based party limit (biker gang wants unlimited)
+        set_global_var(GVAR_ENABLE_FO2_PARTY_LIMIT, 0);
+        LOG("start", "party_limit_disabled", 1);
     end
 end
 
@@ -36,8 +42,8 @@ procedure keypress_handler begin
     key := get_sfall_arg;
 
     if (pressed == 0) then return;
-    // Top-row "0" = DX scancode 11 (avoid TAB=15 vanilla automap hotkey)
-    if (key != 11) then return;
+    // "J" = DX scancode 36 (avoid party_orders.ini SwitchKey=11 collision on "0")
+    if (key != 36) then return;
     if (get_game_mode != 0) then return;
 
     current := global_var(GVAR_PARTY_NO_FOLLOW);
@@ -50,9 +56,15 @@ end
 
 // Reset on map change -- hold flag should not persist across maps.
 procedure gamemode_handler begin
-    if (cur_map_index == last_map_index) then return;
+    LOG("gm", "A_entry", cur_map_index);
+    LOG("gm", "A_last_idx", last_map_index);
+    if (cur_map_index == last_map_index) then begin
+        LOG("gm", "Z_same_map", 1);
+        return;
+    end
     last_map_index := cur_map_index;
     if (global_var(GVAR_PARTY_NO_FOLLOW) != 0) then begin
         set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
     end
+    LOG("gm", "Z_mapchange_done", cur_map_index);
 end

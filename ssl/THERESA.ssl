@@ -86,6 +86,7 @@ end
 
 procedure critter_p_proc begin
    if (self_team == TEAM_PLAYER) then begin
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0 and local_var(13) != 0) then set_local_var(13, 0);
       if (global_var(GVAR_PARTY_NO_FOLLOW) == 0 or local_var(13) != 0) then party_follow_dude_point(5, 3)
       return;
    end
@@ -174,6 +175,11 @@ procedure look_at_p_proc begin
 end
 
 procedure map_enter_p_proc begin
+   // If in party, don't reset team or home tile (keep her as party member)
+   if (self_team == TEAM_PLAYER) then begin
+      return;
+   end
+
    // Theresa is ALWAYS punk
    art_change_fid_num(self_obj, 122);
 
@@ -358,7 +364,9 @@ procedure Theresa13 begin
 end
 
 procedure Theresa14 begin
-   NMessage(133);
+   Reply(133);
+   NOption("Join me.", NodeRecruit, 4);
+   NOption("Goodbye.", TheresaEnd, 4);
 end
 
 procedure Theresa15 begin
@@ -450,7 +458,9 @@ procedure Theresa24 begin
       exp_flag := 0;
       line := 10;
    end
-   NMessage(172);
+   Reply(172);
+   NOption("Join me.", NodeRecruit, 4);
+   NOption("Goodbye.", TheresaEnd, 4);
 end
 
 procedure Theresa25 begin
@@ -478,7 +488,7 @@ procedure NodeCampWakeUp;
 
 procedure NodePartyMain begin
    Reply_Blank;
-   if (global_var(GVAR_PARTY_NO_FOLLOW) == 1) then begin
+   if (global_var(GVAR_PARTY_NO_FOLLOW) == 1 and local_var(13) == 0) then begin
       NOption("Get up and follow me.", NodeCampWakeUp, 4);
    end
    NOption("Follow me.", NodePartyFollow, 4);
