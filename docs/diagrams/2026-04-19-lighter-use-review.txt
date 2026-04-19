@@ -1,0 +1,99 @@
+================================================================================
+ LIGHTER USE ACTION -- REVIEW (2026-04-19)
+================================================================================
+
+ OBSERVED: lighter w inventorze nie ma USE cursor (kursor LOOK).
+
+
+================================================================================
+ ENGINE MODEL (Fallout 2)
+================================================================================
+
+   PROTO (plik .pro, shared przez wszystkie obj tego PID):
+     offset 20 (PROTO_FLAG)        -- NO_DROP, HIDDEN, LIGHT_ON, etc.
+     offset 24 (PROTO_FLAG_EXT)    -- action flags:
+                                      ITEM_ACTION_USE    (0x800)
+                                      ITEM_ACTION_USEON  (0x1000)
+                                      ITEM_ACTION_PICK_UP
+                                      ITEM_ACTION_LOOK
+                                      ITEM_ACTION_TALK
+
+   OBJ INSTANCE (per-obj, w save file):
+     OBJ_DATA_FLAGS (0x24 = 36)    -- per-obj version of PROTO_FLAG (20)
+                                      NO_DROP / HIDDEN / LIGHT_ON
+     -- NIE MA per-obj action flags!
+     -- Action flags są TYLKO w proto (shared).
+
+
+================================================================================
+ BUG IN v6 phase 4.7
+================================================================================
+
+   set_object_data(lighter, OBJ_DATA_FLAGS,
+       get_object_data(lighter, OBJ_DATA_FLAGS) bwor ITEM_ACTION_USE)
+
+   Efekt:
+     OBJ_DATA_FLAGS (0x24) | 0x800  -- ustawia bit 11 na per-obj flags
+     Per-obj flags NIE MA action flag zestawu -- bit 11 to coś innego
+     (może HIDDEN related, lub 0 = no-op).
+
+   Efekt wizualny: zero. USE cursor nie pojawia się.
+
+
+================================================================================
+ POPRAWNA ŚCIEŻKA
+================================================================================
+
+   DLA PROTO (jedyna droga dla action flags):
+     set_proto_data(PID_LIGHTER, PROTO_IT_FLAGS,
+         get_proto_data(PID_LIGHTER, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE)
+
+   Efekt:
+     Każdy NOWY create_object(PID_LIGHTER) dziedziczy USE cursor.
+     Istniejące obj w save -- engine sprawdza PROTO_FLAG_EXT per-rysowanie
+     cursor, więc update proto wpływa natychmiast.
+
+
+================================================================================
+ DLACZEGO NADAL NIE DZIAŁA PO start() set_proto_data?
+================================================================================
+
+ Hipoteza 1: set_proto_data nie persistuje przez save/load. Po load save,
+   proto wraca do default. start() odpala przy game_loaded = TRUE, ale
+   może nie każdym loadem (sfall bug?).
+
+ Hipoteza 2: Timing -- engine cacheuje proto flags przy init mapy.
+   Nasze set_proto_data w start() wykonuje się PO cache. Engine uzywa
+   starego proto dla cursor rendering.
+
+ Hipoteza 3: Load order mods. Inny mod overwrite nasze proto zmiany.
+
+ Hipoteza 4: set_proto_data faktycznie działa, ale Borys widzi stary
+   lighter (z pre-fix save), który ma OBJ_DATA_FLAGS bug z 4.7.
+
+
+================================================================================
+ FIX PLAN
+================================================================================
+
+ Krok 1: USUN bledne set_object_data OBJ_DATA_FLAGS | ITEM_ACTION_USE
+         (nigdzie, zarówno w start jak refresh_lighter_flags)
+
+ Krok 2: set_proto_data PID_LIGHTER PROTO_IT_FLAGS ITEM_ACTION_USE
+         -- wywoluj:
+         a) w start() (juz jest)
+         b) w gamemode_handler przy map change (re-apply)
+
+ Krok 3: DIAGNOSTIC LOG:
+         LOG przed/po set_proto_data z get_proto_data value
+         Sprawdzi czy flag faktycznie jest zapisany
+
+ Krok 4: Test:
+         - Załaduj save, sprawdź testing.ini [outd_ltr] logi
+         - Jeśli flag ma 0x800 po set, a cursor dalej LOOK ->
+           sfall/engine bug (issue upstream)
+
+
+================================================================================
+ EOF
+================================================================================

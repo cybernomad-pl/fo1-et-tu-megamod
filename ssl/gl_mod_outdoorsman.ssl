@@ -414,6 +414,9 @@ procedure gamemode_handler begin
             set_object_data(right_h, OBJ_DATA_LIGHT_DISTANCE, 0);
             set_object_data(right_h, OBJ_DATA_LIGHT_INTENSITY, 0);
         end
+        // Re-apply PROTO_IT_FLAGS | ITEM_ACTION_USE on map change
+        // (proto may be cache-reset by engine on map init).
+        call refresh_lighter_flags;
         LOG("gm", "lighter_reset_on_mapchange", 1);
     end
 
@@ -924,26 +927,20 @@ procedure give_camping_kit begin
 end
 
 // ============================================================
-// REFRESH LIGHTER FLAGS -- iter dude inv, force ITEM_ACTION_USE
-// on every PID_LIGHTER obj. Compensates for proto -> obj inheritance
-// quirks after save/load and proto edits.
+// REFRESH LIGHTER PROTO -- re-applies ITEM_ACTION_USE to proto flags.
+// Proto-level only: per-obj has no action flag storage in FO2.
+// Called in start() + gamemode_handler (map change) to survive save/load
+// and proto cache resets.
 // ============================================================
 procedure refresh_lighter_flags begin
-    variable i;
-    variable item;
-    variable count;
+    variable before;
+    variable after;
 
-    count := 0;
-    i := 0;
-    item := inven_ptr(dude_obj, i);
-    while (item) do begin
-        if (obj_pid(item) == PID_LIGHTER) then begin
-            set_object_data(item, OBJ_DATA_FLAGS,
-                get_object_data(item, OBJ_DATA_FLAGS) bwor ITEM_ACTION_USE);
-            count := count + 1;
-        end
-        i := i + 1;
-        item := inven_ptr(dude_obj, i);
-    end
-    LOG("ltr", "refresh_count", count);
+    before := get_proto_data(PID_LIGHTER, PROTO_IT_FLAGS);
+    set_proto_data(PID_LIGHTER, PROTO_IT_FLAGS,
+        before bwor ITEM_ACTION_USE);
+    after := get_proto_data(PID_LIGHTER, PROTO_IT_FLAGS);
+    LOG("ltr", "proto_before", before);
+    LOG("ltr", "proto_after", after);
+    LOG("ltr", "has_use_bit", after bwand 2048);
 end
