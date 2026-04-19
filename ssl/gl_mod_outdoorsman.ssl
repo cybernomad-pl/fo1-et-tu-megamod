@@ -85,6 +85,11 @@ procedure refresh_lighter_flags;
 procedure handle_camp_npc_action;
 procedure action_gather_firewood;
 procedure action_hunt;
+procedure action_search_useful;
+procedure action_any_ideas;
+procedure party_has_pid(variable pid);
+procedure party_consume_pid(variable pid);
+procedure party_highest_outdoorsman;
 
 procedure start begin
     if game_loaded then begin
@@ -577,10 +582,21 @@ procedure handle_shovel_on_firepit begin
     // 2b. Release no-follow -- party follows dude again.
     set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
 
-    // 4. Mark bedrolls for deferred cleanup (after wake anim plays).
-    now_ticks := game_time;
-    pending_cleanup[map_key] := now_ticks + CLEANUP_DELAY_TICKS;
-    save_array("campfire_pending", pending_cleanup);
+    // 4. Destroy ALL bedrolls immediately (Borys 2026-04-19: pack camp
+    //    should fully tear down -- no deferred cleanup).
+    variable bedrolls_now;
+    variable bi;
+    variable bed_obj;
+    bedrolls_now := bedroll_map[map_key];
+    if (bedrolls_now != 0) then begin
+        for (bi := 0; bi < len_array(bedrolls_now); bi++) begin
+            bed_obj := bedrolls_now[bi];
+            if (bed_obj != 0) then destroy_object(bed_obj);
+        end
+        free_array(bedrolls_now);
+        bedroll_map[map_key] := 0;
+        save_array("campfire_bedrolls", bedroll_map);
+    end
 
     // 5. Clear campfire tile + firepit obj refs (bedrolls still tracked in bedroll_map).
     campfire_map[map_key] := 0;
@@ -986,6 +1002,12 @@ procedure handle_camp_npc_action begin
     else if (action == 4) then begin  // GATHER FIREWOOD
         call action_gather_firewood;
     end
+    else if (action == 5) then begin  // SEARCH FOR SOMETHING USEFUL
+        call action_search_useful;
+    end
+    else if (action == 6) then begin  // ANY IDEAS? (craft check)
+        call action_any_ideas;
+    end
 end
 
 // ============================================================
@@ -1035,5 +1057,283 @@ procedure action_hunt begin
     end
     else begin
         display_msg("The hunt was a bust. No game today.");
+    end
+end
+
+// ============================================================
+// HELPER: highest SKILL_OUTDOORSMAN across dude + party NPCs.
+// ============================================================
+procedure party_highest_outdoorsman begin
+    variable lst;
+    variable obj;
+    variable sk;
+    variable highest;
+    highest := has_skill(dude_obj, SKILL_OUTDOORSMAN);
+    lst := list_begin(LIST_CRITTERS);
+    obj := list_next(lst);
+    while (obj) do begin
+        if (obj != 0 and obj != dude_obj
+            and get_team(obj) == TEAM_PLAYER
+            and not(is_critter_dead(obj))) then begin
+            sk := has_skill(obj, SKILL_OUTDOORSMAN);
+            if (sk > highest) then highest := sk;
+        end
+        obj := list_next(lst);
+    end
+    list_end(lst);
+    return highest;
+end
+
+// ============================================================
+// HELPER: does dude or any party NPC carry the PID? (returns 1/0)
+// ============================================================
+procedure party_has_pid(variable pid) begin
+    variable lst;
+    variable obj;
+    if (obj_is_carrying_obj_pid(dude_obj, pid) > 0) then return 1;
+    lst := list_begin(LIST_CRITTERS);
+    obj := list_next(lst);
+    while (obj) do begin
+        if (obj != 0 and obj != dude_obj
+            and get_team(obj) == TEAM_PLAYER
+            and not(is_critter_dead(obj))) then begin
+            if (obj_is_carrying_obj_pid(obj, pid) > 0) then begin
+                list_end(lst);
+                return 1;
+            end
+        end
+        obj := list_next(lst);
+    end
+    list_end(lst);
+    return 0;
+end
+
+// ============================================================
+// HELPER: consume 1 item of PID from party (dude first, then NPCs).
+// Returns 1 on success, 0 if nobody had it.
+// ============================================================
+procedure party_consume_pid(variable pid) begin
+    variable lst;
+    variable obj;
+    variable item;
+    variable i;
+
+    // Try dude first
+    i := 0;
+    item := inven_ptr(dude_obj, i);
+    while (item) do begin
+        if (obj_pid(item) == pid) then begin
+            rm_obj_from_inven(dude_obj, item);
+            destroy_object(item);
+            return 1;
+        end
+        i := i + 1;
+        item := inven_ptr(dude_obj, i);
+    end
+
+    // Try party NPCs
+    lst := list_begin(LIST_CRITTERS);
+    obj := list_next(lst);
+    while (obj) do begin
+        if (obj != 0 and obj != dude_obj
+            and get_team(obj) == TEAM_PLAYER
+            and not(is_critter_dead(obj))) then begin
+            i := 0;
+            item := inven_ptr(obj, i);
+            while (item) do begin
+                if (obj_pid(item) == pid) then begin
+                    rm_obj_from_inven(obj, item);
+                    destroy_object(item);
+                    list_end(lst);
+                    return 1;
+                end
+                i := i + 1;
+                item := inven_ptr(obj, i);
+            end
+        end
+        obj := list_next(lst);
+    end
+    list_end(lst);
+    return 0;
+end
+
+// ============================================================
+// ACTION: SEARCH FOR SOMETHING USEFUL
+// Outdoorsman skill check (party highest). Success: random loot.
+// Pool: rocks / flint / firewood / spore spikes / broc / xander /
+//       flower / sharpened pole / iguana on a stick.
+// ============================================================
+procedure action_search_useful begin
+    variable highest;
+    variable roll;
+    variable pick;
+    variable loot_pid;
+    variable loot_name;
+    variable item;
+
+    highest := party_highest_outdoorsman;
+    roll := roll_vs_skill(dude_obj, SKILL_OUTDOORSMAN,
+        highest - has_skill(dude_obj, SKILL_OUTDOORSMAN));
+    if (not(is_success(roll))) then begin
+        display_msg("You find nothing useful.");
+        return;
+    end
+
+    pick := random(0, 8);
+    if      (pick == 0) then begin loot_pid := 19;  loot_name := "a rock";              end
+    else if (pick == 1) then begin loot_pid := 278; loot_name := "a flint";             end
+    else if (pick == 2) then begin loot_pid := 286; loot_name := "firewood";            end
+    else if (pick == 3) then begin loot_pid := 365; loot_name := "a spore spike";       end
+    else if (pick == 4) then begin loot_pid := 271; loot_name := "a broc flower";       end
+    else if (pick == 5) then begin loot_pid := 272; loot_name := "a xander root";       end
+    else if (pick == 6) then begin loot_pid := 117; loot_name := "a flower";            end
+    else if (pick == 7) then begin loot_pid := 320; loot_name := "a sharpened pole";    end
+    else                 begin loot_pid := 81;  loot_name := "an iguana on a stick";end
+
+    item := create_object(loot_pid, 0, 0);
+    if (item != 0) then add_obj_to_inven(dude_obj, item);
+    give_exp_points(25);
+    display_msg("You search the area and find " + loot_name + " (+25 XP).");
+end
+
+// ============================================================
+// ACTION: ANY IDEAS -- craft check (combined party inventory).
+// Primitive survival recipes only -- no stimpaks/vanilla medicine.
+// Recipes:
+//   SHARPENED_POLE (320) + KNIFE (4/236) -> SPEAR (7)
+//   SPEAR (7) + FLINT (278) -> SHARP_SPEAR (280)
+//   SHARPENED_POLE + FLINT -> SHARP_SPEAR (shortcut)
+//   BROC_FLOWER (271) + XANDER_ROOT (272) -> HEALING_POWDER (273)
+//   SHARPENED_POLE + ROCK (19) -> CLUB (5)
+//   FLINT + ROCK -> KNIFE (4, primitive)
+//   FIREWOOD (286) + FLINT -> camp ignite (no lighter needed)
+//   SCORPION_TAIL (92) + BOOZE (125) + high SCIENCE -> ANTIDOTE (49)
+// Consumes ingredients from whoever has them. Adds product to dude.
+// ============================================================
+procedure action_any_ideas begin
+    variable made;
+    variable item;
+    variable sci;
+    variable sci_roll;
+    variable lst;
+    variable obj;
+    variable s;
+    made := 0;
+
+    // SPEAR recipe (pole + knife)
+    if (party_has_pid(320) and (party_has_pid(4) or party_has_pid(236))) then begin
+        call party_consume_pid(320);
+        if (party_has_pid(4)) then call party_consume_pid(4);
+        else call party_consume_pid(236);
+        item := create_object(7, 0, 0);
+        if (item != 0) then add_obj_to_inven(dude_obj, item);
+        display_msg("You fashion a spear from a sharpened pole and knife.");
+        give_exp_points(30);
+        made := made + 1;
+    end
+
+    // SHARP_SPEAR from SPEAR + FLINT
+    if (party_has_pid(7) and party_has_pid(278)) then begin
+        call party_consume_pid(7);
+        call party_consume_pid(278);
+        item := create_object(280, 0, 0);
+        if (item != 0) then add_obj_to_inven(dude_obj, item);
+        display_msg("You tip a spear with flint -- sharpened spear.");
+        give_exp_points(40);
+        made := made + 1;
+    end
+
+    // SHARP_SPEAR shortcut: SHARPENED_POLE + FLINT direct
+    if (party_has_pid(320) and party_has_pid(278)) then begin
+        call party_consume_pid(320);
+        call party_consume_pid(278);
+        item := create_object(280, 0, 0);
+        if (item != 0) then add_obj_to_inven(dude_obj, item);
+        display_msg("You knap a flint blade onto the pole -- sharpened spear.");
+        give_exp_points(35);
+        made := made + 1;
+    end
+
+    // HEALING_POWDER (broc + xander)
+    if (party_has_pid(271) and party_has_pid(272)) then begin
+        call party_consume_pid(271);
+        call party_consume_pid(272);
+        item := create_object(273, 0, 0);
+        if (item != 0) then add_obj_to_inven(dude_obj, item);
+        display_msg("You grind broc flower and xander root into healing powder.");
+        give_exp_points(30);
+        made := made + 1;
+    end
+
+    // CLUB (pole + rock)
+    if (party_has_pid(320) and party_has_pid(19)) then begin
+        call party_consume_pid(320);
+        call party_consume_pid(19);
+        item := create_object(5, 0, 0);
+        if (item != 0) then add_obj_to_inven(dude_obj, item);
+        display_msg("You lash a rock to a pole -- crude club.");
+        give_exp_points(20);
+        made := made + 1;
+    end
+
+    // KNIFE primitive (flint + rock)
+    if (party_has_pid(278) and party_has_pid(19)) then begin
+        call party_consume_pid(278);
+        call party_consume_pid(19);
+        item := create_object(4, 0, 0);
+        if (item != 0) then add_obj_to_inven(dude_obj, item);
+        display_msg("You chip a flint blade on a rock -- primitive knife.");
+        give_exp_points(20);
+        made := made + 1;
+    end
+
+    // CAMP IGNITE (firewood + flint -- no lighter needed)
+    if (party_has_pid(286) and party_has_pid(278)
+        and is_wilderness and not(map_has_campfire)
+        and not(combat_is_initialized)) then begin
+        call party_consume_pid(286);
+        call party_consume_pid(278);
+        call create_campfire_adjacent;
+        play_sfx("FLAMETHR");
+        display_msg("You strike flint against firewood and start a fire.");
+        give_exp_points(15);
+        made := made + 1;
+    end
+
+    // ANTIDOTE (scorpion tail + booze) -- requires high SCIENCE in party.
+    // Threshold 80% for reliable craft. Roll vs highest party SCIENCE.
+    if (party_has_pid(92) and party_has_pid(125)) then begin
+        sci := has_skill(dude_obj, SKILL_SCIENCE);
+        lst := list_begin(LIST_CRITTERS);
+        obj := list_next(lst);
+        while (obj) do begin
+            if (obj != 0 and obj != dude_obj
+                and get_team(obj) == TEAM_PLAYER
+                and not(is_critter_dead(obj))) then begin
+                s := has_skill(obj, SKILL_SCIENCE);
+                if (s > sci) then sci := s;
+            end
+            obj := list_next(lst);
+        end
+        list_end(lst);
+
+        sci_roll := roll_vs_skill(dude_obj, SKILL_SCIENCE,
+            sci - has_skill(dude_obj, SKILL_SCIENCE));
+        if (is_success(sci_roll)) then begin
+            call party_consume_pid(92);
+            call party_consume_pid(125);
+            item := create_object(49, 0, 0);
+            if (item != 0) then add_obj_to_inven(dude_obj, item);
+            display_msg("You distill venom and booze into antidote.");
+            give_exp_points(50);
+            made := made + 1;
+        end
+        else begin
+            display_msg("Nobody's smart enough to brew antidote from that tail.");
+        end
+    end
+
+    if (made == 0) then begin
+        display_msg("Nobody has the right ingredients for a craft.");
     end
 end
