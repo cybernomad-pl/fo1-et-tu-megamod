@@ -1,0 +1,95 @@
+================================================================================
+ CLEANUP PHASE 5.5 -- sfall global "CAMP" + dead code removal  (2026-04-20)
+================================================================================
+
+ KONTEKST:
+   Phase 5.4 diagnostic wykryl: set_global_var(5020,...) pisze POZA vault13.gam
+   zakres (gam defines do GVAR 5016). NPC trigger "widac" ([TRIGGER] msg),
+   ale outdoorsman dispatcher nigdy nie widzi GVAR != 0.
+
+ ROZWIAZANIE:
+   refactor do sfall API: set_sfall_global("CAMP", N) / get_sfall_global_int("CAMP")
+   -- string-keyed, cross-script, nie wymaga .gam entry, bez limitow.
+
+
+================================================================================
+ NEW PIPELINE (sfall-only)
+================================================================================
+
+   NPC dialog (37 plikow)              gl_mod_outdoorsman.ssl
+   +--------------------------+        +---------------------------------+
+   | NOption("Make camp.",    |        | gamemode_handler (HOOK)         |
+   |   CampMakeTrigger, 4)    |        |   if get_sfall_global_int("CAMP") != 0 |
+   |                          |        |       call handle_camp_npc_action |
+   | CampMakeTrigger:         | -----> | |                                 |
+   |   set_sfall_global(      |        | handle_camp_npc_action:          |
+   |     "CAMP", 1)           |        |   action = get_sfall_global_int("CAMP") |
+   +--------------------------+        |   set_sfall_global("CAMP", 0)   |
+                                       |   dispatch(action)               |
+                                       +---------------------------------+
+
+ Fire-and-forget:
+   NPC zapisuje int do sfall global "CAMP" (1..6).
+   Dialog zamyka sie -> game mode change -> hook fires -> dispatcher czyta + consume.
+   map_update_p_proc NIE pollsuje (race eliminated).
+
+
+================================================================================
+ CLEANUP -- USUNIETE
+================================================================================
+
+ CRITICAL:
+   [x] Double dispatch: map_update_p_proc no longer polls "CAMP"
+       -> gamemode_handler only (fires after dialog close, deterministic)
+   [x] GVAR_CAMP_ACTIVE (5019) -- write-only dead code, deleted
+       (map_has_campfire reads campfire_map save_array instead)
+
+ DEAD CODE:
+   [x] procedure cleanup_pending_bedrolls (65 lines) -- removed
+       (bedrolls now destroyed immediately in handle_shovel_on_firepit)
+   [x] variable pending_cleanup -- removed
+   [x] #define CLEANUP_DELAY_TICKS (20) -- removed
+   [x] save_array("campfire_pending") init in start() -- removed
+   [x] variable tracked_bedroll -- removed (unused local)
+
+ DEBUG CLEANUP:
+   [x] display_msg("[GM] ...") in gamemode_handler -- removed
+   [x] display_msg("[GM_HOOK] ...") in gamemode_handler -- removed
+   [x] display_msg("[DISPATCH] ...") in handle_camp_npc_action -- removed
+   [x] LOG debug keys (A_gvar5020_value, A_npc_action_pending) -- removed
+   [x] display_msg("[TRIGGER] ...") in 37 NPC scripts (222 lines) -- removed
+
+ COMMENT FIXES:
+   [x] "GVAR_CAMP_NPC_ACTION" references updated to "sfall global 'CAMP'"
+   [x] BEDROLL DEFERRED CLEANUP header section rewritten
+
+
+================================================================================
+ ZACHOWANE -- USER-FRIENDLY GATE MESSAGES
+================================================================================
+
+ handle_camp_npc_action dalej pokazuje msgi gdy gate blokuje:
+   action 1 MAKE CAMP:
+     not(is_wilderness)    -> "Can't make camp here -- need wilderness."
+     map_has_campfire      -> "Camp already set up here."
+     combat_is_initialized -> "Can't make camp during combat."
+   action 2 PACK CAMP:
+     not(map_has_campfire) -> "No camp here to pack."
+
+ actions 3..6 (hunt/gather/search/ideas) bez gates -- dzialaja zawsze.
+
+
+================================================================================
+ DELTA
+================================================================================
+
+   38 files changed
+   296 insertions(+), 589 deletions(-)
+   gl_mod_outdoorsman.ssl: 1395 -> 1252 lines (-143)
+
+ Commit: feat(outdoorsman): sfall global "CAMP" refactor + cleanup dead code
+
+
+================================================================================
+ EOF
+================================================================================

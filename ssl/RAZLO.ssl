@@ -852,7 +852,7 @@ procedure NodePartyMain begin
    NOption("Follow me.", NodePartyFollow, 4);
    NOption("Wait here.", NodePartyWait, 4);
    NOption("Holster weapon.", NodePartyHolster, 4);
-   // Camp dialog options (gates off for debug)
+   // Camp dialog options -- always visible; dispatcher validates context.
    NOption("Make camp.", CampMakeTrigger, 4);
    NOption("Pack up camp.", CampPackTrigger, 4);
    NOption("Gather firewood.", CampGatherTrigger, 4);
@@ -863,33 +863,27 @@ procedure NodePartyMain begin
 end
 
 procedure CampMakeTrigger begin
-   display_msg("[TRIGGER] Make camp (GVAR 5020 := 1)");
-   set_global_var(5020, 1);
+   set_sfall_global("CAMP", 1);
 end
 
 procedure CampPackTrigger begin
-   display_msg("[TRIGGER] Pack camp (GVAR 5020 := 2)");
-   set_global_var(5020, 2);
+   set_sfall_global("CAMP", 2);
 end
 
 procedure CampHuntTrigger begin
-   display_msg("[TRIGGER] Hunt (GVAR 5020 := 3)");
-   set_global_var(5020, 3);
+   set_sfall_global("CAMP", 3);
 end
 
 procedure CampGatherTrigger begin
-   display_msg("[TRIGGER] Gather firewood (GVAR 5020 := 4)");
-   set_global_var(5020, 4);
+   set_sfall_global("CAMP", 4);
 end
 
 procedure CampSearchTrigger begin
-   display_msg("[TRIGGER] Search useful (GVAR 5020 := 5)");
-   set_global_var(5020, 5);
+   set_sfall_global("CAMP", 5);
 end
 
 procedure CampIdeasTrigger begin
-   display_msg("[TRIGGER] Any ideas (GVAR 5020 := 6)");
-   set_global_var(5020, 6);
+   set_sfall_global("CAMP", 6);
 end
 
 procedure NodePartyWait begin

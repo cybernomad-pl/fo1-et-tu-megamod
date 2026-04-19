@@ -19,16 +19,13 @@
       -> mark bedrolls for deferred cleanup (destroyed after wake anim)
       -> gfade_in
 
-    === BEDROLL DEFERRED CLEANUP ===
-    Bedrolls are NOT destroyed immediately. They are removed on the next
-    HOOK_GAMEMODECHANGE tick that fires at least CLEANUP_DELAY_TICKS after
-    the shovel action (20 ticks = ~2s). This gives ANIM_back_to_standing
-    time to play so the bedroll stays visible under the critter until they
-    finish standing up.
+    === BEDROLL CLEANUP ===
+    Bedrolls are destroyed immediately when shovel action fires (short gfade
+    hides the transition). Previous deferred cleanup path removed.
 
     Standalone mod. Hooks: HOOK_USEOBJ (lighter + player bedroll rest),
-    HOOK_USEOBJON (shovel), HOOK_GAMEMODECHANGE (bedroll cleanup, hotkey
-    wake-up edge detect).
+    HOOK_USEOBJON (shovel), HOOK_GAMEMODECHANGE (NPC camp action dispatch,
+    hotkey wake-up edge detect).
 
     NOTE: PID/FID debug dump moved to fo1_mod_party_armor_ext (separate mod).
 */
@@ -45,13 +42,12 @@
 #define XP_CAMPFIRE_LIGHT    (15)
 #define XP_CAMPFIRE_SMOTHER  (10)
 #define CAMPFIRE_NEAR_RANGE  (3)
-#define CLEANUP_DELAY_TICKS  (20)  // 2s (10 ticks/s) -- wait for ANIM_back_to_standing
 #define RING_START_DIST      (5)   // first ring distance from fire
 #define RING_STEP            (3)   // extra distance per outer ring
 
-// Shared GVARs for NPC dialog -> camp action triggers.
-#define GVAR_CAMP_ACTIVE     (5019)  // 1 when campfire exists on current map
-#define GVAR_CAMP_NPC_ACTION (5020)  // 1=make, 2=pack, 3=hunt, 4=gather
+// Camp NPC action channel uses sfall global "CAMP" (string-keyed, not vanilla GVAR).
+// 1=make, 2=pack, 3=hunt, 4=gather, 5=search, 6=ideas.
+// Camp presence queried via map_has_campfire (reads campfire_map save_array).
 
 #define PID_IGUANA_ON_A_STICK (81)   // hunt reward
 
@@ -61,7 +57,6 @@ variable firepit_obj_map;    // "<map_idx>" -> firepit obj_id (for USE ON match)
 variable player_bedroll_map; // "<map_idx>" -> player bedroll obj_id (for USE rest)
 variable bedroll_map;        // "<map_idx>" -> list of bedroll obj_ids
 variable sleepers_map;       // "<map_idx>" -> list of npc obj_ids put to sleep
-variable pending_cleanup;    // map_key -> cleanup_deadline (game_time ticks)
 variable last_map_idx;       // for map-change detection
 variable flicker_counter;    // map_update tick counter (flicker throttle)
 variable last_no_follow;     // edge detect GVAR 1->0 transition (hotkey wake)
@@ -78,7 +73,6 @@ procedure handle_player_bedroll_rest;
 procedure is_wilderness;
 procedure map_has_campfire;
 procedure create_campfire_adjacent;
-procedure cleanup_pending_bedrolls;
 procedure flicker_campfire;
 procedure give_camping_kit;
 procedure refresh_lighter_flags;
@@ -130,12 +124,6 @@ procedure start begin
         if (sleepers_map == 0) then begin
             sleepers_map := create_array_map;
             save_array("campfire_sleepers", sleepers_map);
-        end
-
-        pending_cleanup := load_array("campfire_pending");
-        if (pending_cleanup == 0) then begin
-            pending_cleanup := create_array_map;
-            save_array("campfire_pending", pending_cleanup);
         end
 
         last_map_idx := cur_map_index;
@@ -260,7 +248,6 @@ end
 procedure useobj_handler begin
     variable user;
     variable item;
-    variable tracked_bedroll;
 
     user := get_sfall_arg;
     item := get_sfall_arg;
@@ -273,13 +260,13 @@ procedure useobj_handler begin
         return;
     end
 
-    // USE on any bedroll -> rest until morning. (Tracked check removed
-    // -- any PID_BED_1/BED_2 works, simpler for player.)
+    // USE on any bedroll -> rest until morning.
     LOG("useobj", "item_pid", obj_pid(item));
     if (obj_pid(item) == PID_BED_1 or obj_pid(item) == PID_BED_2) then begin
         LOG("useobj", "bedroll_hit", obj_pid(item));
         call handle_player_bedroll_rest;
         set_sfall_return(-1);
+        return;
     end
 end
 
@@ -380,9 +367,13 @@ procedure gamemode_handler begin
     LOG("gm", "A_entry", cur_map_index);
     LOG("gm", "A_last_idx", last_map_idx);
 
-    // Always run pending bedroll cleanup (only for current map -- safe).
-    call cleanup_pending_bedrolls;
-    LOG("gm", "B_after_cleanup", 1);
+    // Dispatch NPC camp action (sfall global "CAMP" set by NPC dialog trigger).
+    // Runs on gamemode transitions (dialog close -> world mode).
+    if (get_sfall_global_int("CAMP") != 0) then begin
+        LOG("gm", "A_camp_action", get_sfall_global_int("CAMP"));
+        call handle_camp_npc_action;
+    end
+
 
     // Edge detect GVAR_PARTY_NO_FOLLOW 1->0 (hotkey unhold, not shovel):
     // play wake-up anim on still-tracked sleepers so they stand before following.
@@ -616,79 +607,7 @@ procedure handle_shovel_on_firepit begin
     gfade_in(300);
 
     display_msg("You shovel dirt onto the fire. The flames die out.");
-    set_global_var(GVAR_CAMP_ACTIVE, 0);
     give_exp_points(XP_CAMPFIRE_SMOTHER);
-end
-
-// ============================================================
-// DEFERRED BEDROLL CLEANUP -- runs on every HOOK_GAMEMODECHANGE tick
-// ============================================================
-procedure cleanup_pending_bedrolls begin
-    variable keys;
-    variable i;
-    variable map_key;
-    variable deadline;
-    variable now_ticks;
-    variable bedrolls;
-    variable j;
-    variable obj;
-
-    LOG("cln", "A_entry", cur_map_index);
-
-    if (pending_cleanup == 0) then begin
-        LOG("cln", "Z_exit_no_pending", 1);
-        return;
-    end
-    keys := array_keys(pending_cleanup);
-    if (keys == 0) then begin
-        LOG("cln", "Z_exit_null_keys", 1);
-        return;
-    end
-    if (len_array(keys) == 0) then begin
-        free_array(keys);
-        LOG("cln", "Z_exit_empty_keys", 1);
-        return;
-    end
-    LOG("cln", "B_keys_count", len_array(keys));
-
-    now_ticks := game_time;
-
-    for (i := 0; i < len_array(keys); i++) begin
-        map_key := keys[i];
-        deadline := pending_cleanup[map_key];
-        if (deadline > 0 and now_ticks >= deadline) then begin
-            // SAFETY: only destroy bedrolls for the CURRENT map.
-            // Objects from other maps have been despawned by the engine;
-            // their obj_ids are stale and destroy_object would be unsafe.
-            if (map_key == ("" + cur_map_index)) then begin
-                bedrolls := bedroll_map[map_key];
-                if (bedrolls != 0) then begin
-                    for (j := 0; j < len_array(bedrolls); j++) begin
-                        obj := bedrolls[j];
-                        if (obj != 0) then destroy_object(obj);
-                    end
-                    free_array(bedrolls);
-                    bedroll_map[map_key] := 0;
-                    save_array("campfire_bedrolls", bedroll_map);
-                end
-                tile_refresh_display;
-            end
-            else begin
-                // Stale pending entry for another map -- just drop tracking
-                // (objects there are already gone; don't call destroy_object).
-                bedrolls := bedroll_map[map_key];
-                if (bedrolls != 0) then begin
-                    free_array(bedrolls);
-                    bedroll_map[map_key] := 0;
-                    save_array("campfire_bedrolls", bedroll_map);
-                end
-            end
-            pending_cleanup[map_key] := 0;
-            save_array("campfire_pending", pending_cleanup);
-        end
-    end
-
-    free_array(keys);
 end
 
 // ============================================================
@@ -863,7 +782,6 @@ procedure create_campfire_adjacent begin
     save_array("campfire_sleepers", sleepers_map);
 
     display_msg("You make camp. The fire crackles. The party settles in for the night.");
-    set_global_var(GVAR_CAMP_ACTIVE, 1);
     give_exp_points(XP_CAMPFIRE_LIGHT);
     LOG("camp", "lit_tile", fire_tile);
     LOG("camp", "lit_map", cur_map_index);
@@ -931,10 +849,9 @@ procedure map_update_p_proc begin
     if ((flicker_counter % 3) == 0) then begin
         call flicker_campfire;
     end
-    // Poll NPC-triggered camp actions (via GVAR).
-    if (global_var(GVAR_CAMP_NPC_ACTION) != 0) then begin
-        call handle_camp_npc_action;
-    end
+    // NPC camp-action dispatch handled exclusively in gamemode_handler
+    // (fires after dialog close -- avoids mid-dialog action race with
+    // the map-update tick).
 end
 
 // ============================================================
@@ -983,22 +900,34 @@ procedure refresh_lighter_flags begin
 end
 
 // ============================================================
-// NPC -> outdoorsman action dispatcher (via GVAR_CAMP_NPC_ACTION).
+// NPC -> outdoorsman action dispatcher (via sfall global "CAMP").
 // ============================================================
 procedure handle_camp_npc_action begin
     variable action;
-    action := global_var(GVAR_CAMP_NPC_ACTION);
-    set_global_var(GVAR_CAMP_NPC_ACTION, 0);   // consume trigger
+    action := get_sfall_global_int("CAMP");
+    set_sfall_global("CAMP", 0);   // consume trigger
     LOG("npc_action", "code", action);
 
     if (action == 1) then begin      // MAKE CAMP
-        if (is_wilderness and not(map_has_campfire) and not(combat_is_initialized)) then begin
+        if not(is_wilderness) then begin
+            display_msg("Can't make camp here -- need wilderness.");
+        end
+        else if (map_has_campfire) then begin
+            display_msg("Camp already set up here.");
+        end
+        else if (combat_is_initialized) then begin
+            display_msg("Can't make camp during combat.");
+        end
+        else begin
             call create_campfire_adjacent;
             play_sfx("FLAMETHR");
         end
     end
     else if (action == 2) then begin  // PACK UP CAMP
-        if (map_has_campfire) then begin
+        if not(map_has_campfire) then begin
+            display_msg("No camp here to pack.");
+        end
+        else begin
             call handle_shovel_on_firepit;
         end
     end

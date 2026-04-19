@@ -1,0 +1,164 @@
+================================================================================
+ FID MAPPING -- ARCHITECTURE DECISION NEEDED  (2026-04-19)
+================================================================================
+
+ PROBLEM: jeden armor dostaje ten sam target FID dla WIELU rodzin.
+ Np. combat armor dla wszystkich kobiet = idx 3 (HFCMBT).
+ Theresa (NFP_PUNK) + Officer (HF_WHITE) zakladaja combat -> oba FID=3.
+ Po zdjeciu combat: NIE WIADOMO ktora byla w ktorej rodzinie.
+
+ PRZYCZYNA: Fallout nie ma wystarczajacych artwork. Niektore rodziny
+ nie maja dedicated combat/robe/power sprite -- wiec wszystkie female
+ mapuja na shared idx 3 (HFCMBT).
+
+
+================================================================================
+ OPCJA A -- STATIC MAP, no state  (Borys preferred?)
+================================================================================
+
+                   STATIC DATA
+   +-----------------------------------------------+
+   |  fid_to_set:                                  |
+   |    HMJMPS(11) -> HM_WHITE                     |
+   |    HMLTHR(12) -> HM_WHITE (armored variant)   |
+   |    HMMAXX(13) -> HM_WHITE                     |
+   |    HMBJMP(8)  -> HM_BLACK                     |
+   |    HMBLTR(133)-> HM_BLACK                     |
+   |    NFPJMP(122)-> NFP_PUNK                     |
+   |    NFPGLA(92) -> NFP_PUNK                     |
+   |    NFPGMT(93) -> NFP_PUNK                     |
+   |    HFJMPS(4)  -> HF_WHITE                     |
+   |    HFMAXX(6)  -> HF_WHITE                     |
+   |    HFLTHR(5)  -> HF_WHITE                     |
+   |    HFMETL(7)  -> HF_WHITE                     |
+   |    ...                                        |
+   |    HFCMBT(3)  -> ??? SHARED, NIE W MAPIE      |
+   |    idx 105    -> ??? SHARED                   |
+   |    idx 127    -> ??? SHARED                   |
+   |    idx 144    -> ??? SHARED                   |
+   +-----------------------------------------------+
+
+ FLOW:
+   current_fid -> fid_to_set[current_fid]
+         |
+      +--+--+
+      |     |
+    FOUND  NOT_FOUND (shared)
+      |     |
+      |     v
+      |  [SKIP]  no remap -- zostaje w current sprite
+      v
+   set_armor_to_fid[set][group] -> target_fid
+      |
+      v
+   art_change_fid_num(obj, target_fid)
+
+ PROBLEM: Theresa w combat (FID=3) -> SKIP -> zdejmuje combat -> FID=3
+ NADAL, bo skip. Theresa ZOSTAJE W COMBAT SPRITE visual na zawsze po
+ pierwszym combat. Nie wraca do NFPJMP.
+
+ Rozwiazanie: uzywac TYLKO unikalnych target FIDs dla kazdej rodziny.
+ NFP_PUNK + combat -> 0 (brak), no remap. Theresa w combat zostaje w
+ NFPJMP sprite (widoczna w pixelowym body combat armor vanilla).
+
+
+================================================================================
+ OPCJA B -- STATIC MAP + SOURCE FID CACHE  (co mialam w 3.4)
+================================================================================
+
+                    STATIC DATA (fid_to_set jak wyzej)
+   +                          +
+                    PER-OBJ DATA
+   +-----------------------------------------------+
+   |  save_array "party_source_fid":               |
+   |    Theresa_obj_id -> NFPJMP (122)             |
+   |    Officer_obj_id -> HFJMPS (4)               |
+   |    Medyk_obj_id   -> HMBJMP (8)               |
+   +-----------------------------------------------+
+
+ FLOW:
+   current_fid = obj_art_fid(obj)
+         |
+         v
+   source_cache[obj_id]
+         |
+      +--+--+
+      |     |
+    EMPTY  FILLED
+      |     |
+      v     |
+   if fid_to_set(current) != NONE: |
+     source_cache[obj_id] = current (capture base, first sighting)
+     |                              |
+     v                              v
+   set_id = fid_to_set(source_cache[obj_id])
+         |
+         v
+   set_armor_to_fid[set][group] -> target_fid
+         |
+         v
+   art_change_fid_num(obj, target_fid)
+
+ Zalety:
+  - Theresa w combat (FID=3): source=NFPJMP (cached), set=NFP_PUNK,
+    armor=NONE -> target=NFPJMP. Wraca do NFPJMP po zdjeciu combat. OK.
+  - Officer w combat (FID=3): source=HFJMPS, set=HF_WHITE, armor=NONE
+    -> target=HFJMPS. Wraca do HFJMPS. OK.
+
+ Wady:
+  - save_array per-obj state ("cache jednorazowy" wg Borysa)
+  - Pierwsze sighting musi byc w base sprite (non-armored). NPC
+    spawn w armor -> nie capture -> SET_NONE skip.
+
+
+================================================================================
+ OPCJA C -- ZERO SHARED TARGETS  (wysiłek: mniejszy feature set)
+================================================================================
+
+ Dla kazdej rodziny dedykowane target FIDs. Jesli brak dedicated sprite
+ dla armor type -> brak mapping -> skip.
+
+ Np. NFP_PUNK + COMBAT -> brak (Fallout nie ma female punk combat sprite)
+      -> skip -> Theresa w combat zostaje w poprzednim NFP sprite
+         (np. NFPGLA jesli przedtem leather). Brak wizualnej zmiany.
+
+ Zalety:
+  - Zero state
+  - Zero ambiguity
+
+ Wady:
+  - Theresa w combat wyglada nadal jak w leather (bo nie ma dedicated
+    female punk combat art -- limit Fallouta)
+  - Ograniczone w porownaniu z B
+
+
+================================================================================
+ KTORA OPCJA?
+================================================================================
+
+   [A] Static map + skip for shared -> Theresa stuck w combat sprite
+       po pierwszym zalozeniu combat
+
+   [B] Static map + source cache -> dziala poprawnie, per-obj state
+       w save_array (Borys: "cache jednorazowy" vs "prawdziwy cache")
+
+   [C] Zero shared targets -> Theresa w combat zostaje w leather sprite
+       (brak wizualnej zmiany dla combat jej)
+
+
+================================================================================
+ REKOMENDACJA
+================================================================================
+
+ Opcja B -- jedyna ktora daje POPRAWNY visual dla kazdego NPC przy
+ kazdym armor change. Per-obj cache to NIE "jednorazowy cache set_id"
+ (tamten psul Therese bo set_id pochodna). To "source FID cache" --
+ kapturuje BAZĘ (niemutowalna po capture).
+
+ Jesli Borys odrzuca cache w ogole -> opcja A lub C, ale NPCzy tracą
+ identity po shared armor.
+
+
+================================================================================
+ EOF
+================================================================================
