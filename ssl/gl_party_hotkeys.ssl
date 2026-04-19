@@ -2,9 +2,9 @@
     Party Hotkeys + FID Browser -- fo1-et-tu-megamod
 
     HOTKEYS:
-      J (36) -- toggle GVAR_PARTY_NO_FOLLOW (party hold/follow)
-      F (33) -- FID BROWSER: cycle forward (next sprite) on nearest party
-      N (49) -- FID BROWSER: cycle backward (prev sprite) on nearest party
+      F (33) -- toggle GVAR_PARTY_NO_FOLLOW (party hold/follow)
+      [ (26) -- FID BROWSER: cycle backward (prev sprite) on nearest party
+      ] (27) -- FID BROWSER: cycle forward  (next sprite) on nearest party
 
     FID Browser:
       Selects the nearest TEAM_PLAYER critter (not dude). Applies art_change
@@ -56,22 +56,22 @@ procedure keypress_handler begin
     if ((get_game_mode bwand (DIALOG bwor INVENTORY bwor CHARSCREEN
         bwor PIPBOY bwor ESCMENU bwor SAVEGAME bwor LOADGAME)) != 0) then return;
 
-    // J (36) -- party hold/follow toggle
-    if (key == 36) then begin
+    // F (33) -- party hold/follow toggle
+    if (key == 33) then begin
         current := global_var(GVAR_PARTY_NO_FOLLOW);
         if (current) then set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
         else set_global_var(GVAR_PARTY_NO_FOLLOW, 1);
         return;
     end
 
-    // F (33) -- FID browser cycle forward
-    if (key == 33) then begin
+    // ] (27) -- FID browser cycle forward
+    if (key == 27) then begin
         call cycle_fid(1);
         return;
     end
 
-    // N (49) -- FID browser cycle backward
-    if (key == 49) then begin
+    // [ (26) -- FID browser cycle backward
+    if (key == 26) then begin
         call cycle_fid(-1);
         return;
     end
