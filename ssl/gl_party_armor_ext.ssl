@@ -432,7 +432,6 @@ procedure set_armor_to_fid(variable set_id, variable group) begin
         if (group == ARM_COMBAT_DARK) then return 16777343; // HFCMBL (127)
         if (group == ARM_BROTHERHOOD) then return 16777343; // HFCMBL (127)
         if (group == ARM_POWER) then return 16777246;      // idx 30
-        if (group == ARM_ADV_POWER) then return 16777246;  // fallback idx 30 (no dedicated APA)
         if (group == ARM_ROBE_GREY) then return 16777321;  // HASROB (105)
         if (group == ARM_ROBE_PURPLE) then return 16777360; // idx 144
     end
