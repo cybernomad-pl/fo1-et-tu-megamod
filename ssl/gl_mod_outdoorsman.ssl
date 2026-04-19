@@ -130,11 +130,13 @@ procedure start begin
         // using save_array guard instead (persists in save file).
         call give_camping_kit;
 
-        // Enable USE action on lighter (affects NEW create_object instances).
-        // Existing lighter obj from old save may still miss USE flag on its
-        // own OBJ_DATA -- player should use hotkey L as a fallback.
+        // Enable USE action on lighter + bedrolls (scenery protos).
         set_proto_data(PID_LIGHTER, PROTO_IT_FLAGS,
             get_proto_data(PID_LIGHTER, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+        set_proto_data(PID_BED_1, PROTO_IT_FLAGS,
+            get_proto_data(PID_BED_1, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+        set_proto_data(PID_BED_2, PROTO_IT_FLAGS,
+            get_proto_data(PID_BED_2, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
         // Shovel already has USE_ON via other mods (gl_shovel.ssl)
 
         register_hook_proc(HOOK_USEOBJ, useobj_handler);
@@ -856,10 +858,30 @@ end
 // MAP UPDATE (sfall auto-called) -- flicker throttle
 // ============================================================
 procedure map_update_p_proc begin
+    variable crackle_sfx;
+    variable roll;
+
     flicker_counter := flicker_counter + 1;
     // Throttle: flicker every ~3rd tick (subtle, not strobing).
     if ((flicker_counter % 3) == 0) then begin
         call flicker_campfire;
+    end
+
+    // Fire crackling ambient: every ~100 ticks (~10 sec) if camp active,
+    // play a random MAFIRE* short sfx. Adds ambient life to the camp.
+    if ((flicker_counter % 100) == 0 and map_has_campfire) then begin
+        roll := random(0, 9);
+        if (roll == 0) then crackle_sfx := "MAFIREAA";
+        else if (roll == 1) then crackle_sfx := "MAFIREAN";
+        else if (roll == 2) then crackle_sfx := "MAFIREAO";
+        else if (roll == 3) then crackle_sfx := "MAFIREBA";
+        else if (roll == 4) then crackle_sfx := "MAFIREBF";
+        else if (roll == 5) then crackle_sfx := "MAFIREBL";
+        else if (roll == 6) then crackle_sfx := "MAFIRECH";
+        else if (roll == 7) then crackle_sfx := "MAFIREZA";
+        else if (roll == 8) then crackle_sfx := "MAFIREZQ";
+        else crackle_sfx := "MAFIREZR";
+        play_sfx(crackle_sfx);
     end
 end
 
