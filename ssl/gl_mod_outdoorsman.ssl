@@ -1273,6 +1273,17 @@ procedure action_any_ideas begin
         made := made + 1;
     end
 
+    // MOLOTOV COCKTAIL (booze + lighter). Lighter NOT consumed -- just
+    // used to ignite the booze-soaked rag.
+    if (party_has_pid(125) and party_has_pid(101)) then begin
+        call party_consume_pid(125);   // consume booze only
+        item := create_object(159, 0, 0);
+        if (item != 0) then add_obj_to_inven(dude_obj, item);
+        display_msg("You soak a rag in booze and ignite it -- Molotov cocktail.");
+        give_exp_points(25);
+        made := made + 1;
+    end
+
     // ANTIDOTE (scorpion tail + booze) -- requires high SCIENCE in party.
     // Threshold 80% for reliable craft. Roll vs highest party SCIENCE.
     if (party_has_pid(92) and party_has_pid(125)) then begin
