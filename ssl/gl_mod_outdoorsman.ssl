@@ -185,6 +185,22 @@ procedure keypress_handler begin
         return;
     end
 
+    // DIK_X (45) = quick exit to worldmap (encounter only, no combat)
+    if (key == 45) then begin
+        if (combat_is_initialized) then begin
+            display_msg("Can't exit during combat.");
+            return;
+        end
+        if not(map_is_encounter) then begin
+            display_msg("Use an exit grid to leave this map.");
+            return;
+        end
+        // EXPERIMENTAL: load_map(-1) -- may trigger worldmap transition
+        // or crash. Fallback: player must walk to edge.
+        load_map(-1, 0);
+        return;
+    end
+
     // DIK_L (38) = lighter toggle (fallback when USE action on lighter fails)
     if (key == 38) then begin
         LOG("key", "L_invoked", 1);
