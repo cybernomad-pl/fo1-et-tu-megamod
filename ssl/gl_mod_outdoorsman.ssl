@@ -187,6 +187,10 @@ procedure keypress_handler begin
 
     // DIK_X (45) = quick exit to worldmap (encounter only, no combat)
     if (key == 45) then begin
+        LOG("keyX", "triggered", 1);
+        LOG("keyX", "combat", combat_is_initialized);
+        LOG("keyX", "is_encounter", map_is_encounter);
+        LOG("keyX", "cur_map", cur_map_index);
         if (combat_is_initialized) then begin
             display_msg("Can't exit during combat.");
             return;
@@ -195,9 +199,9 @@ procedure keypress_handler begin
             display_msg("Use an exit grid to leave this map.");
             return;
         end
-        // EXPERIMENTAL: load_map(-1) -- may trigger worldmap transition
-        // or crash. Fallback: player must walk to edge.
+        LOG("keyX", "calling_load_map_neg1", 1);
         load_map(-1, 0);
+        LOG("keyX", "load_map_returned", 1);
         return;
     end
 
@@ -254,7 +258,9 @@ procedure useobj_handler begin
 
     // USE on any bedroll -> rest until morning. (Tracked check removed
     // -- any PID_BED_1/BED_2 works, simpler for player.)
+    LOG("useobj", "item_pid", obj_pid(item));
     if (obj_pid(item) == PID_BED_1 or obj_pid(item) == PID_BED_2) then begin
+        LOG("useobj", "bedroll_hit", obj_pid(item));
         call handle_player_bedroll_rest;
         set_sfall_return(-1);
     end
@@ -831,7 +837,10 @@ end
 // PLAYER BEDROLL REST -- USE on player bedroll = rest until morning
 // ============================================================
 procedure handle_player_bedroll_rest begin
+    LOG("rest", "entry", 1);
+    LOG("rest", "combat", combat_is_initialized);
     if (combat_is_initialized) then begin
+        LOG("rest", "skip_combat", 1);
         display_msg("Not a good time to sleep.");
         return;
     end
