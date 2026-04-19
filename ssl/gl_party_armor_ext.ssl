@@ -146,26 +146,61 @@ end
 // ============================================================
 procedure refresh_one(variable obj) begin
     variable cur_fid;
+    variable art_idx;
     variable set_id;
     variable worn_obj;
     variable worn_pid;
+    variable worn_name;
     variable armor_group;
     variable target_fid;
+    variable section;
+    variable sid;
 
     cur_fid := obj_art_fid(obj);
+    art_idx := cur_fid bwand 4095;
     set_id := fid_to_set(cur_fid);
-    if (set_id == SET_NONE) then return;   // unknown sprite, skip
+    sid := get_script(obj);
+
+    // Full data dump -- grouped by sid for easy parsing.
+    section := "npc_" + sid;
+    LOG(section, "name",      obj_name(obj));
+    LOG(section, "pid",       obj_pid(obj));
+    LOG(section, "fid",       cur_fid);
+    LOG(section, "art_idx",   art_idx);
+    LOG(section, "set_id",    set_id);
 
     worn_obj := critter_inven_obj(obj, INVEN_TYPE_WORN);
-    if (worn_obj != 0) then worn_pid := obj_pid(worn_obj);
-    else worn_pid := 0;
+    if (worn_obj != 0) then begin
+        worn_pid  := obj_pid(worn_obj);
+        worn_name := obj_name(worn_obj);
+    end
+    else begin
+        worn_pid  := 0;
+        worn_name := "(none)";
+    end
+    LOG(section, "worn_pid",  worn_pid);
+    LOG(section, "worn_name", worn_name);
 
     armor_group := pid_to_armor_group(worn_pid);
     target_fid := set_armor_to_fid(set_id, armor_group);
-    if (target_fid == 0) then return;
+    LOG(section, "group",      armor_group);
+    LOG(section, "target_fid", target_fid);
+
+    if (set_id == SET_NONE) then begin
+        LOG(section, "result", "skip_unknown_set");
+        return;
+    end
+    if (target_fid == 0) then begin
+        LOG(section, "result", "skip_no_mapping");
+        return;
+    end
 
     if (target_fid != cur_fid) then begin
         art_change_fid_num(obj, target_fid);
+        LOG(section, "result", "applied");
+    end
+    else begin
+        LOG(section, "result", "already_ok");
     end
 end
 
