@@ -465,9 +465,8 @@ procedure handle_shovel_on_firepit begin
 
     map_key := "" + cur_map_index;
 
-    gfade_out(600);
-
-    // Sizzle of dirt smothering flames (sfall vanilla STEAM.ACM).
+    // No fade -- Borys 2026-04-19: extinguish should be instant, not
+    // a transition sequence (reduces crash risk in combat too).
     play_sfx("STEAM");
 
     // 1. Destroy tracked firepit (primary). Remember its tile so we can
@@ -480,18 +479,28 @@ procedure handle_shovel_on_firepit begin
     end
 
     // 1b. Sweep any extra PID_FIRE_PIT on the same tile (aux light stack).
+    // Two-pass: collect candidates first, destroy after list_end, to avoid
+    // modifying LIST_SCENERY during iteration (stale pointer crash risk).
     if (fire_tile > 0) then begin
+        variable to_destroy;
+        variable k;
+        to_destroy := create_array(0, 4);
         lst := list_begin(LIST_SCENERY);
         scanned := list_next(lst);
         while (scanned) do begin
             if (scanned != 0
                 and obj_pid(scanned) == PID_FIRE_PIT
                 and tile_num(scanned) == fire_tile) then begin
-                destroy_object(scanned);
+                resize_array(to_destroy, len_array(to_destroy) + 1);
+                to_destroy[len_array(to_destroy) - 1] := scanned;
             end
             scanned := list_next(lst);
         end
         list_end(lst);
+        for (k := 0; k < len_array(to_destroy); k++) begin
+            if (to_destroy[k] != 0) then destroy_object(to_destroy[k]);
+        end
+        free_array(to_destroy);
     end
 
     // 2. Wake tracked sleepers: just play stand-up anim.
@@ -529,7 +538,7 @@ procedure handle_shovel_on_firepit begin
     save_array("campfire_player_bedroll", player_bedroll_map);
 
     tile_refresh_display;
-    gfade_in(600);
+    // No fade_in -- see no gfade_out note above.
 
     display_msg("You shovel dirt onto the fire. The flames die out.");
     give_exp_points(XP_CAMPFIRE_SMOTHER);
