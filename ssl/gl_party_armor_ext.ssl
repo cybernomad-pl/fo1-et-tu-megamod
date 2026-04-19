@@ -156,28 +156,20 @@ procedure refresh_one(variable obj) begin
     variable target_fid;
     variable section;
     variable sid;
-    variable cache_arr;
-    variable obj_key;
 
     cur_fid := obj_art_fid(obj);
     art_idx := cur_fid bwand 4095;
-    set_id := fid_to_set(cur_fid);
     sid := get_script(obj);
 
-    // Cache: last known valid set_id per obj. Handles "shared" armor
-    // sprites (e.g. idx 145 = female combat used by HF_WHITE and NFP_PUNK)
-    // -- current FID alone can't distinguish owning set, so we remember
-    // the last time fid_to_set returned a valid answer.
-    cache_arr := load_array("party_set_cache");
-    if (cache_arr == 0) then cache_arr := create_array_map;
-    obj_key := "" + obj;
-    if (set_id != SET_NONE) then begin
-        cache_arr[obj_key] := set_id;
-        save_array("party_set_cache", cache_arr);
-    end
-    else begin
-        set_id := cache_arr[obj_key];   // fallback to last known
-    end
+    // PER-SCRIPT_ID mapping (primary). Each known NPC has a fixed SET
+    // regardless of current FID. Shared armor sprites (e.g. female
+    // combat idx 3) don't confuse identity this way.
+    set_id := SET_NONE;
+    if (sid == SCRIPT_MEDIC) then set_id := SET_HM_BLACK;
+    else if (sid == SCRIPT_OFFICER) then set_id := SET_HF_WHITE;
+    else if (sid == SCRIPT_THERESA) then set_id := SET_NFP_PUNK;
+    else if (sid == SCRIPT_DIANA) then set_id := SET_NFP_PUNK;
+    else if (sid == SCRIPT_GWEN) then set_id := SET_NFP_PUNK;
 
     // Full data dump -- grouped by sid for easy parsing.
     section := "npc_" + sid;
