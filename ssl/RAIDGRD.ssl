@@ -367,6 +367,11 @@ procedure CampIdeasTrigger;
 procedure PartyAmmoTrigger;
 procedure PartyFoodTrigger;
 procedure PartyWoundedTrigger;
+procedure CraftSpearTrigger;
+procedure CraftSharpSpearTrigger;
+procedure CraftHealingPowderTrigger;
+procedure CraftAntidoteTrigger;
+procedure CraftMolotovTrigger;
 // camp_has_fire_here / camp_searched_here -- provided by camp_actions.h
 procedure NodePartyMain begin
    Reply_Blank;
@@ -408,9 +413,23 @@ procedure CampSearchTrigger begin
 end
 
 procedure CampIdeasTrigger begin
-   CAMP_DO_IDEAS
+   // Dialog node: list available craft recipes as options.
+   // Each NOption fires its Craft*Trigger (runs craft inline,
+   // then calls back here to relist what's still possible).
+   Reply_Blank;
+   if (camp_party_has_pid(320) and (camp_party_has_pid(4) or camp_party_has_pid(236))) then
+      NOption("Fashion a spear from a sharpened pole and knife.", CraftSpearTrigger, 4);
+   if (camp_party_has_pid(7) and camp_party_has_pid(278)) then
+      NOption("Tip a spear with flint for a sharpened spear.", CraftSharpSpearTrigger, 4);
+   if (camp_party_has_pid(271) and camp_party_has_pid(272)) then
+      NOption("Grind broc and xander into healing powder.", CraftHealingPowderTrigger, 4);
+   if (camp_party_has_pid(92) and camp_party_has_pid(125)) then
+      NOption("Distill a scorpion tail and booze into antidote.", CraftAntidoteTrigger, 4);
+   if (camp_party_has_pid(125) and camp_party_has_pid(101)) then
+      NOption("Soak a rag in booze, flick the lighter, Molotov.", CraftMolotovTrigger, 4);
+   NOption("Back.", NodePartyMain, 4);
+   NOption("Done.", NodePartyDone, 4);
 end
-
 procedure PartyAmmoTrigger begin
    CAMP_DO_AMMO
 end
@@ -421,6 +440,31 @@ end
 
 procedure PartyWoundedTrigger begin
    CAMP_DO_WOUNDED
+end
+
+procedure CraftSpearTrigger begin
+   CAMP_CRAFT_SPEAR
+   call CampIdeasTrigger;
+end
+
+procedure CraftSharpSpearTrigger begin
+   CAMP_CRAFT_SHARP_SPEAR
+   call CampIdeasTrigger;
+end
+
+procedure CraftHealingPowderTrigger begin
+   CAMP_CRAFT_HEALING_POWDER
+   call CampIdeasTrigger;
+end
+
+procedure CraftAntidoteTrigger begin
+   CAMP_CRAFT_ANTIDOTE
+   call CampIdeasTrigger;
+end
+
+procedure CraftMolotovTrigger begin
+   CAMP_CRAFT_MOLOTOV
+   call CampIdeasTrigger;
 end
 procedure NodePartyWait begin
    display_msg(obj_name(self_obj) + " waits here.");

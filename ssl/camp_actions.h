@@ -439,6 +439,93 @@ end
     end
 
 // ============================================================
+// CRAFT SPEAR -- sharpened pole + knife -> spear. Consumes ingredients.
+// ============================================================
+#define CAMP_CRAFT_SPEAR \
+    variable cs_item; \
+    call camp_party_consume_pid(320); /* sharpened pole */ \
+    if (camp_party_has_pid(4)) then call camp_party_consume_pid(4); \
+    else call camp_party_consume_pid(236); \
+    cs_item := create_object(7, 0, 0); /* PID_SPEAR */ \
+    if (cs_item != 0) then add_obj_to_inven(dude_obj, cs_item); \
+    display_msg("You fashion a spear from a sharpened pole and knife."); \
+    give_exp_points(30);
+
+// ============================================================
+// CRAFT SHARP SPEAR -- spear + flint -> sharpened spear.
+// ============================================================
+#define CAMP_CRAFT_SHARP_SPEAR \
+    variable css_item; \
+    call camp_party_consume_pid(7);   /* spear */ \
+    call camp_party_consume_pid(278); /* flint */ \
+    css_item := create_object(280, 0, 0); /* PID_SHARPENED_SPEAR */ \
+    if (css_item != 0) then add_obj_to_inven(dude_obj, css_item); \
+    display_msg("You tip a spear with flint -- sharpened spear."); \
+    give_exp_points(40);
+
+// ============================================================
+// CRAFT HEALING POWDER -- broc flower + xander root -> healing powder.
+// ============================================================
+#define CAMP_CRAFT_HEALING_POWDER \
+    variable chp_item; \
+    call camp_party_consume_pid(271); /* broc */ \
+    call camp_party_consume_pid(272); /* xander */ \
+    chp_item := create_object(273, 0, 0); /* PID_HEALING_POWDER */ \
+    if (chp_item != 0) then add_obj_to_inven(dude_obj, chp_item); \
+    display_msg("You grind broc flower and xander root into healing powder."); \
+    give_exp_points(30);
+
+// ============================================================
+// CRAFT ANTIDOTE -- scorpion tail + booze + SCIENCE roll.
+// Uses party highest SCIENCE. Fail on low skill = ingredients NOT consumed.
+// ============================================================
+#define CAMP_CRAFT_ANTIDOTE \
+    variable ca_item; \
+    variable ca_lst; \
+    variable ca_obj; \
+    variable ca_sci; \
+    variable ca_s; \
+    variable ca_roll; \
+    ca_sci := has_skill(dude_obj, SKILL_SCIENCE); \
+    ca_lst := list_begin(LIST_CRITTERS); \
+    ca_obj := list_next(ca_lst); \
+    while (ca_obj) do begin \
+        if (ca_obj != 0 and ca_obj != dude_obj \
+            and get_team(ca_obj) == TEAM_PLAYER \
+            and not(is_critter_dead(ca_obj))) then begin \
+            ca_s := has_skill(ca_obj, SKILL_SCIENCE); \
+            if (ca_s > ca_sci) then ca_sci := ca_s; \
+        end \
+        ca_obj := list_next(ca_lst); \
+    end \
+    list_end(ca_lst); \
+    ca_roll := roll_vs_skill(dude_obj, SKILL_SCIENCE, \
+        ca_sci - has_skill(dude_obj, SKILL_SCIENCE)); \
+    if (is_success(ca_roll)) then begin \
+        call camp_party_consume_pid(92);  /* scorpion tail */ \
+        call camp_party_consume_pid(125); /* booze */ \
+        ca_item := create_object(49, 0, 0); /* PID_ANTIDOTE */ \
+        if (ca_item != 0) then add_obj_to_inven(dude_obj, ca_item); \
+        display_msg("You distill venom and booze into antidote."); \
+        give_exp_points(50); \
+    end \
+    else begin \
+        display_msg("Nobody here has the science to brew an antidote. Ingredients preserved."); \
+    end
+
+// ============================================================
+// CRAFT MOLOTOV -- booze + lighter -> molotov cocktail. Lighter kept.
+// ============================================================
+#define CAMP_CRAFT_MOLOTOV \
+    variable cm_item; \
+    call camp_party_consume_pid(125); /* booze (lighter kept) */ \
+    cm_item := create_object(159, 0, 0); /* PID_MOLOTOV_COCKTAIL */ \
+    if (cm_item != 0) then add_obj_to_inven(dude_obj, cm_item); \
+    display_msg("You soak a rag in booze and ignite it -- Molotov cocktail."); \
+    give_exp_points(25);
+
+
+// ============================================================
 // ANY IDEAS -- craft recipes from combined party inventory.
 // Primitive survival only -- no stimpaks/vanilla medicine.
 // Recipes (all consume ingredients from anyone in party):
