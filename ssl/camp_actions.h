@@ -37,13 +37,15 @@
 // because procedures are script-local.
 // ============================================================
 procedure camp_has_fire_here;
+procedure camp_active_here;
 procedure camp_searched_here;
 procedure camp_mark_searched;
 procedure camp_party_has_pid(variable pid);
 procedure camp_party_consume_pid(variable pid);
 procedure camp_grant_barter(variable obj);
 
-// Returns 1 if campfire exists on current map, 0 otherwise.
+// Returns 1 if campfire (actual fire) exists on current map, 0 otherwise.
+// Used by shovel handler and by camp_active_here check.
 procedure camp_has_fire_here begin
     variable arr;
     variable key;
@@ -51,6 +53,19 @@ procedure camp_has_fire_here begin
     arr := load_array("campfire_map");
     if (arr == 0) then return 0;
     if (arr[key] > 0) then return 1;
+    return 0;
+end
+
+// Returns 1 if any camp is set up on current map (WITH or WITHOUT fire).
+// Camp exists = bedrolls placed + party sleeping. Fire is optional (needs
+// firewood). Dialog Make/Pack gate uses THIS, not camp_has_fire_here.
+procedure camp_active_here begin
+    variable arr;
+    variable key;
+    key := "" + cur_map_index;
+    arr := load_array("camp_active_map");
+    if (arr == 0) then return 0;
+    if (arr[key] == 1) then return 1;
     return 0;
 end
 
@@ -183,6 +198,9 @@ end
     variable c_bed_map; \
     variable c_sl_map; \
     variable c_pb_map; \
+    variable c_am_map; \
+    variable c_has_firewood; \
+    variable c_center_tile; \
     if (not(map_is_encounter)) then begin \
         display_msg("Can't make camp here -- need wilderness."); \
     end \
@@ -191,37 +209,44 @@ end
     end \
     else begin \
         c_player_tile := tile_num(dude_obj); \
-        c_fire_tile := tile_num_in_direction(c_player_tile, 0, 1); \
         gfade_out(600); \
         game_time_advance(600); \
-        c_fire := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); /* PID_FIRE_PIT */ \
-        if (c_fire == 0) then begin \
-            for (c_dir := 1; c_dir < 6; c_dir++) begin \
-                c_fire_tile := tile_num_in_direction(c_player_tile, c_dir, 1); \
-                c_fire := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); \
-                if (c_fire != 0) then break; \
+        /* FIRE is OPTIONAL: needs firewood. No firewood = cold camp. */ \
+        c_fire := 0; \
+        c_fire_tile := tile_num_in_direction(c_player_tile, 0, 1); \
+        c_has_firewood := camp_party_has_pid(286); \
+        if (c_has_firewood) then begin \
+            call camp_party_consume_pid(286); \
+            c_fire := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); \
+            if (c_fire == 0) then begin \
+                for (c_dir := 1; c_dir < 6; c_dir++) begin \
+                    c_fire_tile := tile_num_in_direction(c_player_tile, c_dir, 1); \
+                    c_fire := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); \
+                    if (c_fire != 0) then break; \
+                end \
             end \
         end \
-        if (c_fire == 0) then begin \
-            gfade_in(600); \
-            display_msg("No room to make a fire here."); \
-        end \
-        else begin \
-            set_object_data(c_fire, OBJ_DATA_LIGHT_DISTANCE, 8); \
-            set_object_data(c_fire, OBJ_DATA_LIGHT_INTENSITY, 65536); \
-            c_fire2 := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); \
-            if (c_fire2 != 0) then begin \
-                set_object_data(c_fire2, OBJ_DATA_LIGHT_DISTANCE, 8); \
-                set_object_data(c_fire2, OBJ_DATA_LIGHT_INTENSITY, 65536); \
+        /* Bedrolls ring center: fire tile if fire, else player tile. */ \
+        if (c_fire != 0) then c_center_tile := c_fire_tile; \
+        else c_center_tile := c_player_tile; \
+        begin \
+            if (c_fire != 0) then begin \
+                set_object_data(c_fire, OBJ_DATA_LIGHT_DISTANCE, 8); \
+                set_object_data(c_fire, OBJ_DATA_LIGHT_INTENSITY, 65536); \
+                c_fire2 := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); \
+                if (c_fire2 != 0) then begin \
+                    set_object_data(c_fire2, OBJ_DATA_LIGHT_DISTANCE, 8); \
+                    set_object_data(c_fire2, OBJ_DATA_LIGHT_INTENSITY, 65536); \
+                end \
             end \
             c_bedrolls_arr := create_array(0, 4); \
             c_sleepers_arr := create_array(0, 4); \
             c_had_sleeper := 0; \
-            /* Player bedroll: try PID_BED_2 (distinct sprite), then BED_1, */ \
-            /* spiralling through 6 directions if tiles are blocked. */ \
+            /* Player bedroll: try PID_BED_2 first (distinct sprite), then */ \
+            /* PID_BED_1, spiralling through 6 directions from center. */ \
             c_player_bedroll := 0; \
             for (c_dir := 0; c_dir < 6; c_dir++) begin \
-                c_player_bedroll_tile := tile_num_in_direction(c_fire_tile, c_dir, 5); \
+                c_player_bedroll_tile := tile_num_in_direction(c_center_tile, c_dir, 5); \
                 c_player_bedroll := create_object(CAMP_PID_BED_2, c_player_bedroll_tile, dude_elevation); \
                 if (c_player_bedroll == 0) then \
                     c_player_bedroll := create_object(CAMP_PID_BED_1, c_player_bedroll_tile, dude_elevation); \
@@ -245,8 +270,8 @@ end
                     c_slot := c_idx; \
                     c_ring := c_slot / 6; \
                     c_dir_idx := c_slot % 6; \
-                    c_bedroll_tile := tile_num_in_direction(c_fire_tile, c_dir_idx, 5 + c_ring * 3); \
-                    c_bedroll := create_object(CAMP_PID_BED_1, c_bedroll_tile, dude_elevation); /* PID_BED_1 */ \
+                    c_bedroll_tile := tile_num_in_direction(c_center_tile, c_dir_idx, 5 + c_ring * 3); \
+                    c_bedroll := create_object(CAMP_PID_BED_1, c_bedroll_tile, dude_elevation); \
                     if (c_bedroll != 0) then begin \
                         resize_array(c_bedrolls_arr, len_array(c_bedrolls_arr) + 1); \
                         c_bedrolls_arr[len_array(c_bedrolls_arr) - 1] := c_bedroll; \
@@ -267,14 +292,22 @@ end
             tile_refresh_display; \
             gfade_in(600); \
             c_map_key := "" + cur_map_index; \
-            c_cf_map := load_array("campfire_map"); \
-            if (c_cf_map == 0) then c_cf_map := create_array_map; \
-            c_cf_map[c_map_key] := c_fire_tile; \
-            save_array("campfire_map", c_cf_map); \
-            c_fp_map := load_array("campfire_firepit_obj"); \
-            if (c_fp_map == 0) then c_fp_map := create_array_map; \
-            c_fp_map[c_map_key] := c_fire; \
-            save_array("campfire_firepit_obj", c_fp_map); \
+            /* Always mark camp active (bedrolls regardless of fire). */ \
+            c_am_map := load_array("camp_active_map"); \
+            if (c_am_map == 0) then c_am_map := create_array_map; \
+            c_am_map[c_map_key] := 1; \
+            save_array("camp_active_map", c_am_map); \
+            /* Only record fire tile/obj if we actually built a fire. */ \
+            if (c_fire != 0) then begin \
+                c_cf_map := load_array("campfire_map"); \
+                if (c_cf_map == 0) then c_cf_map := create_array_map; \
+                c_cf_map[c_map_key] := c_fire_tile; \
+                save_array("campfire_map", c_cf_map); \
+                c_fp_map := load_array("campfire_firepit_obj"); \
+                if (c_fp_map == 0) then c_fp_map := create_array_map; \
+                c_fp_map[c_map_key] := c_fire; \
+                save_array("campfire_firepit_obj", c_fp_map); \
+            end \
             c_bed_map := load_array("campfire_bedrolls"); \
             if (c_bed_map == 0) then c_bed_map := create_array_map; \
             c_bed_map[c_map_key] := c_bedrolls_arr; \
@@ -307,13 +340,17 @@ end
     variable p_obj; \
     variable p_sweep_lst; \
     variable p_sweep_obj; \
+    variable p_am_map; \
     p_map_key := "" + cur_map_index; \
-    p_cf_map := load_array("campfire_map"); \
-    if (p_cf_map == 0 or p_cf_map[p_map_key] == 0) then begin \
+    /* Gate on camp_active_map (camp may be fireless). */ \
+    p_am_map := load_array("camp_active_map"); \
+    if (p_am_map == 0 or p_am_map[p_map_key] != 1) then begin \
         display_msg("No camp here to pack."); \
     end \
     else begin \
         gfade_out(300); \
+        /* Firepit cleanup (only if camp HAD fire). */ \
+        p_cf_map := load_array("campfire_map"); \
         p_fp_map := load_array("campfire_firepit_obj"); \
         if (p_fp_map != 0) then begin \
             p_fire := p_fp_map[p_map_key]; \
@@ -372,121 +409,46 @@ end
             p_pb_map[p_map_key] := 0; \
             save_array("campfire_player_bedroll", p_pb_map); \
         end \
-        p_cf_map[p_map_key] := 0; \
-        save_array("campfire_map", p_cf_map); \
+        if (p_cf_map != 0) then begin \
+            p_cf_map[p_map_key] := 0; \
+            save_array("campfire_map", p_cf_map); \
+        end \
+        p_am_map[p_map_key] := 0; \
+        save_array("camp_active_map", p_am_map); \
         set_global_var(398, 0); /* GVAR_PARTY_NO_FOLLOW */ \
         tile_refresh_display; \
         gfade_in(300); \
-        display_msg("You shovel dirt onto the fire. The flames die out. Camp packed."); \
+        display_msg("Camp packed. The party moves on."); \
         give_exp_points(10); \
     end
 
 // ============================================================
-// SEARCH AREA -- merged firewood + hunt + search-loot.
-// Outdoorsman skill check (party highest). ONE attempt per map.
-// On success: 2 items from merged pool + XP. Failure: nothing + mark used.
-// Pool: firewood/iguana/rock/flint/spore spike/broc/xander/flower/sharpened pole.
+// SEARCH AREA -- TEST MODE (Borys 2026-04-21): no skill check,
+// always returns 2x of each of 9 items. 18 items total. ONE per map.
+// Reason: Borys has no inventory to test crafts -- seed all ingredients.
+// NOTE: skill-based logic will return in future phase.
 // ============================================================
 #define CAMP_DO_SEARCH \
-    variable s_lst; \
-    variable s_obj; \
-    variable s_sk; \
-    variable s_highest; \
-    variable s_roll; \
-    variable s_pick; \
     variable s_item; \
-    variable s_drops; \
-    variable s_d; \
-    variable s_xp; \
-    variable s_n_firewood; \
-    variable s_n_iguana; \
-    variable s_n_rock; \
-    variable s_n_flint; \
-    variable s_n_spore; \
-    variable s_n_broc; \
-    variable s_n_xander; \
-    variable s_n_flower; \
-    variable s_n_pole; \
-    variable s_report; \
-    variable s_first; \
+    variable s_pass; \
     if (camp_searched_here) then begin \
         display_msg("You've already picked this area clean."); \
     end \
     else begin \
         call camp_mark_searched; \
-        s_highest := has_skill(dude_obj, SKILL_OUTDOORSMAN); \
-        s_lst := list_begin(LIST_CRITTERS); \
-        s_obj := list_next(s_lst); \
-        while (s_obj) do begin \
-            if (s_obj != 0 and s_obj != dude_obj \
-                and get_team(s_obj) == TEAM_PLAYER \
-                and not(is_critter_dead(s_obj))) then begin \
-                s_sk := has_skill(s_obj, SKILL_OUTDOORSMAN); \
-                if (s_sk > s_highest) then s_highest := s_sk; \
-            end \
-            s_obj := list_next(s_lst); \
+        for (s_pass := 0; s_pass < 2; s_pass++) begin \
+            s_item := create_object(286, 0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
+            s_item := create_object(81,  0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
+            s_item := create_object(19,  0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
+            s_item := create_object(278, 0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
+            s_item := create_object(365, 0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
+            s_item := create_object(271, 0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
+            s_item := create_object(272, 0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
+            s_item := create_object(117, 0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
+            s_item := create_object(320, 0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
         end \
-        list_end(s_lst); \
-        s_roll := roll_vs_skill(dude_obj, SKILL_OUTDOORSMAN, \
-            s_highest - has_skill(dude_obj, SKILL_OUTDOORSMAN)); \
-        if (not(is_success(s_roll))) then begin \
-            display_msg("You comb the area but find nothing useful."); \
-        end \
-        else begin \
-            /* 6-10 drops per Borys, aggregated by PID in final report. */ \
-            s_drops := 6 + random(0, 4); \
-            s_xp := 0; \
-            s_n_firewood := 0; s_n_iguana := 0; s_n_rock := 0; \
-            s_n_flint := 0; s_n_spore := 0; s_n_broc := 0; \
-            s_n_xander := 0; s_n_flower := 0; s_n_pole := 0; \
-            for (s_d := 0; s_d < s_drops; s_d++) begin \
-                s_pick := random(0, 8); \
-                if      (s_pick == 0) then s_item := create_object(286, 0, 0); \
-                else if (s_pick == 1) then s_item := create_object(81, 0, 0); \
-                else if (s_pick == 2) then s_item := create_object(19, 0, 0); \
-                else if (s_pick == 3) then s_item := create_object(278, 0, 0); \
-                else if (s_pick == 4) then s_item := create_object(365, 0, 0); \
-                else if (s_pick == 5) then s_item := create_object(271, 0, 0); \
-                else if (s_pick == 6) then s_item := create_object(272, 0, 0); \
-                else if (s_pick == 7) then s_item := create_object(117, 0, 0); \
-                else                       s_item := create_object(320, 0, 0); \
-                /* Only count + credit XP if the object materialised AND */ \
-                /* got added to inventory. No phantom entries in report. */ \
-                if (s_item != 0) then begin \
-                    add_obj_to_inven(dude_obj, s_item); \
-                    if      (s_pick == 0) then s_n_firewood := s_n_firewood + 1; \
-                    else if (s_pick == 1) then s_n_iguana   := s_n_iguana + 1; \
-                    else if (s_pick == 2) then s_n_rock     := s_n_rock + 1; \
-                    else if (s_pick == 3) then s_n_flint    := s_n_flint + 1; \
-                    else if (s_pick == 4) then s_n_spore    := s_n_spore + 1; \
-                    else if (s_pick == 5) then s_n_broc     := s_n_broc + 1; \
-                    else if (s_pick == 6) then s_n_xander   := s_n_xander + 1; \
-                    else if (s_pick == 7) then s_n_flower   := s_n_flower + 1; \
-                    else                       s_n_pole     := s_n_pole + 1; \
-                    s_xp := s_xp + 25; \
-                end \
-            end \
-            /* Build summary "2x firewood, 3x rock, 1x iguana" style. */ \
-            /* Leading "" forces SSL string-concat coercion for int values. */ \
-            s_report := ""; \
-            s_first := 1; \
-            if (s_n_firewood > 0) then begin s_report := "" + s_n_firewood + "x firewood"; s_first := 0; end \
-            if (s_n_iguana > 0)   then begin if (s_first) then s_report := "" + s_n_iguana + "x iguana on a stick"; else s_report := s_report + ", " + s_n_iguana + "x iguana on a stick"; s_first := 0; end \
-            if (s_n_rock > 0)     then begin if (s_first) then s_report := "" + s_n_rock + "x rock"; else s_report := s_report + ", " + s_n_rock + "x rock"; s_first := 0; end \
-            if (s_n_flint > 0)    then begin if (s_first) then s_report := "" + s_n_flint + "x flint"; else s_report := s_report + ", " + s_n_flint + "x flint"; s_first := 0; end \
-            if (s_n_spore > 0)    then begin if (s_first) then s_report := "" + s_n_spore + "x spore spike"; else s_report := s_report + ", " + s_n_spore + "x spore spike"; s_first := 0; end \
-            if (s_n_broc > 0)     then begin if (s_first) then s_report := "" + s_n_broc + "x broc flower"; else s_report := s_report + ", " + s_n_broc + "x broc flower"; s_first := 0; end \
-            if (s_n_xander > 0)   then begin if (s_first) then s_report := "" + s_n_xander + "x xander root"; else s_report := s_report + ", " + s_n_xander + "x xander root"; s_first := 0; end \
-            if (s_n_flower > 0)   then begin if (s_first) then s_report := "" + s_n_flower + "x flower"; else s_report := s_report + ", " + s_n_flower + "x flower"; s_first := 0; end \
-            if (s_n_pole > 0)     then begin if (s_first) then s_report := "" + s_n_pole + "x sharpened pole"; else s_report := s_report + ", " + s_n_pole + "x sharpened pole"; end \
-            if (s_report == "") then begin \
-                display_msg("The party comes back empty-handed -- nothing took shape out there."); \
-            end \
-            else begin \
-                display_msg("The party brings back: " + s_report + "."); \
-            end \
-            give_exp_points(s_xp); \
-        end \
+        give_exp_points(100); \
+        display_msg("The party scatters and returns with: 2x firewood, 2x iguana on a stick, 2x rock, 2x flint, 2x spore spike, 2x broc flower, 2x xander root, 2x flower, 2x sharpened pole."); \
     end
 
 // ============================================================
@@ -808,38 +770,40 @@ end
 // per healing powder, +20 per stimpak. Iterates until no more HP
 // missing or no more heal items.
 // ============================================================
+// ============================================================
+// WOUNDED CHECK -- status inspect only. NO healing, NO HP numbers.
+// Fuzzy descriptors like Fallout's look_at status: perfect / scratched /
+// hurting / near death. Report delivered as DIALOG REPLY (not float
+// display_msg) so it feels like asking the NPC for a sitrep.
+// ============================================================
+// Helper macro: map ratio int (current*100/max) to fuzzy text.
+// Output var must be named status_var.
+#define CAMP_WOUND_STATUS(ratio_var, status_var) \
+    if      (ratio_var >= 85) then status_var := "in good shape"; \
+    else if (ratio_var >= 60) then status_var := "a little roughed up"; \
+    else if (ratio_var >= 35) then status_var := "hurting pretty bad"; \
+    else if (ratio_var >= 10) then status_var := "bleeding heavily"; \
+    else                      status_var := "barely conscious";
+
 #define CAMP_DO_WOUNDED \
     variable w_lst; \
     variable w_obj; \
     variable w_cur; \
     variable w_max; \
-    variable w_wounded; \
-    variable w_healed; \
-    variable w_name; \
-    variable w_missing; \
+    variable w_ratio; \
+    variable w_status; \
     variable w_report; \
-    w_wounded := 0; \
-    w_healed := 0; \
+    variable w_first; \
     w_report := ""; \
+    w_first := 1; \
     /* dude */ \
     w_cur := get_critter_stat(dude_obj, STAT_current_hp); \
     w_max := get_critter_stat(dude_obj, STAT_max_hp); \
     if (w_cur < w_max) then begin \
-        w_missing := w_max - w_cur; \
-        w_report := w_report + "You: " + w_cur + "/" + w_max + ". "; \
-        w_wounded := w_wounded + 1; \
-        while (w_cur < w_max and (camp_party_has_pid(273) or camp_party_has_pid(40))) do begin \
-            if (camp_party_has_pid(273)) then begin \
-                call camp_party_consume_pid(273); \
-                critter_heal(dude_obj, 30); \
-            end \
-            else begin \
-                call camp_party_consume_pid(40); \
-                critter_heal(dude_obj, 20); \
-            end \
-            w_healed := w_healed + 1; \
-            w_cur := get_critter_stat(dude_obj, STAT_current_hp); \
-        end \
+        w_ratio := (w_cur * 100) / w_max; \
+        CAMP_WOUND_STATUS(w_ratio, w_status) \
+        w_report := "You: " + w_status; \
+        w_first := 0; \
     end \
     /* party NPCs */ \
     w_lst := list_begin(LIST_CRITTERS); \
@@ -851,29 +815,24 @@ end
             w_cur := get_critter_stat(w_obj, STAT_current_hp); \
             w_max := get_critter_stat(w_obj, STAT_max_hp); \
             if (w_cur < w_max) then begin \
-                w_name := obj_name(w_obj); \
-                w_report := w_report + w_name + ": " + w_cur + "/" + w_max + ". "; \
-                w_wounded := w_wounded + 1; \
-                while (w_cur < w_max and (camp_party_has_pid(273) or camp_party_has_pid(40))) do begin \
-                    if (camp_party_has_pid(273)) then begin \
-                        call camp_party_consume_pid(273); \
-                        critter_heal(w_obj, 30); \
-                    end \
-                    else begin \
-                        call camp_party_consume_pid(40); \
-                        critter_heal(w_obj, 20); \
-                    end \
-                    w_healed := w_healed + 1; \
-                    w_cur := get_critter_stat(w_obj, STAT_current_hp); \
+                w_ratio := (w_cur * 100) / w_max; \
+                CAMP_WOUND_STATUS(w_ratio, w_status) \
+                if (w_first) then begin \
+                    w_report := obj_name(w_obj) + ": " + w_status; \
+                    w_first := 0; \
                 end \
+                else w_report := w_report + ". " + obj_name(w_obj) + ": " + w_status; \
             end \
         end \
         w_obj := list_next(w_lst); \
     end \
     list_end(w_lst); \
-    if (w_wounded == 0) then display_msg("Nobody's hurt -- party in good shape."); \
-    else if (w_healed == 0) then display_msg("Wounded: " + w_report + "(no healing items available)"); \
-    else display_msg("Treated " + w_healed + " wound(s). " + w_report);
+    if (w_report == "") then begin \
+        Reply("Nobody's complaining. We're all in good shape."); \
+    end \
+    else begin \
+        Reply("Here's how we're holding up. " + w_report + "."); \
+    end
 
 /* ============================================================
    NPC TEMPLATE -- NodePartyMain contextual pattern:

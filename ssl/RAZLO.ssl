@@ -851,7 +851,8 @@ procedure CraftSharpSpearTrigger;
 procedure CraftHealingPowderTrigger;
 procedure CraftAntidoteTrigger;
 procedure CraftMolotovTrigger;
-// camp_has_fire_here / camp_searched_here -- provided by camp_actions.h
+procedure NodePartyNeeds;
+// camp_active_here / camp_searched_here -- provided by camp_actions.h
 procedure NodePartyMain begin
    Reply_Blank;
    if (global_var(GVAR_PARTY_NO_FOLLOW) == 1 and local_var(13) == 0 and is_critter_prone(self_obj)) then begin
@@ -863,22 +864,27 @@ procedure NodePartyMain begin
    // Camp options -- ONLY in wilderness (random encounter maps)
    // AND contextual: Make XOR Pack, never both, never in wrong state.
    if (map_is_encounter) then begin
-      if (camp_has_fire_here) then
+      if (camp_active_here) then
          NOption("Pack up camp.", CampPackTrigger, 4);
       else
          NOption("Make camp.", CampMakeTrigger, 4);
       if not(camp_searched_here) then
          NOption("Spread out and search the area for anything useful.", CampSearchTrigger, 4);
    end
+   NOption("Anything else on your mind?", NodePartyNeeds, 4);
+   NOption("Nothing right now.", NodePartyDone, 4);
+end
+// Camp actions -- INLINE via camp_actions.h macros (vanilla pattern).
+procedure NodePartyNeeds begin
+   Reply_Blank;
    NOption("Anything on your mind?", CampIdeasTrigger, 4);
-   // Team ops -- available ANYWHERE (wilderness or town)
    NOption("Redistribute ammo.", PartyAmmoTrigger, 4);
    NOption("Eat and drink.", PartyFoodTrigger, 4);
    NOption("Who is hurt?", PartyWoundedTrigger, 4);
-   NOption("[Done]", NodePartyDone, 4);
+   NOption("Back.", NodePartyMain, 4);
+   NOption("Nothing right now.", NodePartyDone, 4);
 end
 
-// Camp actions -- INLINE via camp_actions.h macros (vanilla pattern).
 procedure CampMakeTrigger begin
    CAMP_DO_MAKE
 end
@@ -889,8 +895,8 @@ end
 
 procedure CampSearchTrigger begin
    CAMP_DO_SEARCH
+   call NodePartyMain;
 end
-
 procedure CampIdeasTrigger begin
    // Dialog node: list available craft recipes as options.
    // Each NOption fires its Craft*Trigger (runs craft inline,
@@ -906,21 +912,22 @@ procedure CampIdeasTrigger begin
       NOption("Distill a scorpion tail and booze into antidote.", CraftAntidoteTrigger, 4);
    if (camp_party_has_pid(125) and camp_party_has_pid(101)) then
       NOption("Soak a rag in booze, flick the lighter, Molotov.", CraftMolotovTrigger, 4);
-   NOption("Back.", NodePartyMain, 4);
-   NOption("Done.", NodePartyDone, 4);
+   NOption("Back.", NodePartyNeeds, 4);
+   NOption("Nothing right now.", NodePartyDone, 4);
 end
 procedure PartyAmmoTrigger begin
    CAMP_DO_AMMO
+   call NodePartyNeeds;
 end
-
 procedure PartyFoodTrigger begin
    CAMP_DO_FOOD
+   call NodePartyNeeds;
 end
-
 procedure PartyWoundedTrigger begin
    CAMP_DO_WOUNDED
+   NOption("Back.", NodePartyNeeds, 4);
+   NOption("Nothing right now.", NodePartyDone, 4);
 end
-
 procedure CraftSpearTrigger begin
    CAMP_CRAFT_SPEAR
    call CampIdeasTrigger;
