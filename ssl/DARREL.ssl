@@ -14,6 +14,7 @@
 
 #include "command.h"
 #include "modreact.h"
+#include "camp_actions.h"
 
 /* Standard Script Procedures */
 procedure start;
@@ -504,11 +505,9 @@ end
 procedure NodeCampWakeUp;
 procedure CampMakeTrigger;
 procedure CampPackTrigger;
-procedure CampHuntTrigger;
-procedure CampGatherTrigger;
 procedure CampSearchTrigger;
 procedure CampIdeasTrigger;
-
+// camp_has_fire_here / camp_searched_here -- provided by camp_actions.h
 procedure NodePartyMain begin
    Reply_Blank;
    if (global_var(GVAR_PARTY_NO_FOLLOW) == 1 and local_var(13) == 0 and is_critter_prone(self_obj)) then begin
@@ -517,40 +516,36 @@ procedure NodePartyMain begin
    NOption("Follow me.", NodePartyFollow, 4);
    NOption("Wait here.", NodePartyWait, 4);
    NOption("Holster weapon.", NodePartyHolster, 4);
-   // Camp dialog options -- always visible; dispatcher validates context.
-   NOption("Make camp.", CampMakeTrigger, 4);
-   NOption("Pack up camp.", CampPackTrigger, 4);
-   NOption("Gather firewood.", CampGatherTrigger, 4);
-   NOption("We're going hunting.", CampHuntTrigger, 4);
-   NOption("Search for something useful.", CampSearchTrigger, 4);
-   NOption("Any ideas?", CampIdeasTrigger, 4);
+   // Camp options -- ONLY in wilderness (random encounter maps)
+   // AND contextual: Make XOR Pack, never both, never in wrong state.
+   if (map_is_encounter) then begin
+      if (camp_has_fire_here) then
+         NOption("Pack up camp.", CampPackTrigger, 4);
+      else
+         NOption("Make camp.", CampMakeTrigger, 4);
+      if not(camp_searched_here) then
+         NOption("Spread out and search the area for anything useful.", CampSearchTrigger, 4);
+   end
+   NOption("Anything on your mind?", CampIdeasTrigger, 4);
    NOption("[Done]", NodePartyDone, 4);
 end
 
+// Camp actions -- INLINE via camp_actions.h macros (vanilla pattern).
 procedure CampMakeTrigger begin
-   set_sfall_global("CAMP", 1);
+   CAMP_DO_MAKE
 end
 
 procedure CampPackTrigger begin
-   set_sfall_global("CAMP", 2);
-end
-
-procedure CampHuntTrigger begin
-   set_sfall_global("CAMP", 3);
-end
-
-procedure CampGatherTrigger begin
-   set_sfall_global("CAMP", 4);
+   CAMP_DO_PACK
 end
 
 procedure CampSearchTrigger begin
-   set_sfall_global("CAMP", 5);
+   CAMP_DO_SEARCH
 end
 
 procedure CampIdeasTrigger begin
-   set_sfall_global("CAMP", 6);
+   CAMP_DO_IDEAS
 end
-
 procedure NodePartyWait begin
    display_msg(obj_name(self_obj) + " waits here.");
 end
