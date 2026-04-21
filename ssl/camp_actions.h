@@ -92,7 +92,8 @@ end
 
 // Grant BARTER (trade) flag on proto so "this critter cannot carry anything"
 // stops blocking trade. Call from NodeRecruit after party_add.
-// CFLG_BARTER = 2 (bit 1), PROTO_CR_FLAGS offset = 32.
+// Uses named constants CFLG_BARTER (=2, bit 0x02 "can trade with") and
+// PROTO_CR_FLAGS (=32, critter flags offset in proto) from sfall/define_extra.h.
 // Proto-level change (all instances of this PID get it). Sfall persists
 // proto changes across save/load.
 procedure camp_grant_barter(variable obj) begin
@@ -100,8 +101,8 @@ procedure camp_grant_barter(variable obj) begin
     variable cur_flags;
     if (obj == 0) then return;
     pid := obj_pid(obj);
-    cur_flags := get_proto_data(pid, 32);
-    set_proto_data(pid, 32, cur_flags bwor 2);
+    cur_flags := get_proto_data(pid, PROTO_CR_FLAGS);
+    set_proto_data(pid, PROTO_CR_FLAGS, cur_flags bwor CFLG_BARTER);
 end
 
 procedure camp_party_consume_pid(variable pid) begin
@@ -411,10 +412,9 @@ end
             display_msg("You comb the area but find nothing useful."); \
         end \
         else begin \
-            /* Drop count scales with outdoorsman skill: 2 + skill/50 */ \
-            /* clamp 2..6. Skill 50 -> 3, 100 -> 4, 150 -> 5, 200+ -> 6. */ \
-            s_drops := 2 + s_highest / 50; \
-            if (s_drops > 6) then s_drops := 6; \
+            /* Borys spec: 6-10 items total, independently picked from pool */ \
+            /* (duplicates allowed). random(6, 10) inclusive. */ \
+            s_drops := 6 + random(0, 4); \
             s_xp := 0; \
             display_msg("The party spreads out and combs the area."); \
             for (s_d := 0; s_d < s_drops; s_d++) begin \
@@ -524,98 +524,6 @@ end
     display_msg("You soak a rag in booze and ignite it -- Molotov cocktail."); \
     give_exp_points(25);
 
-
-// ============================================================
-// ANY IDEAS -- craft recipes from combined party inventory.
-// Primitive survival only -- no stimpaks/vanilla medicine.
-// Recipes (all consume ingredients from anyone in party):
-//   SHARPENED_POLE (320) + KNIFE (4/236) -> SPEAR (7)           [30 XP]
-//   SPEAR (7) + FLINT (278)              -> SHARP_SPEAR (280)   [40 XP]
-//   BROC (271) + XANDER (272)            -> HEALING_POWDER (273) [30 XP]
-//   FIREWOOD (286) + FLINT (278)         -> camp ignite (wilderness) [15 XP]
-//   SCORPION_TAIL (92) + BOOZE (125)     -> ANTIDOTE (49, SCIENCE check) [50 XP]
-//   BOOZE (125) + LIGHTER (101)          -> MOLOTOV (159), lighter kept  [25 XP]
-// ============================================================
-#define CAMP_DO_IDEAS \
-    variable i_made; \
-    variable i_item; \
-    variable i_sci; \
-    variable i_sci_roll; \
-    variable i_lst; \
-    variable i_obj; \
-    variable i_s; \
-    i_made := 0; \
-    /* SPEAR */ \
-    if (camp_party_has_pid(320) and (camp_party_has_pid(4) or camp_party_has_pid(236))) then begin \
-        call camp_party_consume_pid(320); \
-        if (camp_party_has_pid(4)) then call camp_party_consume_pid(4); \
-        else call camp_party_consume_pid(236); \
-        i_item := create_object(7, 0, 0); \
-        if (i_item != 0) then add_obj_to_inven(dude_obj, i_item); \
-        display_msg("You fashion a spear from a sharpened pole and knife."); \
-        give_exp_points(30); \
-        i_made := i_made + 1; \
-    end \
-    /* SHARP_SPEAR */ \
-    if (camp_party_has_pid(7) and camp_party_has_pid(278)) then begin \
-        call camp_party_consume_pid(7); \
-        call camp_party_consume_pid(278); \
-        i_item := create_object(280, 0, 0); \
-        if (i_item != 0) then add_obj_to_inven(dude_obj, i_item); \
-        display_msg("You tip a spear with flint -- sharpened spear."); \
-        give_exp_points(40); \
-        i_made := i_made + 1; \
-    end \
-    /* HEALING_POWDER */ \
-    if (camp_party_has_pid(271) and camp_party_has_pid(272)) then begin \
-        call camp_party_consume_pid(271); \
-        call camp_party_consume_pid(272); \
-        i_item := create_object(273, 0, 0); \
-        if (i_item != 0) then add_obj_to_inven(dude_obj, i_item); \
-        display_msg("You grind broc flower and xander root into healing powder."); \
-        give_exp_points(30); \
-        i_made := i_made + 1; \
-    end \
-    /* ANTIDOTE */ \
-    if (camp_party_has_pid(92) and camp_party_has_pid(125)) then begin \
-        i_sci := has_skill(dude_obj, SKILL_SCIENCE); \
-        i_lst := list_begin(LIST_CRITTERS); \
-        i_obj := list_next(i_lst); \
-        while (i_obj) do begin \
-            if (i_obj != 0 and i_obj != dude_obj \
-                and get_team(i_obj) == TEAM_PLAYER \
-                and not(is_critter_dead(i_obj))) then begin \
-                i_s := has_skill(i_obj, SKILL_SCIENCE); \
-                if (i_s > i_sci) then i_sci := i_s; \
-            end \
-            i_obj := list_next(i_lst); \
-        end \
-        list_end(i_lst); \
-        i_sci_roll := roll_vs_skill(dude_obj, SKILL_SCIENCE, \
-            i_sci - has_skill(dude_obj, SKILL_SCIENCE)); \
-        if (is_success(i_sci_roll)) then begin \
-            call camp_party_consume_pid(92); \
-            call camp_party_consume_pid(125); \
-            i_item := create_object(49, 0, 0); \
-            if (i_item != 0) then add_obj_to_inven(dude_obj, i_item); \
-            display_msg("You distill venom and booze into antidote."); \
-            give_exp_points(50); \
-            i_made := i_made + 1; \
-        end \
-        else begin \
-            display_msg("Nobody's smart enough to brew antidote from that tail."); \
-        end \
-    end \
-    /* MOLOTOV (consumes booze only, lighter kept) */ \
-    if (camp_party_has_pid(125) and camp_party_has_pid(101)) then begin \
-        call camp_party_consume_pid(125); \
-        i_item := create_object(159, 0, 0); \
-        if (i_item != 0) then add_obj_to_inven(dude_obj, i_item); \
-        display_msg("You soak a rag in booze and ignite it -- Molotov cocktail."); \
-        give_exp_points(25); \
-        i_made := i_made + 1; \
-    end \
-    if (i_made == 0) then display_msg("Nothing obvious to craft with what you've got.");
 
 // ============================================================
 // AMMO DISTRIBUTION -- reload party weapons from shared ammo pool.

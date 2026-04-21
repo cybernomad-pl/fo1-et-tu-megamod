@@ -444,27 +444,27 @@ end
 
 procedure CraftSpearTrigger begin
    CAMP_CRAFT_SPEAR
-   call CampIdeasTrigger;
+   start_dialog_at_node(CampIdeasTrigger);
 end
 
 procedure CraftSharpSpearTrigger begin
    CAMP_CRAFT_SHARP_SPEAR
-   call CampIdeasTrigger;
+   start_dialog_at_node(CampIdeasTrigger);
 end
 
 procedure CraftHealingPowderTrigger begin
    CAMP_CRAFT_HEALING_POWDER
-   call CampIdeasTrigger;
+   start_dialog_at_node(CampIdeasTrigger);
 end
 
 procedure CraftAntidoteTrigger begin
    CAMP_CRAFT_ANTIDOTE
-   call CampIdeasTrigger;
+   start_dialog_at_node(CampIdeasTrigger);
 end
 
 procedure CraftMolotovTrigger begin
    CAMP_CRAFT_MOLOTOV
-   call CampIdeasTrigger;
+   start_dialog_at_node(CampIdeasTrigger);
 end
 procedure NodePartyWait begin
    display_msg(obj_name(self_obj) + " waits here.");
