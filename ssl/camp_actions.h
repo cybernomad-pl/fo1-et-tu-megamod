@@ -429,41 +429,50 @@ end
             s_n_xander := 0; s_n_flower := 0; s_n_pole := 0; \
             for (s_d := 0; s_d < s_drops; s_d++) begin \
                 s_pick := random(0, 8); \
-                if (s_pick == 0) then begin \
-                    s_item := create_object(286, 0, 0); s_n_firewood := s_n_firewood + 1; \
-                end else if (s_pick == 1) then begin \
-                    s_item := create_object(81, 0, 0); s_n_iguana := s_n_iguana + 1; \
-                end else if (s_pick == 2) then begin \
-                    s_item := create_object(19, 0, 0); s_n_rock := s_n_rock + 1; \
-                end else if (s_pick == 3) then begin \
-                    s_item := create_object(278, 0, 0); s_n_flint := s_n_flint + 1; \
-                end else if (s_pick == 4) then begin \
-                    s_item := create_object(365, 0, 0); s_n_spore := s_n_spore + 1; \
-                end else if (s_pick == 5) then begin \
-                    s_item := create_object(271, 0, 0); s_n_broc := s_n_broc + 1; \
-                end else if (s_pick == 6) then begin \
-                    s_item := create_object(272, 0, 0); s_n_xander := s_n_xander + 1; \
-                end else if (s_pick == 7) then begin \
-                    s_item := create_object(117, 0, 0); s_n_flower := s_n_flower + 1; \
-                end else begin \
-                    s_item := create_object(320, 0, 0); s_n_pole := s_n_pole + 1; \
+                if      (s_pick == 0) then s_item := create_object(286, 0, 0); \
+                else if (s_pick == 1) then s_item := create_object(81, 0, 0); \
+                else if (s_pick == 2) then s_item := create_object(19, 0, 0); \
+                else if (s_pick == 3) then s_item := create_object(278, 0, 0); \
+                else if (s_pick == 4) then s_item := create_object(365, 0, 0); \
+                else if (s_pick == 5) then s_item := create_object(271, 0, 0); \
+                else if (s_pick == 6) then s_item := create_object(272, 0, 0); \
+                else if (s_pick == 7) then s_item := create_object(117, 0, 0); \
+                else                       s_item := create_object(320, 0, 0); \
+                /* Only count + credit XP if the object materialised AND */ \
+                /* got added to inventory. No phantom entries in report. */ \
+                if (s_item != 0) then begin \
+                    add_obj_to_inven(dude_obj, s_item); \
+                    if      (s_pick == 0) then s_n_firewood := s_n_firewood + 1; \
+                    else if (s_pick == 1) then s_n_iguana   := s_n_iguana + 1; \
+                    else if (s_pick == 2) then s_n_rock     := s_n_rock + 1; \
+                    else if (s_pick == 3) then s_n_flint    := s_n_flint + 1; \
+                    else if (s_pick == 4) then s_n_spore    := s_n_spore + 1; \
+                    else if (s_pick == 5) then s_n_broc     := s_n_broc + 1; \
+                    else if (s_pick == 6) then s_n_xander   := s_n_xander + 1; \
+                    else if (s_pick == 7) then s_n_flower   := s_n_flower + 1; \
+                    else                       s_n_pole     := s_n_pole + 1; \
+                    s_xp := s_xp + 25; \
                 end \
-                if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
-                s_xp := s_xp + 25; \
             end \
             /* Build summary "2x firewood, 3x rock, 1x iguana" style. */ \
+            /* Leading "" forces SSL string-concat coercion for int values. */ \
             s_report := ""; \
             s_first := 1; \
-            if (s_n_firewood > 0) then begin s_report := s_n_firewood + "x firewood"; s_first := 0; end \
-            if (s_n_iguana > 0)   then begin if (s_first) then s_report := s_n_iguana + "x iguana on a stick"; else s_report := s_report + ", " + s_n_iguana + "x iguana on a stick"; s_first := 0; end \
-            if (s_n_rock > 0)     then begin if (s_first) then s_report := s_n_rock + "x rock"; else s_report := s_report + ", " + s_n_rock + "x rock"; s_first := 0; end \
-            if (s_n_flint > 0)    then begin if (s_first) then s_report := s_n_flint + "x flint"; else s_report := s_report + ", " + s_n_flint + "x flint"; s_first := 0; end \
-            if (s_n_spore > 0)    then begin if (s_first) then s_report := s_n_spore + "x spore spike"; else s_report := s_report + ", " + s_n_spore + "x spore spike"; s_first := 0; end \
-            if (s_n_broc > 0)     then begin if (s_first) then s_report := s_n_broc + "x broc flower"; else s_report := s_report + ", " + s_n_broc + "x broc flower"; s_first := 0; end \
-            if (s_n_xander > 0)   then begin if (s_first) then s_report := s_n_xander + "x xander root"; else s_report := s_report + ", " + s_n_xander + "x xander root"; s_first := 0; end \
-            if (s_n_flower > 0)   then begin if (s_first) then s_report := s_n_flower + "x flower"; else s_report := s_report + ", " + s_n_flower + "x flower"; s_first := 0; end \
-            if (s_n_pole > 0)     then begin if (s_first) then s_report := s_n_pole + "x sharpened pole"; else s_report := s_report + ", " + s_n_pole + "x sharpened pole"; s_first := 0; end \
-            display_msg("The party brings back " + s_drops + " items: " + s_report + "."); \
+            if (s_n_firewood > 0) then begin s_report := "" + s_n_firewood + "x firewood"; s_first := 0; end \
+            if (s_n_iguana > 0)   then begin if (s_first) then s_report := "" + s_n_iguana + "x iguana on a stick"; else s_report := s_report + ", " + s_n_iguana + "x iguana on a stick"; s_first := 0; end \
+            if (s_n_rock > 0)     then begin if (s_first) then s_report := "" + s_n_rock + "x rock"; else s_report := s_report + ", " + s_n_rock + "x rock"; s_first := 0; end \
+            if (s_n_flint > 0)    then begin if (s_first) then s_report := "" + s_n_flint + "x flint"; else s_report := s_report + ", " + s_n_flint + "x flint"; s_first := 0; end \
+            if (s_n_spore > 0)    then begin if (s_first) then s_report := "" + s_n_spore + "x spore spike"; else s_report := s_report + ", " + s_n_spore + "x spore spike"; s_first := 0; end \
+            if (s_n_broc > 0)     then begin if (s_first) then s_report := "" + s_n_broc + "x broc flower"; else s_report := s_report + ", " + s_n_broc + "x broc flower"; s_first := 0; end \
+            if (s_n_xander > 0)   then begin if (s_first) then s_report := "" + s_n_xander + "x xander root"; else s_report := s_report + ", " + s_n_xander + "x xander root"; s_first := 0; end \
+            if (s_n_flower > 0)   then begin if (s_first) then s_report := "" + s_n_flower + "x flower"; else s_report := s_report + ", " + s_n_flower + "x flower"; s_first := 0; end \
+            if (s_n_pole > 0)     then begin if (s_first) then s_report := "" + s_n_pole + "x sharpened pole"; else s_report := s_report + ", " + s_n_pole + "x sharpened pole"; end \
+            if (s_report == "") then begin \
+                display_msg("The party comes back empty-handed -- nothing took shape out there."); \
+            end \
+            else begin \
+                display_msg("The party brings back: " + s_report + "."); \
+            end \
             give_exp_points(s_xp); \
         end \
     end
