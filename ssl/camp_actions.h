@@ -277,6 +277,8 @@ end
     variable p_sleepers; \
     variable p_i; \
     variable p_obj; \
+    variable p_sweep_lst; \
+    variable p_sweep_obj; \
     p_map_key := "" + cur_map_index; \
     p_cf_map := load_array("campfire_map"); \
     if (p_cf_map == 0 or p_cf_map[p_map_key] == 0) then begin \
@@ -291,6 +293,19 @@ end
             p_fp_map[p_map_key] := 0; \
             save_array("campfire_firepit_obj", p_fp_map); \
         end \
+        /* Sweep LIST_SCENERY for any remaining PID_FIRE_PIT on the */ \
+        /* camp tile -- MAKE stacks a second invisible firepit for 2x */ \
+        /* brightness (c_fire2), which isn't tracked in save_array. */ \
+        /* Without this sweep, Pack leaves a silent light source. */ \
+        p_sweep_lst := list_begin(LIST_SCENERY); \
+        p_sweep_obj := list_next(p_sweep_lst); \
+        while (p_sweep_obj) do begin \
+            if (p_sweep_obj != 0 and obj_pid(p_sweep_obj) == 33555044) then begin \
+                destroy_object(p_sweep_obj); \
+            end \
+            p_sweep_obj := list_next(p_sweep_lst); \
+        end \
+        list_end(p_sweep_lst); \
         p_sl_map := load_array("campfire_sleepers"); \
         if (p_sl_map != 0) then begin \
             p_sleepers := p_sl_map[p_map_key]; \
@@ -303,9 +318,11 @@ end
                         reg_anim_end(); \
                     end \
                 end \
-                free_array(p_sleepers); \
+                /* Clear map handle + save BEFORE free to avoid sfall */ \
+                /* save_array seeing a freed array reference. */ \
                 p_sl_map[p_map_key] := 0; \
                 save_array("campfire_sleepers", p_sl_map); \
+                free_array(p_sleepers); \
             end \
         end \
         p_bed_map := load_array("campfire_bedrolls"); \
@@ -316,9 +333,10 @@ end
                     p_obj := p_bedrolls[p_i]; \
                     if (p_obj != 0) then destroy_object(p_obj); \
                 end \
-                free_array(p_bedrolls); \
+                /* Clear + save BEFORE free (sfall safety). */ \
                 p_bed_map[p_map_key] := 0; \
                 save_array("campfire_bedrolls", p_bed_map); \
+                free_array(p_bedrolls); \
             end \
         end \
         p_pb_map := load_array("campfire_player_bedroll"); \

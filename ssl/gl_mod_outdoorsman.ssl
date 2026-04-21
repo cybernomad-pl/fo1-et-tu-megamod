@@ -41,15 +41,11 @@
 
 #define XP_CAMPFIRE_LIGHT    (15)
 #define XP_CAMPFIRE_SMOTHER  (10)
-#define CAMPFIRE_NEAR_RANGE  (3)
 #define RING_START_DIST      (5)   // first ring distance from fire
 #define RING_STEP            (3)   // extra distance per outer ring
 
-// Camp NPC action channel uses sfall global "CAMP" (string-keyed, not vanilla GVAR).
-// 1=make, 2=pack, 3=hunt, 4=gather, 5=search, 6=ideas.
+// NPC camp actions run INLINE via camp_actions.h macros (vanilla pattern).
 // Camp presence queried via map_has_campfire (reads campfire_map save_array).
-
-#define PID_IGUANA_ON_A_STICK (81)   // hunt reward
 
 variable lighter_lit;
 variable campfire_map;       // "<map_idx>" -> fire tile
