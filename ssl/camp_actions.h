@@ -24,6 +24,13 @@
 // needed by the CAMP_DO_MAKE / CAMP_DO_PACK macros.
 #include "sfall/define_extra.h"
 
+// Scenery PIDs (not in standard itempid.h; scenepid.h uses pid_type=2
+// encoding `0x02000000 | idx`). Named constants instead of magic
+// literals in macro bodies -- single source of truth if PIDs change.
+#define CAMP_PID_FIRE_PIT   (33555044)
+#define CAMP_PID_BED_1      (33554640)
+#define CAMP_PID_BED_2      (33554641)
+
 // ============================================================
 // Forward decls for helper procedures defined in this header.
 // Each NPC that #includes this file gets its own copy -- no collision
@@ -187,11 +194,11 @@ end
         c_fire_tile := tile_num_in_direction(c_player_tile, 0, 1); \
         gfade_out(600); \
         game_time_advance(600); \
-        c_fire := create_object(33555044, c_fire_tile, dude_elevation); /* PID_FIRE_PIT */ \
+        c_fire := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); /* PID_FIRE_PIT */ \
         if (c_fire == 0) then begin \
             for (c_dir := 1; c_dir < 6; c_dir++) begin \
                 c_fire_tile := tile_num_in_direction(c_player_tile, c_dir, 1); \
-                c_fire := create_object(33555044, c_fire_tile, dude_elevation); \
+                c_fire := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); \
                 if (c_fire != 0) then break; \
             end \
         end \
@@ -202,7 +209,7 @@ end
         else begin \
             set_object_data(c_fire, OBJ_DATA_LIGHT_DISTANCE, 8); \
             set_object_data(c_fire, OBJ_DATA_LIGHT_INTENSITY, 65536); \
-            c_fire2 := create_object(33555044, c_fire_tile, dude_elevation); \
+            c_fire2 := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); \
             if (c_fire2 != 0) then begin \
                 set_object_data(c_fire2, OBJ_DATA_LIGHT_DISTANCE, 8); \
                 set_object_data(c_fire2, OBJ_DATA_LIGHT_INTENSITY, 65536); \
@@ -210,10 +217,15 @@ end
             c_bedrolls_arr := create_array(0, 4); \
             c_sleepers_arr := create_array(0, 4); \
             c_had_sleeper := 0; \
-            c_player_bedroll_tile := tile_num_in_direction(c_fire_tile, 0, 5); \
-            c_player_bedroll := create_object(33554641, c_player_bedroll_tile, dude_elevation); /* PID_BED_2 */ \
-            if (c_player_bedroll == 0) then begin \
-                c_player_bedroll := create_object(33554640, c_player_bedroll_tile, dude_elevation); /* PID_BED_1 */ \
+            /* Player bedroll: try PID_BED_2 (distinct sprite), then BED_1, */ \
+            /* spiralling through 6 directions if tiles are blocked. */ \
+            c_player_bedroll := 0; \
+            for (c_dir := 0; c_dir < 6; c_dir++) begin \
+                c_player_bedroll_tile := tile_num_in_direction(c_fire_tile, c_dir, 5); \
+                c_player_bedroll := create_object(CAMP_PID_BED_2, c_player_bedroll_tile, dude_elevation); \
+                if (c_player_bedroll == 0) then \
+                    c_player_bedroll := create_object(CAMP_PID_BED_1, c_player_bedroll_tile, dude_elevation); \
+                if (c_player_bedroll != 0) then break; \
             end \
             if (c_player_bedroll != 0) then begin \
                 resize_array(c_bedrolls_arr, len_array(c_bedrolls_arr) + 1); \
@@ -234,7 +246,7 @@ end
                     c_ring := c_slot / 6; \
                     c_dir_idx := c_slot % 6; \
                     c_bedroll_tile := tile_num_in_direction(c_fire_tile, c_dir_idx, 5 + c_ring * 3); \
-                    c_bedroll := create_object(33554640, c_bedroll_tile, dude_elevation); /* PID_BED_1 */ \
+                    c_bedroll := create_object(CAMP_PID_BED_1, c_bedroll_tile, dude_elevation); /* PID_BED_1 */ \
                     if (c_bedroll != 0) then begin \
                         resize_array(c_bedrolls_arr, len_array(c_bedrolls_arr) + 1); \
                         c_bedrolls_arr[len_array(c_bedrolls_arr) - 1] := c_bedroll; \
@@ -316,7 +328,7 @@ end
         p_sweep_lst := list_begin(LIST_SCENERY); \
         p_sweep_obj := list_next(p_sweep_lst); \
         while (p_sweep_obj) do begin \
-            if (p_sweep_obj != 0 and obj_pid(p_sweep_obj) == 33555044) then begin \
+            if (p_sweep_obj != 0 and obj_pid(p_sweep_obj) == CAMP_PID_FIRE_PIT) then begin \
                 destroy_object(p_sweep_obj); \
             end \
             p_sweep_obj := list_next(p_sweep_lst); \

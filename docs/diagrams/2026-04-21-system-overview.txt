@@ -1,5 +1,37 @@
 ================================================================================
- FO1-ET-TU-MEGAMOD -- SYSTEM OVERVIEW  (2026-04-21)
+ FO1-ET-TU-MEGAMOD -- SYSTEM OVERVIEW  (updated 2026-04-21 post-5.13)
+================================================================================
+
+ UPDATE 2026-04-21 (phase 5.7-5.13):
+ Old cross-script dispatcher (sfall_global "CAMP" + handle_camp_npc_action)
+ REMOVED. Replaced with INLINE macro pattern (camp_actions.h) following
+ vanilla FO (ARADESH, RAZLO, MICHAEL). Each NPC Camp*/Party*/Craft*Trigger
+ expands macro body directly -- no messaging layer.
+
+ Current dialog option matrix (all 37 party NPC, identical):
+   Follow / Wait / Holster
+   IF map_is_encounter:
+     Make camp (if no fire) | Pack up camp (if fire)
+     Spread out and search  (once per map)
+   Anything on your mind?   -> dialog Node w/ per-craft NOption menu
+     Craft spear / sharp spear / healing powder / antidote / molotov
+   Redistribute ammo
+   Eat and drink
+   Who is hurt?
+   Done
+
+ Search: 6-10 items (random pick from 9-pool), drops aggregated to 1
+ display_msg "party brings back 3x firewood, 2x rock, 1x flint".
+ Craft: per-NPC dialog Node, create-then-consume (ingredients preserved
+ on fail), recursion back via `call CampIdeasTrigger`.
+ Barter: NodeRecruit -> camp_grant_barter(self_obj) sets CFLG_BARTER
+ on proto (persists across save).
+
+ Sections below describe architecture in MORE detail but specific
+ dispatcher-era callouts (sfall_global "CAMP", handle_camp_npc_action,
+ action_gather_firewood, action_hunt) are OBSOLETE. Header paragraph
+ above is authoritative for current state.
+
 ================================================================================
 
  7 active mods, all gl_*.ssl global scripts + NPC script patches (37 NPCs).
