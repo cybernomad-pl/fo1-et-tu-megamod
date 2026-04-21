@@ -431,14 +431,20 @@ end
 #define CAMP_DO_SEARCH \
     variable s_item; \
     variable s_pass; \
+    variable s_has_fire; \
     if (camp_searched_here) then begin \
         display_msg("You've already picked this area clean."); \
     end \
     else begin \
         call camp_mark_searched; \
+        /* Iguana on a stick requires a fire to cook -- gated by */ \
+        /* camp_has_fire_here (not just camp_active_here). */ \
+        s_has_fire := camp_has_fire_here; \
         for (s_pass := 0; s_pass < 2; s_pass++) begin \
             s_item := create_object(286, 0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
-            s_item := create_object(81,  0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
+            if (s_has_fire) then begin \
+                s_item := create_object(81, 0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
+            end \
             s_item := create_object(19,  0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
             s_item := create_object(278, 0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
             s_item := create_object(365, 0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
@@ -448,7 +454,12 @@ end
             s_item := create_object(320, 0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
         end \
         give_exp_points(100); \
-        display_msg("The party scatters and returns with: 2x firewood, 2x iguana on a stick, 2x rock, 2x flint, 2x spore spike, 2x broc flower, 2x xander root, 2x flower, 2x sharpened pole."); \
+        if (s_has_fire) then begin \
+            display_msg("The party scatters and returns with 2x firewood, 2x iguana on a stick, 2x rock, 2x flint, 2x spore spike, 2x broc flower, 2x xander root, 2x flower, 2x sharpened pole."); \
+        end \
+        else begin \
+            display_msg("The party scatters and returns with 2x firewood, 2x rock, 2x flint, 2x spore spike, 2x broc flower, 2x xander root, 2x flower, 2x sharpened pole. No way to cook raw meat without a fire."); \
+        end \
     end
 
 // ============================================================
@@ -794,18 +805,21 @@ end
     variable w_status; \
     variable w_report; \
     variable w_first; \
+    variable w_phrase; \
     w_report := ""; \
     w_first := 1; \
-    /* dude */ \
+    /* dude first -- perspective of self_obj (the NPC we're talking to): */ \
+    /*   dude     -> "You're <status>"                                    */ \
+    /*   self_obj -> "I'm <status>"                                       */ \
+    /*   other    -> "<Name> is <status>"                                 */ \
     w_cur := get_critter_stat(dude_obj, STAT_current_hp); \
     w_max := get_critter_stat(dude_obj, STAT_max_hp); \
     if (w_cur < w_max) then begin \
         w_ratio := (w_cur * 100) / w_max; \
         CAMP_WOUND_STATUS(w_ratio, w_status) \
-        w_report := "You: " + w_status; \
+        w_report := "You're " + w_status; \
         w_first := 0; \
     end \
-    /* party NPCs */ \
     w_lst := list_begin(LIST_CRITTERS); \
     w_obj := list_next(w_lst); \
     while (w_obj) do begin \
@@ -817,11 +831,13 @@ end
             if (w_cur < w_max) then begin \
                 w_ratio := (w_cur * 100) / w_max; \
                 CAMP_WOUND_STATUS(w_ratio, w_status) \
+                if (w_obj == self_obj) then w_phrase := "I'm " + w_status; \
+                else w_phrase := obj_name(w_obj) + " is " + w_status; \
                 if (w_first) then begin \
-                    w_report := obj_name(w_obj) + ": " + w_status; \
+                    w_report := w_phrase; \
                     w_first := 0; \
                 end \
-                else w_report := w_report + ". " + obj_name(w_obj) + ": " + w_status; \
+                else w_report := w_report + ". " + w_phrase; \
             end \
         end \
         w_obj := list_next(w_lst); \
@@ -831,7 +847,7 @@ end
         Reply("Nobody's complaining. We're all in good shape."); \
     end \
     else begin \
-        Reply("Here's how we're holding up. " + w_report + "."); \
+        Reply(w_report + "."); \
     end
 
 /* ============================================================
