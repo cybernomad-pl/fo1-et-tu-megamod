@@ -34,6 +34,7 @@ procedure camp_searched_here;
 procedure camp_mark_searched;
 procedure camp_party_has_pid(variable pid);
 procedure camp_party_consume_pid(variable pid);
+procedure camp_grant_barter(variable obj);
 
 // Returns 1 if campfire exists on current map, 0 otherwise.
 procedure camp_has_fire_here begin
@@ -87,6 +88,20 @@ procedure camp_party_has_pid(variable pid) begin
     end
     list_end(lst);
     return 0;
+end
+
+// Grant BARTER (trade) flag on proto so "this critter cannot carry anything"
+// stops blocking trade. Call from NodeRecruit after party_add.
+// CFLG_BARTER = 2 (bit 1), PROTO_CR_FLAGS offset = 32.
+// Proto-level change (all instances of this PID get it). Sfall persists
+// proto changes across save/load.
+procedure camp_grant_barter(variable obj) begin
+    variable pid;
+    variable cur_flags;
+    if (obj == 0) then return;
+    pid := obj_pid(obj);
+    cur_flags := get_proto_data(pid, 32);
+    set_proto_data(pid, 32, cur_flags bwor 2);
 end
 
 procedure camp_party_consume_pid(variable pid) begin
@@ -195,9 +210,9 @@ end
             c_sleepers_arr := create_array(0, 4); \
             c_had_sleeper := 0; \
             c_player_bedroll_tile := tile_num_in_direction(c_fire_tile, 0, 5); \
-            c_player_bedroll := create_object(269, c_player_bedroll_tile, dude_elevation); /* PID_BED_2 */ \
+            c_player_bedroll := create_object(33554641, c_player_bedroll_tile, dude_elevation); /* PID_BED_2 */ \
             if (c_player_bedroll == 0) then begin \
-                c_player_bedroll := create_object(32, c_player_bedroll_tile, dude_elevation); /* PID_BED_1 */ \
+                c_player_bedroll := create_object(33554640, c_player_bedroll_tile, dude_elevation); /* PID_BED_1 */ \
             end \
             if (c_player_bedroll != 0) then begin \
                 resize_array(c_bedrolls_arr, len_array(c_bedrolls_arr) + 1); \
@@ -218,7 +233,7 @@ end
                     c_ring := c_slot / 6; \
                     c_dir_idx := c_slot % 6; \
                     c_bedroll_tile := tile_num_in_direction(c_fire_tile, c_dir_idx, 5 + c_ring * 3); \
-                    c_bedroll := create_object(32, c_bedroll_tile, dude_elevation); /* PID_BED_1 */ \
+                    c_bedroll := create_object(33554640, c_bedroll_tile, dude_elevation); /* PID_BED_1 */ \
                     if (c_bedroll != 0) then begin \
                         resize_array(c_bedrolls_arr, len_array(c_bedrolls_arr) + 1); \
                         c_bedrolls_arr[len_array(c_bedrolls_arr) - 1] := c_bedroll; \
@@ -369,6 +384,9 @@ end
     variable s_pid; \
     variable s_name; \
     variable s_item; \
+    variable s_drops; \
+    variable s_d; \
+    variable s_xp; \
     if (camp_searched_here) then begin \
         display_msg("You've already picked this area clean."); \
     end \
@@ -393,20 +411,30 @@ end
             display_msg("You comb the area but find nothing useful."); \
         end \
         else begin \
-            s_pick := random(0, 8); \
-            if      (s_pick == 0) then begin s_pid := 286; s_name := "firewood";            end \
-            else if (s_pick == 1) then begin s_pid := 81;  s_name := "an iguana on a stick";end \
-            else if (s_pick == 2) then begin s_pid := 19;  s_name := "a rock";              end \
-            else if (s_pick == 3) then begin s_pid := 278; s_name := "a flint";             end \
-            else if (s_pick == 4) then begin s_pid := 365; s_name := "a spore spike";       end \
-            else if (s_pick == 5) then begin s_pid := 271; s_name := "a broc flower";       end \
-            else if (s_pick == 6) then begin s_pid := 272; s_name := "a xander root";       end \
-            else if (s_pick == 7) then begin s_pid := 117; s_name := "a flower";            end \
-            else                       begin s_pid := 320; s_name := "a sharpened pole";    end \
-            s_item := create_object(s_pid, 0, 0); \
-            if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
-            give_exp_points(50); \
-            display_msg("Combing the area pays off. You bring back " + s_name + " (+50 XP)."); \
+            /* Drop count scales with outdoorsman skill: 2 + skill/50 */ \
+            /* clamp 2..6. Skill 50 -> 3, 100 -> 4, 150 -> 5, 200+ -> 6. */ \
+            s_drops := 2 + s_highest / 50; \
+            if (s_drops > 6) then s_drops := 6; \
+            s_xp := 0; \
+            display_msg("The party spreads out and combs the area."); \
+            for (s_d := 0; s_d < s_drops; s_d++) begin \
+                s_pick := random(0, 8); \
+                if      (s_pick == 0) then begin s_pid := 286; s_name := "firewood";            end \
+                else if (s_pick == 1) then begin s_pid := 81;  s_name := "an iguana on a stick";end \
+                else if (s_pick == 2) then begin s_pid := 19;  s_name := "a rock";              end \
+                else if (s_pick == 3) then begin s_pid := 278; s_name := "a flint";             end \
+                else if (s_pick == 4) then begin s_pid := 365; s_name := "a spore spike";       end \
+                else if (s_pick == 5) then begin s_pid := 271; s_name := "a broc flower";       end \
+                else if (s_pick == 6) then begin s_pid := 272; s_name := "a xander root";       end \
+                else if (s_pick == 7) then begin s_pid := 117; s_name := "a flower";            end \
+                else                       begin s_pid := 320; s_name := "a sharpened pole";    end \
+                s_item := create_object(s_pid, 0, 0); \
+                if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
+                display_msg("Found " + s_name + "."); \
+                s_xp := s_xp + 25; \
+            end \
+            give_exp_points(s_xp); \
+            display_msg("You gained " + s_xp + " XP for the scavenging."); \
         end \
     end
 

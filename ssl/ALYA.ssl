@@ -294,6 +294,7 @@ procedure NodeRecruit begin
    end
    party_add(self_obj);
    set_team(self_obj, TEAM_PLAYER);
+   call camp_grant_barter(self_obj);
    display_msg(obj_name(self_obj) + " joins your party.");
 end
 
@@ -302,6 +303,9 @@ procedure CampMakeTrigger;
 procedure CampPackTrigger;
 procedure CampSearchTrigger;
 procedure CampIdeasTrigger;
+procedure PartyAmmoTrigger;
+procedure PartyFoodTrigger;
+procedure PartyWoundedTrigger;
 // camp_has_fire_here / camp_searched_here -- provided by camp_actions.h
 procedure NodePartyMain begin
    Reply_Blank;
@@ -322,6 +326,10 @@ procedure NodePartyMain begin
          NOption("Spread out and search the area for anything useful.", CampSearchTrigger, 4);
    end
    NOption("Anything on your mind?", CampIdeasTrigger, 4);
+   // Team ops -- available ANYWHERE (wilderness or town)
+   NOption("Redistribute ammo.", PartyAmmoTrigger, 4);
+   NOption("Eat and drink.", PartyFoodTrigger, 4);
+   NOption("Who is hurt?", PartyWoundedTrigger, 4);
    NOption("[Done]", NodePartyDone, 4);
 end
 
@@ -340,6 +348,18 @@ end
 
 procedure CampIdeasTrigger begin
    CAMP_DO_IDEAS
+end
+
+procedure PartyAmmoTrigger begin
+   CAMP_DO_AMMO
+end
+
+procedure PartyFoodTrigger begin
+   CAMP_DO_FOOD
+end
+
+procedure PartyWoundedTrigger begin
+   CAMP_DO_WOUNDED
 end
 procedure NodePartyWait begin
    display_msg(obj_name(self_obj) + " waits here.");
