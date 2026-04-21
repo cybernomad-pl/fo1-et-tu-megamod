@@ -1,0 +1,181 @@
+================================================================================
+ DIALOG -> ACTION ARCHITECTURE DECISION  (2026-04-20)
+================================================================================
+
+ PROBLEM:
+   3 prob attempts failed (GVAR 5020, GVAR 5016, sfall global "CAMP").
+   Dispatcher w gl_mod_outdoorsman.ssl nigdy nie widzi triggera z NPC dialog.
+
+ ROOT CAUSE DISCOVERY:
+   Vanilla FO1 NPC scripts (ARADESH, RAZLO, MICHAEL, GARL, HAROLD, IAN)
+   NIE uzywaja messaging do global scripts. Akcja z dialog jest INLINE
+   w target procedure. Zero GVAR/sfall_global channel.
+
+ RESEARCH CONFIRMED:
+   ARADESH.ssl L798-806:
+     procedure aradesh40 begin
+       item := create_object(PID_SPEAR, 0, 0);
+       add_obj_to_inven(dude_obj, item);
+     end
+     -- wywolywana z NOption(239, aradesh40, 4)
+
+   WORKBNCH.ssl: NPC script uzywa save_array/load_array w start()
+   i w dialog target proc. Cross-script state OK.
+
+
+================================================================================
+ OPCJA A -- INLINE + SHARED HEADER MACRO  (jak MICHAEL/RAZLO pattern)
+================================================================================
+
+                      +-------------------+
+                      | camp_actions.h    |  (NOWY shared header)
+                      +-------------------+
+                      | #define           |
+                      |   MAKE_CAMP_INLINE|
+                      |     ... body ...  |
+                      |   PACK_CAMP_INLINE|
+                      |   HUNT_INLINE     |
+                      |   GATHER_INLINE   |
+                      |   SEARCH_INLINE   |
+                      |   IDEAS_INLINE    |
+                      +-------------------+
+                            |
+                            | #include
+                            v
+                      +-------------------+
+                      | AGATHA.ssl        |  (37 plikow)
+                      +-------------------+
+                      | #include "camp_actions.h"
+                      |                   |
+                      | procedure         |
+                      | CampMakeTrigger   |
+                      |   begin           |
+                      |     MAKE_CAMP_INLINE;  // macro expand
+                      |   end             |
+                      +-------------------+
+
+ FLOW:
+   user click -> target proc -> macro expand -> akcja INLINE
+   Dispatch IMMEDIATE, no hook, no polling, no messaging.
+
+ PLUSES:
+   [+] Vanilla pattern -- proven by MICHAEL, RAZLO, ARADESH
+   [+] Deterministic timing -- akcja fires DOKLADNIE w dialog context
+   [+] Zero cross-script dependency
+   [+] Zero hook execution order race
+
+ MINUSES:
+   [-] Header macro ~300 linii (calosc camp logic)
+   [-] Debug harder -- macro rozwija sie w 37 miejscach
+   [-] SSL preprocessor (mcpp) ma limity line length dla macros
+
+
+================================================================================
+ OPCJA B -- save_array MESSAGING  (jak WORKBNCH cross-script)
+================================================================================
+
+                  NPC script (37 plikow)          gl_mod_outdoorsman.ssl
+                  +-------------------+           +-----------------------+
+                  | CampMakeTrigger   |           | gamemode_handler      |
+                  |   begin           |           |   arr := load_array(  |
+                  |     save_array(   | --msg---> |     "camp_action")    |
+                  |       "camp_action" |         |   if arr != 0 and     |
+                  |       [1])        |           |      arr[0] != 0 then |
+                  |   end             |           |     dispatch(arr[0])  |
+                  +-------------------+           |     save_array(       |
+                                                  |       "camp_action",  |
+                                                  |       create_array_map)|
+                                                  +-----------------------+
+
+ FLOW:
+   user click -> target proc writes save_array -> dialog closes
+   -> gamemode_handler fires -> reads save_array -> dispatch -> clear.
+
+ PLUSES:
+   [+] Logic pozostaje w outdoorsman (jeden plik, latwy debug)
+   [+] NPC triggery trywialne (2 linie: save_array)
+   [+] save_array CONFIRMED cross-script (WORKBNCH proof)
+   [+] Persistent przez save/load
+
+ MINUSES:
+   [-] Dalej messaging przez kanal -- jeden stopien oddzielenia
+   [-] save_array wolniejsze niz GVAR (negligible: milliseconds)
+   [-] Wymaga polling w hook (gamemode_handler OK, fires on dialog close)
+
+
+================================================================================
+ PORWNANIE
+================================================================================
+
+ Kryterium               | OPCJA A (inline)  | OPCJA B (save_array)
+ ------------------------|-------------------|----------------------
+ Proven in vanilla       | TAK (MICHAEL etc) | TAK (WORKBNCH)
+ Timing deterministic    | TAK (immediate)   | TAK (next gm_change)
+ Cross-script dep        | NONE              | Hook + save_array
+ Debug simplicity        | medium (macro)    | high (single file)
+ Code duplication        | 37x macro expand  | 0 (logic in 1 file)
+ NPC file patches        | 1 line per trigger| 2 lines per trigger
+ Maintenance             | edit header       | edit outdoorsman
+ Risk z SSL compiler     | macro length      | proven OK
+ Breaking debug (tracking)| harder           | easy (one file)
+
+
+================================================================================
+ REKOMENDACJA
+================================================================================
+
+ OPCJA B (save_array messaging).
+
+ UZASADNIENIE:
+   1. Logika pozostaje w jednym miejscu (gl_mod_outdoorsman.ssl) --
+      latwy debug, jedna zmiana = wszystkie NPC.
+   2. WORKBNCH.ssl dowodzi ze save_array cross-script DZIALA.
+      Poprzednie prob (GVAR 5020/5016/sfall_global "CAMP") padalo,
+      ale save_array jest proven przez vanilla mod.
+   3. NPC triggery trywialne -- 37 plikow x 2 linie (save_array call).
+   4. Debug: widac stan w save_array "camp_action" i w testing.ini
+      LOG kluczach -- jasne co sie dzieje.
+
+ OPCJA A odpada bo macro ~300 linii w shared header to koszmar do
+ utrzymania. Vanilla mody (MICHAEL/RAZLO) INLINE robia akcje < 10 linii
+ -- to tam sensowne. Dla camp (100+ linii per akcja) lepiej centralnie.
+
+
+================================================================================
+ IMPLEMENTATION PLAN -- OPCJA B
+================================================================================
+
+ STEP 1 (outdoorsman start):
+   camp_action_arr := load_array("camp_action");
+   if (camp_action_arr == 0) then begin
+       camp_action_arr := create_array;
+       save_array("camp_action", camp_action_arr);
+   end
+
+ STEP 2 (outdoorsman gamemode_handler):
+   camp_action_arr := load_array("camp_action");
+   if (camp_action_arr != 0 and len_array(camp_action_arr) > 0) then begin
+       variable action;
+       action := camp_action_arr[0];
+       // clear: overwrite with empty
+       save_array("camp_action", create_array);
+       call handle_camp_npc_action(action);
+   end
+
+ STEP 3 (37 NPC scripts, Camp*Trigger procs):
+   procedure CampMakeTrigger begin
+       variable arr;
+       arr := create_array;
+       arr[0] := 1;
+       save_array("camp_action", arr);
+   end
+   (i analogicznie 2/3/4/5/6 dla reszty)
+
+ STEP 4: Kompilacja + install.
+ STEP 5: Test w grze (wilderness map dla make_camp).
+ STEP 6: Po potwierdzeniu, cleanup pozostalosci po sfall global "CAMP".
+
+
+================================================================================
+ EOF
+================================================================================

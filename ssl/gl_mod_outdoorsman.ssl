@@ -128,6 +128,12 @@ procedure start begin
 
         last_map_idx := cur_map_index;
 
+        // Explicit init -- SSL globals default to nil on some sfall builds.
+        // last_no_follow MUST mirror current GVAR state so edge-detect
+        // (1->0) works correctly after save/load (not reset to 0).
+        flicker_counter := 0;
+        last_no_follow  := global_var(GVAR_PARTY_NO_FOLLOW);
+
         // NEW GAME only -- give LIGHTER / SHOVEL / ROPE once.
         // is_loading_game proved unreliable (2026-04-18: fired FALSE on load),
         // using save_array guard instead (persists in save file).
@@ -390,12 +396,11 @@ procedure gamemode_handler begin
                     reg_anim_end();
                 end
             end
-            // Don't free sleepers_map yet -- shovel still needs them if
-            // player re-holds then shovels. But drop the array so we
-            // don't re-trigger wake on next edge. Actually: clear it.
-            free_array(sleepers);
+            // Drop tracking first (clear save_array ref), then free.
+            // Reversed order avoids sfall save_array seeing freed handle.
             sleepers_map[map_key] := 0;
             save_array("campfire_sleepers", sleepers_map);
+            free_array(sleepers);
         end
     end
     last_no_follow := cur_nf;
@@ -425,23 +430,52 @@ procedure gamemode_handler begin
         LOG("gm", "lighter_reset_on_mapchange", 1);
     end
 
-    // Map change: drop stale sleepers tracking for abandoned camp.
-    // (bedrolls/firepit stay on disk but are no longer tracked.
-    //  party_remove was permanent -- NPCs who wake up via stand-anim
-    //  won't auto-rejoin unless player re-recruits via dialog. Abandoned
-    //  camp NPCs stay in party_remove'd state on the old map.)
+    // MAP CHANGE -- FULL STATE RESET.
+    // Any camp-related state from previous maps is stale garbage (engine
+    // respawns maps, old obj_ids no longer valid, tiles from other maps
+    // are meaningless). Blow away EVERYTHING so dialog gates on the new
+    // map see a clean slate: no Pack up camp unless player made one here.
     if (cur_map_index != last_map_idx) then begin
-        old_map_key := "" + last_map_idx;
-        old_sleepers := sleepers_map[old_map_key];
-        if (old_sleepers != 0) then begin
-            free_array(old_sleepers);
-            sleepers_map[old_map_key] := 0;
-            save_array("campfire_sleepers", sleepers_map);
-        end
+        variable tmp_empty;
+
+        lighter_lit := 0;
+
+        // in-memory resets -- free old handles BEFORE re-creating to
+        // avoid array leak per map change.
+        if (campfire_map != 0)       then free_array(campfire_map);
+        if (firepit_obj_map != 0)    then free_array(firepit_obj_map);
+        if (player_bedroll_map != 0) then free_array(player_bedroll_map);
+        if (bedroll_map != 0)        then free_array(bedroll_map);
+        if (sleepers_map != 0)       then free_array(sleepers_map);
+
+        campfire_map       := create_array_map;
+        firepit_obj_map    := create_array_map;
+        player_bedroll_map := create_array_map;
+        bedroll_map        := create_array_map;
+        sleepers_map       := create_array_map;
+
+        // persistent resets (force empty on disk)
+        save_array("campfire_map",            campfire_map);
+        save_array("campfire_firepit_obj",    firepit_obj_map);
+        save_array("campfire_player_bedroll", player_bedroll_map);
+        save_array("campfire_bedrolls",       bedroll_map);
+        save_array("campfire_sleepers",       sleepers_map);
+
+        // lighter + camp_searched: separate persistent keys, ephemeral
+        // in-memory (not tracked as script-level variables).
+        tmp_empty := create_array_map;
+        save_array("campfire_lighter", tmp_empty);
+        free_array(tmp_empty);
+        tmp_empty := create_array_map;
+        save_array("camp_searched", tmp_empty);
+        free_array(tmp_empty);
+
+        // Party follow behaviour: release hold from previous camp.
+        set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
+        last_no_follow := 0;
 
         last_map_idx := cur_map_index;
     end
-    LOG("gm", "Z_exit", cur_map_index);
 end
 
 // ============================================================
@@ -571,9 +605,9 @@ procedure handle_shovel_on_firepit begin
                 reg_anim_end();
             end
         end
-        free_array(sleepers);
         sleepers_map[map_key] := 0;
         save_array("campfire_sleepers", sleepers_map);
+        free_array(sleepers);
     end
 
     // 2b. Release no-follow -- party follows dude again.
@@ -590,9 +624,9 @@ procedure handle_shovel_on_firepit begin
             bed_obj := bedrolls_now[bi];
             if (bed_obj != 0) then destroy_object(bed_obj);
         end
-        free_array(bedrolls_now);
         bedroll_map[map_key] := 0;
         save_array("campfire_bedrolls", bedroll_map);
+        free_array(bedrolls_now);
     end
 
     // 5. Clear campfire tile + firepit obj refs (bedrolls still tracked in bedroll_map).
@@ -908,41 +942,38 @@ procedure handle_camp_npc_action begin
     set_sfall_global("CAMP", 0);   // consume trigger
     LOG("npc_action", "code", action);
 
+    // NPC dialog (NodePartyMain) is responsible for gating: Make only
+    // when no camp, Pack only when camp exists, both only in wilderness.
+    // Dispatcher executes action blindly -- if state is wrong, that's a
+    // dialog-gate bug to fix (explicit LOG + early return, no fallback).
+
     if (action == 1) then begin      // MAKE CAMP
-        if not(is_wilderness) then begin
-            display_msg("Can't make camp here -- need wilderness.");
+        if (map_has_campfire) then begin
+            LOG("npc_action", "ASSERT_fail", "MAKE_with_existing_camp");
+            return;
         end
-        else if (map_has_campfire) then begin
-            display_msg("Camp already set up here.");
-        end
-        else if (combat_is_initialized) then begin
-            display_msg("Can't make camp during combat.");
-        end
-        else begin
-            call create_campfire_adjacent;
-            play_sfx("FLAMETHR");
-        end
+        call create_campfire_adjacent;
+        play_sfx("FLAMETHR");
+        return;
     end
-    else if (action == 2) then begin  // PACK UP CAMP
+    if (action == 2) then begin      // PACK UP CAMP
         if not(map_has_campfire) then begin
-            display_msg("No camp here to pack.");
+            LOG("npc_action", "ASSERT_fail", "PACK_without_camp");
+            return;
         end
-        else begin
-            call handle_shovel_on_firepit;
-        end
+        call handle_shovel_on_firepit;
+        return;
     end
-    else if (action == 3) then begin  // WE'RE GOING HUNTING
-        call action_hunt;
-    end
-    else if (action == 4) then begin  // GATHER FIREWOOD
-        call action_gather_firewood;
-    end
-    else if (action == 5) then begin  // SEARCH FOR SOMETHING USEFUL
+    if (action == 5) then begin      // SEARCH AREA
         call action_search_useful;
+        return;
     end
-    else if (action == 6) then begin  // ANY IDEAS? (craft check)
+    if (action == 6) then begin      // ANYTHING ON YOUR MIND (craft check)
         call action_any_ideas;
+        return;
     end
+    // Unknown action code -- log explicit, do nothing.
+    LOG("npc_action", "ASSERT_fail_unknown_code", action);
 end
 
 // ============================================================

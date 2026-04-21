@@ -1,0 +1,422 @@
+================================================================================
+ FO1-ET-TU-MEGAMOD -- SYSTEM OVERVIEW  (2026-04-21)
+================================================================================
+
+ 7 active mods, all gl_*.ssl global scripts + NPC script patches (37 NPCs).
+
+ MOD FOLDER LAYOUT (install dir):
+   fo1_mod_outdoorsman/    -- camping, lighter, shovel, bedroll rest
+   fo1_mod_party_armor_ext/-- per-FID sprite remap based on armor
+   fo1_mod_legendary_gear/ -- unique items grant stat bonus
+   fo1_mod_new_start_plus/ -- starting inventory kit
+   fo1_mod_party_hotkeys/  -- F/[/]/K/L/X hotkeys, FID browser
+   fo1_big_party_mod/      -- NPC dialog patches (37 NPCs) inc. Theresa
+   fo1_base/               -- vanilla FO1 base (not ours)
+
+
+================================================================================
+ SYSTEM 1 -- CAMPING
+================================================================================
+
+ Files:  gl_mod_outdoorsman.ssl  (~1300 lines)
+         THERESA.ssl + 36 other NPC scripts (dialog patches)
+
+ HOOKS:
+   HOOK_USEOBJ         -> useobj_handler    (lighter USE / bedroll USE)
+   HOOK_USEOBJON       -> useobjon_handler  (shovel ON firepit)
+   HOOK_GAMEMODECHANGE -> gamemode_handler  (camp dispatcher + map reset)
+   HOOK_KEYPRESS       -> keypress_handler  (K rest, L lighter, X exit)
+   map_update_p_proc   -> auto-called      (campfire flicker, ~10Hz)
+
+
+ DIALOG PIPELINE (Theresa example, 36 other NPCs same pattern)
+ ------------------------------------------------------------
+
+   gracz klika NPC -> dialog tree
+                          |
+                          v
+                  NodePartyMain (NPC script)
+                          |
+                  [GATE: map_is_encounter?]
+                     |              |
+                    YES             NO
+                     |              |
+                     |       +------+------+
+                     |       | Anything on |
+                     |       | your mind?  |
+                     |       +-------------+
+                     |
+              [GATE: camp_has_fire_here?]   <-- reads save_array "campfire_map"
+                |              |
+               YES (camp)    NO (no camp)
+                |              |
+        +-------v-------+ +----v------+
+        | Pack up camp  | | Make camp |
+        +-------+-------+ +-----+-----+
+                |               |
+                v               v
+        CampPackTrigger   CampMakeTrigger
+                |               |
+        set_sfall_global   set_sfall_global
+         ("CAMP", 2)       ("CAMP", 1)
+                |               |
+                v               v
+        [dialog closes]  [dialog closes]
+                |               |
+                +-------+-------+
+                        |
+                        v
+               HOOK_GAMEMODECHANGE fires
+                        |
+                        v
+               gamemode_handler (outdoorsman)
+                        |
+               get_sfall_global_int("CAMP") != 0?
+                        |
+                       YES
+                        |
+                        v
+               handle_camp_npc_action(action)
+                        |
+              +---------+--------+---------+
+              |         |        |         |
+          action=1  action=2  action=5  action=6
+              |         |        |         |
+              v         v        v         v
+         create_camp  shovel  search    craft_recipes
+          adjacent    firepit useful    (any ideas)
+
+
+ MAKE CAMP FLOW (action_make = create_campfire_adjacent)
+ ------------------------------------------------------
+
+   1. ASSERT: map_has_campfire == 0, else LOG+return (gate should prevent)
+   2. gfade_out(600)
+   3. fire_tile = tile_num_in_direction(dude_tile, dir=0, dist=1)
+   4. fire = create_object(PID_FIRE_PIT, fire_tile, elev)
+        if fails, try dir 1..5
+        if all fail -> gfade_in, display_msg, return
+   5. set OBJ_DATA_LIGHT_DISTANCE=8, INTENSITY=65536
+      + second PID_FIRE_PIT stacked on same tile (2x brightness)
+   6. Create player bedroll (PID_BED_2 or BED_1 fallback), ring dir 0 dist 5
+   7. Iterate LIST_CRITTERS:
+        for each alive party NPC:
+          spiral slot = idx
+          ring = slot/6, dir = slot%6, dist = 5 + ring*3
+          create PID_BED_1 at that tile
+          move_to(npc, tile)
+          reg_anim(npc, ANIM_fall_back_sf)  <-- lying pose
+          track npc in sleepers_arr
+   8. Set GVAR_PARTY_NO_FOLLOW = 1 (npcs won't follow)
+   9. Save state:
+        save_array "campfire_map"       [map_idx -> fire_tile]
+        save_array "campfire_firepit_obj" [map_idx -> fire_obj_id]
+        save_array "campfire_bedrolls"   [map_idx -> bedroll list]
+        save_array "campfire_sleepers"   [map_idx -> sleeper list]
+        save_array "campfire_player_bedroll" [map_idx -> player_bed_obj]
+  10. gfade_in(600), play_sfx("FLAMETHR"), XP +15
+
+
+ PACK CAMP FLOW (handle_shovel_on_firepit)
+ -----------------------------------------
+
+   1. ASSERT: map_has_campfire == 1, else LOG+return
+   2. gfade_out(300)
+   3. destroy firepit (from firepit_obj_map)
+   4. wake all sleepers (reg_anim ANIM_back_to_standing)
+   5. clear sleepers_map[map_key] + save, then free_array
+   6. set GVAR_PARTY_NO_FOLLOW = 0
+   7. destroy all bedrolls (from bedroll_map)
+   8. clear bedroll_map[map_key] + save, then free_array
+   9. gfade_in(300), XP +10
+
+
+ SEARCH AREA FLOW (action_search_useful)
+ ---------------------------------------
+
+   1. Check camp_searched[map_idx]. If 1 -> "already picked clean", return.
+   2. Mark camp_searched[map_idx] = 1, save_array.
+   3. Find highest SKILL_OUTDOORSMAN across dude + alive party NPCs.
+   4. roll_vs_skill(dude, OUTDOORSMAN, highest - dude_skill)
+   5. Fail -> "nothing useful"
+   6. Success:
+        random 0..8 -> loot PID + name from merged pool:
+          firewood / iguana / rock / flint / spore / broc /
+          xander / flower / sharpened pole
+        create_object + add_obj_to_inven(dude), XP +50
+        display "Combing the area pays off. Found X (+50 XP)."
+
+
+ ANY IDEAS (IDEAS / CRAFT) FLOW (action_any_ideas)
+ -------------------------------------------------
+
+   Sequential recipe checks (chain-craft enabled):
+     pole+knife      -> SPEAR            [XP+30]
+     spear+flint     -> SHARP_SPEAR      [XP+40]
+     broc+xander     -> HEALING_POWDER   [XP+30]
+     firewood+flint  -> camp ignite      [XP+15, wilderness+no-camp gate]
+     booze+lighter   -> MOLOTOV          [XP+25, lighter kept]
+     scorpion+booze  -> ANTIDOTE (SCIENCE roll) [XP+50]
+
+
+ MAP CHANGE RESET (gamemode_handler)
+ -----------------------------------
+
+   if cur_map_index != last_map_idx:
+     free_array: campfire_map, firepit_obj_map, bedroll_map,
+                 sleepers_map, player_bedroll_map
+     create_array_map -> fresh empty
+     save_array (all 5 keys + camp_searched + campfire_lighter)
+     GVAR_PARTY_NO_FOLLOW := 0
+     last_no_follow := 0
+     last_map_idx := cur_map_index
+
+
+ KEYPRESS HOTKEYS (outdoorsman keypress_handler)
+ -----------------------------------------------
+
+   DIK_K (37) -> handle_player_bedroll_rest
+                  gates: wilderness, has_campfire, !combat
+                  effect: crouch anim, advance time 7h, heal dude max
+   DIK_L (38) -> lighter toggle (redundant with USE action)
+                  +create_campfire if wilderness+no_camp+no_combat
+   DIK_X (45) -> load_map(-1) - quick exit to worldmap (encounter only)
+
+ STATE: lighter_lit var, persisted in save_array "campfire_lighter"
+
+
+================================================================================
+ SYSTEM 2 -- PARTY ARMOR EXT (sprite remap per armor)
+================================================================================
+
+ File: gl_party_armor_ext.ssl (~550 lines)
+
+ Design: Borys explicit "per-FID static map" (no per-obj state).
+
+ HOOKS:
+   HOOK_GAMEMODECHANGE -> refresh_all_party (all party NPCs, EVERY fire)
+   HOOK_INVENWIELD     -> refresh_one (one NPC on armor equip/unequip)
+
+
+ REFRESH FLOW (refresh_one)
+ --------------------------
+
+   input: NPC obj
+     |
+     v
+   cur_fid := obj_art_fid(obj)
+     |
+     v
+   base_fid := fid_to_base(cur_fid)   <-- static map {cur_fid -> base}
+     |
+   +-+-----+
+   |       |
+  0        nonzero
+   |       |
+  skip    set_id := fid_to_set(base_fid)  <-- static map {base_fid -> set}
+          |
+          v
+          worn_pid := critter_inven_obj(obj, WORN).pid
+          armor_group := pid_to_armor_group(worn_pid)
+          target_fid := set_armor_to_fid(set_id, armor_group)
+          |
+          +-----+
+          |     |
+         0     nonzero
+          |     |
+         skip  art_change_fid_num(obj, target_fid)
+
+
+ SPRITE SETS (10)
+   SET_HM_WHITE  (hero male black hair + generic male NPC)
+   SET_HM_BLACK  (Medyk, Officer)
+   SET_HM_BALD   (NMBJMP)
+   SET_HM_LONG   (NMLJMP)
+   SET_IAN       (Ian-specific)
+   SET_TYCHO     (Tycho-specific)
+   SET_HF_WHITE  (hero female + generic female)
+   SET_NFP_PUNK  (Theresa, Diana, Gwen, Katja)
+   SET_NF_NICE   (black-haired female NPC + redhead redirect)
+   SET_MUTANT    (Super Mutant)
+
+ ARMOR GROUPS (11)
+   NONE / JUMPSUIT / LJ / LA / METAL / COMBAT /
+   COMBAT_DARK / BROTHERHOOD / POWER / ADV_POWER /
+   ROBE_PURPLE / ROBE_GREY
+
+
+================================================================================
+ SYSTEM 3 -- LEGENDARY GEAR (CHA bonus from items)
+================================================================================
+
+ File: gl_mod_legendary_gear.ssl (~90 lines)
+
+ Currently mapped:
+   PID_MIRROR_SHADES (433) -> +10 CHARISMA
+
+ State: save_array "legendary_state"
+   cha_active    (0/1)
+   cha_original  (CHA before bonus applied)
+
+ HOOK: HOOK_GAMEMODECHANGE -> apply_bonuses (map change only after fix)
+
+ FLOW:
+   has_shades := obj_is_carrying_obj_pid(dude, PID_MIRROR_SHADES)
+   active     := state["cha_active"]
+   cur_cha    := get_critter_stat(dude, STAT_ch)
+
+   if has_shades and NOT active:
+     state["cha_original"] := cur_cha
+     state["cha_active"] := 1
+     set_critter_stat(dude, STAT_ch, cur_cha + 10)
+   elif !has_shades and active:
+     set_critter_stat(dude, STAT_ch, state["cha_original"])
+     state["cha_active"] := 0
+
+ KNOWN ISSUE (documented): level-up while wearing -> restore regresses
+   to pre-levelup CHA. Fix requires delta-based model.
+
+
+================================================================================
+ SYSTEM 4 -- NEW START PLUS (starting kit)
+================================================================================
+
+ File: gl_mod_new_start_plus.ssl (~65 lines)
+
+ Fires: start() on first game_loaded (save_array idempotency guard)
+
+ Items granted:
+   - WATER_CHIP (main quest)
+   - ELECTRONIC_LOCKPICKS + RADIO (mod mechanics)
+   - CURED_LEATHER_ARMOR, MIRROR_SHADES, COMBAT_KNIFE (gang wear)
+   - 3x LEATHER_JACKET (for future gang members)
+
+ Idempotency: save_array "new_start_plus_given" -> flag=1 after gift.
+ Survives LOAD SAVE (is_loading_game metarule unreliable per 2026-04-18 note).
+
+
+================================================================================
+ SYSTEM 5 -- PARTY HOTKEYS
+================================================================================
+
+ File: gl_party_hotkeys.ssl (~180 lines)
+
+ HOOKS:
+   HOOK_GAMEMODECHANGE -> gamemode_handler (map change cleanup)
+   HOOK_KEYPRESS       -> keypress_handler
+
+ KEYS:
+   DIK_F (33) -> party hold/follow toggle (sets GVAR_PARTY_NO_FOLLOW)
+   DIK_[ (26) -> FID browser backward  \__ debug tool: cycle art_idx
+   DIK_] (27) -> FID browser forward   /   1..200 on nearest party NPC
+                 logs to testing.ini for each press
+                 (caveat: gl_party_armor_ext.refresh_all_party overrides
+                  on next gamemode change -- debug only)
+
+
+================================================================================
+ SYSTEM 6 -- NPC DIALOG PATCHES (37 NPCs)
+================================================================================
+
+ Files: 37x NPC script (AGATHA.ssl, OFFICER.ssl, THERESA.ssl, ...)
+
+ Currently PATCHED with contextual camp dialog: only THERESA (stable PoC).
+
+ Other 36 NPCs: STILL have old set_sfall_global("CAMP", N) + flat options
+ including Gather/Hunt (no longer supported by dispatcher). They don't
+ crash (dispatcher LOG+return for unknown codes 3,4) but dialog shows
+ dead options. Pending bulk-patch when THERESA pattern proven.
+
+ THERESA.ssl NodePartyMain (post-refactor):
+   Reply_Blank
+   [Get up and follow me.]   (if prone + GVAR_NO_FOLLOW + LVAR13=0)
+   [Follow me.]              -> NodePartyFollow
+   [Wait here.]              -> NodePartyWait
+   [Holster weapon.]         -> NodePartyHolster
+   IF map_is_encounter:
+      [Pack up camp.] / [Make camp.]   (contextual, reads save_array)
+      [Spread out and search ...]       (if not camp_searched_here)
+   [Anything on your mind?]  -> CampIdeasTrigger (craft)
+   [Done]
+
+ Helper procs in THERESA.ssl (self-contained, no cross-script dep):
+   camp_has_fire_here()   reads save_array "campfire_map"
+   camp_searched_here()   reads save_array "camp_searched"
+
+
+================================================================================
+ CROSS-MOD STATE (save_array keys)
+================================================================================
+
+ outdoorsman:
+   "campfire_lighter"        -- lit flag (global, reset on map change)
+   "campfire_map"            -- map_idx -> fire_tile
+   "campfire_firepit_obj"    -- map_idx -> firepit obj_id
+   "campfire_player_bedroll" -- map_idx -> player bedroll obj_id
+   "campfire_bedrolls"       -- map_idx -> [bedroll obj_ids]
+   "campfire_sleepers"       -- map_idx -> [npc obj_ids]
+   "camp_searched"           -- map_idx -> 1 (searched flag)
+   "outdoorsman_kit_given"   -- given=1 (idempotency)
+
+ new_start_plus:
+   "new_start_plus_given"    -- given=1 (idempotency)
+
+ legendary_gear:
+   "legendary_state"         -- cha_active, cha_original
+
+ party_hotkeys:
+   "fid_log_counter"         -- FID browser event counter
+
+ (no overlap between mods, all namespaced by prefix)
+
+
+================================================================================
+ GVARs USED
+================================================================================
+
+ GVAR_PARTY_NO_FOLLOW (398) -- vanilla, in-range. READ by THERESA/outdoorsman,
+                               WRITTEN by outdoorsman (camp) + hotkeys (F).
+
+ GVAR 5020, 5016 (camp_action channel) -- ABANDONED (out of gam range).
+ sfall_global "CAMP"       -- still used by 36 unpatched NPCs. Obsolete once
+                              full refactor to contextual inline dialog done.
+
+
+================================================================================
+ SFALL GLOBALS USED
+================================================================================
+
+ "CAMP"  -- NPC dialog -> outdoorsman dispatcher channel.
+            THERESA still writes this. Dispatcher in gamemode_handler reads.
+            Will be obsolete after full NPC refactor.
+
+
+================================================================================
+ KNOWN STABLE COMPONENTS (don't touch)
+================================================================================
+
+ * party_armor_ext FID two-step lookup (fid_to_base -> fid_to_set).
+   DO NOT add idx 34 / 144 to fid_to_set -- already handled by fid_to_base.
+
+ * legendary_gear save/restore (level-up edge known, documented).
+
+ * new_start_plus idempotency (save_array guard, tested).
+
+
+================================================================================
+ OPEN WORK (pending)
+================================================================================
+
+ 1. 36 NPCs (other than Theresa) -- patch NodePartyMain contextual pattern.
+ 2. Full inline (no sfall_global "CAMP") -- move action logic to macros in
+    camp_actions.h OR expand THERESA-style helpers in each NPC.
+ 3. Ammo / Food / Wounded team-ops -- 3 new dialog options (requires no
+    wilderness gate). Designed but not yet implemented post-rollback.
+ 4. gl_party_armor_ext.gamemode_handler -- refresh only on map change
+    (perf fix, deferred to next iteration).
+ 5. legendary_gear level-up edge -- switch to delta-based bonus.
+
+
+================================================================================
+ EOF
+================================================================================
