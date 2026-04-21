@@ -382,12 +382,21 @@ end
     variable s_highest; \
     variable s_roll; \
     variable s_pick; \
-    variable s_pid; \
-    variable s_name; \
     variable s_item; \
     variable s_drops; \
     variable s_d; \
     variable s_xp; \
+    variable s_n_firewood; \
+    variable s_n_iguana; \
+    variable s_n_rock; \
+    variable s_n_flint; \
+    variable s_n_spore; \
+    variable s_n_broc; \
+    variable s_n_xander; \
+    variable s_n_flower; \
+    variable s_n_pole; \
+    variable s_report; \
+    variable s_first; \
     if (camp_searched_here) then begin \
         display_msg("You've already picked this area clean."); \
     end \
@@ -412,68 +421,105 @@ end
             display_msg("You comb the area but find nothing useful."); \
         end \
         else begin \
-            /* Borys spec: 6-10 items total, independently picked from pool */ \
-            /* (duplicates allowed). random(6, 10) inclusive. */ \
+            /* 6-10 drops per Borys, aggregated by PID in final report. */ \
             s_drops := 6 + random(0, 4); \
             s_xp := 0; \
-            display_msg("The party spreads out and combs the area."); \
+            s_n_firewood := 0; s_n_iguana := 0; s_n_rock := 0; \
+            s_n_flint := 0; s_n_spore := 0; s_n_broc := 0; \
+            s_n_xander := 0; s_n_flower := 0; s_n_pole := 0; \
             for (s_d := 0; s_d < s_drops; s_d++) begin \
                 s_pick := random(0, 8); \
-                if      (s_pick == 0) then begin s_pid := 286; s_name := "firewood";            end \
-                else if (s_pick == 1) then begin s_pid := 81;  s_name := "an iguana on a stick";end \
-                else if (s_pick == 2) then begin s_pid := 19;  s_name := "a rock";              end \
-                else if (s_pick == 3) then begin s_pid := 278; s_name := "a flint";             end \
-                else if (s_pick == 4) then begin s_pid := 365; s_name := "a spore spike";       end \
-                else if (s_pick == 5) then begin s_pid := 271; s_name := "a broc flower";       end \
-                else if (s_pick == 6) then begin s_pid := 272; s_name := "a xander root";       end \
-                else if (s_pick == 7) then begin s_pid := 117; s_name := "a flower";            end \
-                else                       begin s_pid := 320; s_name := "a sharpened pole";    end \
-                s_item := create_object(s_pid, 0, 0); \
+                if (s_pick == 0) then begin \
+                    s_item := create_object(286, 0, 0); s_n_firewood := s_n_firewood + 1; \
+                end else if (s_pick == 1) then begin \
+                    s_item := create_object(81, 0, 0); s_n_iguana := s_n_iguana + 1; \
+                end else if (s_pick == 2) then begin \
+                    s_item := create_object(19, 0, 0); s_n_rock := s_n_rock + 1; \
+                end else if (s_pick == 3) then begin \
+                    s_item := create_object(278, 0, 0); s_n_flint := s_n_flint + 1; \
+                end else if (s_pick == 4) then begin \
+                    s_item := create_object(365, 0, 0); s_n_spore := s_n_spore + 1; \
+                end else if (s_pick == 5) then begin \
+                    s_item := create_object(271, 0, 0); s_n_broc := s_n_broc + 1; \
+                end else if (s_pick == 6) then begin \
+                    s_item := create_object(272, 0, 0); s_n_xander := s_n_xander + 1; \
+                end else if (s_pick == 7) then begin \
+                    s_item := create_object(117, 0, 0); s_n_flower := s_n_flower + 1; \
+                end else begin \
+                    s_item := create_object(320, 0, 0); s_n_pole := s_n_pole + 1; \
+                end \
                 if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
-                display_msg("Found " + s_name + "."); \
                 s_xp := s_xp + 25; \
             end \
+            /* Build summary "2x firewood, 3x rock, 1x iguana" style. */ \
+            s_report := ""; \
+            s_first := 1; \
+            if (s_n_firewood > 0) then begin s_report := s_n_firewood + "x firewood"; s_first := 0; end \
+            if (s_n_iguana > 0)   then begin if (s_first) then s_report := s_n_iguana + "x iguana on a stick"; else s_report := s_report + ", " + s_n_iguana + "x iguana on a stick"; s_first := 0; end \
+            if (s_n_rock > 0)     then begin if (s_first) then s_report := s_n_rock + "x rock"; else s_report := s_report + ", " + s_n_rock + "x rock"; s_first := 0; end \
+            if (s_n_flint > 0)    then begin if (s_first) then s_report := s_n_flint + "x flint"; else s_report := s_report + ", " + s_n_flint + "x flint"; s_first := 0; end \
+            if (s_n_spore > 0)    then begin if (s_first) then s_report := s_n_spore + "x spore spike"; else s_report := s_report + ", " + s_n_spore + "x spore spike"; s_first := 0; end \
+            if (s_n_broc > 0)     then begin if (s_first) then s_report := s_n_broc + "x broc flower"; else s_report := s_report + ", " + s_n_broc + "x broc flower"; s_first := 0; end \
+            if (s_n_xander > 0)   then begin if (s_first) then s_report := s_n_xander + "x xander root"; else s_report := s_report + ", " + s_n_xander + "x xander root"; s_first := 0; end \
+            if (s_n_flower > 0)   then begin if (s_first) then s_report := s_n_flower + "x flower"; else s_report := s_report + ", " + s_n_flower + "x flower"; s_first := 0; end \
+            if (s_n_pole > 0)     then begin if (s_first) then s_report := s_n_pole + "x sharpened pole"; else s_report := s_report + ", " + s_n_pole + "x sharpened pole"; s_first := 0; end \
+            display_msg("The party brings back " + s_drops + " items: " + s_report + "."); \
             give_exp_points(s_xp); \
-            display_msg("You gained " + s_xp + " XP for the scavenging."); \
         end \
     end
 
 // ============================================================
-// CRAFT SPEAR -- sharpened pole + knife -> spear. Consumes ingredients.
+// CRAFT SPEAR -- sharpened pole + knife -> spear.
+// Order: product FIRST, consume only if product created (no loss on fail).
 // ============================================================
 #define CAMP_CRAFT_SPEAR \
     variable cs_item; \
-    call camp_party_consume_pid(320); /* sharpened pole */ \
-    if (camp_party_has_pid(4)) then call camp_party_consume_pid(4); \
-    else call camp_party_consume_pid(236); \
     cs_item := create_object(7, 0, 0); /* PID_SPEAR */ \
-    if (cs_item != 0) then add_obj_to_inven(dude_obj, cs_item); \
-    display_msg("You fashion a spear from a sharpened pole and knife."); \
-    give_exp_points(30);
+    if (cs_item == 0) then begin \
+        display_msg("Something goes wrong -- no spear this time."); \
+    end \
+    else begin \
+        call camp_party_consume_pid(320); /* sharpened pole */ \
+        if (camp_party_has_pid(4)) then call camp_party_consume_pid(4); \
+        else call camp_party_consume_pid(236); \
+        add_obj_to_inven(dude_obj, cs_item); \
+        display_msg("You fashion a spear from a sharpened pole and knife."); \
+        give_exp_points(30); \
+    end
 
 // ============================================================
 // CRAFT SHARP SPEAR -- spear + flint -> sharpened spear.
 // ============================================================
 #define CAMP_CRAFT_SHARP_SPEAR \
     variable css_item; \
-    call camp_party_consume_pid(7);   /* spear */ \
-    call camp_party_consume_pid(278); /* flint */ \
     css_item := create_object(280, 0, 0); /* PID_SHARPENED_SPEAR */ \
-    if (css_item != 0) then add_obj_to_inven(dude_obj, css_item); \
-    display_msg("You tip a spear with flint -- sharpened spear."); \
-    give_exp_points(40);
+    if (css_item == 0) then begin \
+        display_msg("The flint won't bind -- spear stays plain."); \
+    end \
+    else begin \
+        call camp_party_consume_pid(7);   /* spear */ \
+        call camp_party_consume_pid(278); /* flint */ \
+        add_obj_to_inven(dude_obj, css_item); \
+        display_msg("You tip a spear with flint -- sharpened spear."); \
+        give_exp_points(40); \
+    end
 
 // ============================================================
 // CRAFT HEALING POWDER -- broc flower + xander root -> healing powder.
 // ============================================================
 #define CAMP_CRAFT_HEALING_POWDER \
     variable chp_item; \
-    call camp_party_consume_pid(271); /* broc */ \
-    call camp_party_consume_pid(272); /* xander */ \
     chp_item := create_object(273, 0, 0); /* PID_HEALING_POWDER */ \
-    if (chp_item != 0) then add_obj_to_inven(dude_obj, chp_item); \
-    display_msg("You grind broc flower and xander root into healing powder."); \
-    give_exp_points(30);
+    if (chp_item == 0) then begin \
+        display_msg("The herbs won't mix. Try again later."); \
+    end \
+    else begin \
+        call camp_party_consume_pid(271); /* broc */ \
+        call camp_party_consume_pid(272); /* xander */ \
+        add_obj_to_inven(dude_obj, chp_item); \
+        display_msg("You grind broc flower and xander root into healing powder."); \
+        give_exp_points(30); \
+    end
 
 // ============================================================
 // CRAFT ANTIDOTE -- scorpion tail + booze + SCIENCE roll.
@@ -502,12 +548,17 @@ end
     ca_roll := roll_vs_skill(dude_obj, SKILL_SCIENCE, \
         ca_sci - has_skill(dude_obj, SKILL_SCIENCE)); \
     if (is_success(ca_roll)) then begin \
-        call camp_party_consume_pid(92);  /* scorpion tail */ \
-        call camp_party_consume_pid(125); /* booze */ \
         ca_item := create_object(49, 0, 0); /* PID_ANTIDOTE */ \
-        if (ca_item != 0) then add_obj_to_inven(dude_obj, ca_item); \
-        display_msg("You distill venom and booze into antidote."); \
-        give_exp_points(50); \
+        if (ca_item == 0) then begin \
+            display_msg("The mixture won't set. Ingredients preserved."); \
+        end \
+        else begin \
+            call camp_party_consume_pid(92);  /* scorpion tail */ \
+            call camp_party_consume_pid(125); /* booze */ \
+            add_obj_to_inven(dude_obj, ca_item); \
+            display_msg("You distill venom and booze into antidote."); \
+            give_exp_points(50); \
+        end \
     end \
     else begin \
         display_msg("Nobody here has the science to brew an antidote. Ingredients preserved."); \
@@ -518,11 +569,16 @@ end
 // ============================================================
 #define CAMP_CRAFT_MOLOTOV \
     variable cm_item; \
-    call camp_party_consume_pid(125); /* booze (lighter kept) */ \
     cm_item := create_object(159, 0, 0); /* PID_MOLOTOV_COCKTAIL */ \
-    if (cm_item != 0) then add_obj_to_inven(dude_obj, cm_item); \
-    display_msg("You soak a rag in booze and ignite it -- Molotov cocktail."); \
-    give_exp_points(25);
+    if (cm_item == 0) then begin \
+        display_msg("Your lighter fails to catch. Booze saved."); \
+    end \
+    else begin \
+        call camp_party_consume_pid(125); /* booze (lighter kept) */ \
+        add_obj_to_inven(dude_obj, cm_item); \
+        display_msg("You soak a rag in booze and ignite it -- Molotov cocktail."); \
+        give_exp_points(25); \
+    end
 
 
 // ============================================================
