@@ -169,9 +169,11 @@ procedure camp_party_consume_pid(variable pid) begin
 end
 
 // ============================================================
-// MAKE CAMP -- create campfire + bedrolls in spiral ring.
-// Gates: wilderness only (map_is_encounter), no existing camp, not combat.
-// Animates party NPCs to lying pose. Sets GVAR_PARTY_NO_FOLLOW.
+// MAKE CAMP -- EXEC macro (no gates, no Reply, no display_msg).
+// Caller (CampMakeExecute trigger) must have already gated:
+//   - map_is_encounter
+//   - not combat
+// Camera: fade_out -> work -> fade_in. Dialog engine closes dialog.
 // ============================================================
 #define CAMP_DO_MAKE \
     variable c_player_tile; \
@@ -201,130 +203,114 @@ end
     variable c_am_map; \
     variable c_has_firewood; \
     variable c_center_tile; \
-    if (not(map_is_encounter)) then begin \
-        display_msg("Can't make camp here -- need wilderness."); \
-    end \
-    else if (combat_is_initialized) then begin \
-        display_msg("Can't make camp during combat."); \
-    end \
-    else begin \
-        c_player_tile := tile_num(dude_obj); \
-        gfade_out(600); \
-        game_time_advance(600); \
-        /* FIRE is OPTIONAL: needs firewood. No firewood = cold camp. */ \
-        c_fire := 0; \
-        c_fire_tile := tile_num_in_direction(c_player_tile, 0, 1); \
-        c_has_firewood := camp_party_has_pid(286); \
-        if (c_has_firewood) then begin \
-            call camp_party_consume_pid(286); \
-            c_fire := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); \
-            if (c_fire == 0) then begin \
-                for (c_dir := 1; c_dir < 6; c_dir++) begin \
-                    c_fire_tile := tile_num_in_direction(c_player_tile, c_dir, 1); \
-                    c_fire := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); \
-                    if (c_fire != 0) then break; \
-                end \
+    c_player_tile := tile_num(dude_obj); \
+    gfade_out(600); \
+    game_time_advance(600); \
+    c_fire := 0; \
+    c_fire_tile := tile_num_in_direction(c_player_tile, 0, 1); \
+    c_has_firewood := camp_party_has_pid(286); \
+    if (c_has_firewood) then begin \
+        call camp_party_consume_pid(286); \
+        c_fire := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); \
+        if (c_fire == 0) then begin \
+            for (c_dir := 1; c_dir < 6; c_dir++) begin \
+                c_fire_tile := tile_num_in_direction(c_player_tile, c_dir, 1); \
+                c_fire := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); \
+                if (c_fire != 0) then break; \
             end \
         end \
-        /* Bedrolls ring center: fire tile if fire, else player tile. */ \
-        if (c_fire != 0) then c_center_tile := c_fire_tile; \
-        else c_center_tile := c_player_tile; \
-        begin \
-            if (c_fire != 0) then begin \
-                set_object_data(c_fire, OBJ_DATA_LIGHT_DISTANCE, 8); \
-                set_object_data(c_fire, OBJ_DATA_LIGHT_INTENSITY, 65536); \
-                c_fire2 := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); \
-                if (c_fire2 != 0) then begin \
-                    set_object_data(c_fire2, OBJ_DATA_LIGHT_DISTANCE, 8); \
-                    set_object_data(c_fire2, OBJ_DATA_LIGHT_INTENSITY, 65536); \
-                end \
-            end \
-            c_bedrolls_arr := create_array(0, 4); \
-            c_sleepers_arr := create_array(0, 4); \
-            c_had_sleeper := 0; \
-            /* Player bedroll: try PID_BED_2 first (distinct sprite), then */ \
-            /* PID_BED_1, spiralling through 6 directions from center. */ \
-            c_player_bedroll := 0; \
-            for (c_dir := 0; c_dir < 6; c_dir++) begin \
-                c_player_bedroll_tile := tile_num_in_direction(c_center_tile, c_dir, 5); \
-                c_player_bedroll := create_object(CAMP_PID_BED_2, c_player_bedroll_tile, dude_elevation); \
-                if (c_player_bedroll == 0) then \
-                    c_player_bedroll := create_object(CAMP_PID_BED_1, c_player_bedroll_tile, dude_elevation); \
-                if (c_player_bedroll != 0) then break; \
-            end \
-            if (c_player_bedroll != 0) then begin \
+    end \
+    if (c_fire != 0) then c_center_tile := c_fire_tile; \
+    else c_center_tile := c_player_tile; \
+    if (c_fire != 0) then begin \
+        set_object_data(c_fire, OBJ_DATA_LIGHT_DISTANCE, 8); \
+        set_object_data(c_fire, OBJ_DATA_LIGHT_INTENSITY, 65536); \
+        c_fire2 := create_object(CAMP_PID_FIRE_PIT, c_fire_tile, dude_elevation); \
+        if (c_fire2 != 0) then begin \
+            set_object_data(c_fire2, OBJ_DATA_LIGHT_DISTANCE, 8); \
+            set_object_data(c_fire2, OBJ_DATA_LIGHT_INTENSITY, 65536); \
+        end \
+    end \
+    c_bedrolls_arr := create_array(0, 4); \
+    c_sleepers_arr := create_array(0, 4); \
+    c_had_sleeper := 0; \
+    c_player_bedroll := 0; \
+    for (c_dir := 0; c_dir < 6; c_dir++) begin \
+        c_player_bedroll_tile := tile_num_in_direction(c_center_tile, c_dir, 5); \
+        c_player_bedroll := create_object(CAMP_PID_BED_2, c_player_bedroll_tile, dude_elevation); \
+        if (c_player_bedroll == 0) then \
+            c_player_bedroll := create_object(CAMP_PID_BED_1, c_player_bedroll_tile, dude_elevation); \
+        if (c_player_bedroll != 0) then break; \
+    end \
+    if (c_player_bedroll != 0) then begin \
+        resize_array(c_bedrolls_arr, len_array(c_bedrolls_arr) + 1); \
+        c_bedrolls_arr[len_array(c_bedrolls_arr) - 1] := c_player_bedroll; \
+        c_pb_map := load_array("campfire_player_bedroll"); \
+        if (c_pb_map == 0) then c_pb_map := create_array_map; \
+        c_pb_map["" + cur_map_index] := c_player_bedroll; \
+        save_array("campfire_player_bedroll", c_pb_map); \
+    end \
+    c_idx := 1; \
+    c_lst := list_begin(LIST_CRITTERS); \
+    c_npc := list_next(c_lst); \
+    while (c_npc) do begin \
+        if (c_npc != 0 and c_npc != dude_obj \
+            and get_team(c_npc) == TEAM_PLAYER \
+            and not(is_critter_dead(c_npc))) then begin \
+            c_slot := c_idx; \
+            c_ring := c_slot / 6; \
+            c_dir_idx := c_slot % 6; \
+            c_bedroll_tile := tile_num_in_direction(c_center_tile, c_dir_idx, 5 + c_ring * 3); \
+            c_bedroll := create_object(CAMP_PID_BED_1, c_bedroll_tile, dude_elevation); \
+            if (c_bedroll != 0) then begin \
                 resize_array(c_bedrolls_arr, len_array(c_bedrolls_arr) + 1); \
-                c_bedrolls_arr[len_array(c_bedrolls_arr) - 1] := c_player_bedroll; \
-                c_pb_map := load_array("campfire_player_bedroll"); \
-                if (c_pb_map == 0) then c_pb_map := create_array_map; \
-                c_pb_map["" + cur_map_index] := c_player_bedroll; \
-                save_array("campfire_player_bedroll", c_pb_map); \
+                c_bedrolls_arr[len_array(c_bedrolls_arr) - 1] := c_bedroll; \
+                move_to(c_npc, c_bedroll_tile, dude_elevation); \
+                reg_anim_begin(); \
+                reg_anim_animate(c_npc, ANIM_fall_back_sf, -1); \
+                reg_anim_end(); \
+                resize_array(c_sleepers_arr, len_array(c_sleepers_arr) + 1); \
+                c_sleepers_arr[len_array(c_sleepers_arr) - 1] := c_npc; \
+                c_had_sleeper := 1; \
+                c_idx := c_idx + 1; \
             end \
-            c_idx := 1; \
-            c_lst := list_begin(LIST_CRITTERS); \
-            c_npc := list_next(c_lst); \
-            while (c_npc) do begin \
-                if (c_npc != 0 and c_npc != dude_obj \
-                    and get_team(c_npc) == TEAM_PLAYER \
-                    and not(is_critter_dead(c_npc))) then begin \
-                    c_slot := c_idx; \
-                    c_ring := c_slot / 6; \
-                    c_dir_idx := c_slot % 6; \
-                    c_bedroll_tile := tile_num_in_direction(c_center_tile, c_dir_idx, 5 + c_ring * 3); \
-                    c_bedroll := create_object(CAMP_PID_BED_1, c_bedroll_tile, dude_elevation); \
-                    if (c_bedroll != 0) then begin \
-                        resize_array(c_bedrolls_arr, len_array(c_bedrolls_arr) + 1); \
-                        c_bedrolls_arr[len_array(c_bedrolls_arr) - 1] := c_bedroll; \
-                        move_to(c_npc, c_bedroll_tile, dude_elevation); \
-                        reg_anim_begin(); \
-                        reg_anim_animate(c_npc, ANIM_fall_back_sf, -1); \
-                        reg_anim_end(); \
-                        resize_array(c_sleepers_arr, len_array(c_sleepers_arr) + 1); \
-                        c_sleepers_arr[len_array(c_sleepers_arr) - 1] := c_npc; \
-                        c_had_sleeper := 1; \
-                        c_idx := c_idx + 1; \
-                    end \
-                end \
-                c_npc := list_next(c_lst); \
-            end \
-            list_end(c_lst); \
-            if (c_had_sleeper) then set_global_var(398, 1); /* GVAR_PARTY_NO_FOLLOW */ \
-            tile_refresh_display; \
-            gfade_in(600); \
-            c_map_key := "" + cur_map_index; \
-            /* Always mark camp active (bedrolls regardless of fire). */ \
-            c_am_map := load_array("camp_active_map"); \
-            if (c_am_map == 0) then c_am_map := create_array_map; \
-            c_am_map[c_map_key] := 1; \
-            save_array("camp_active_map", c_am_map); \
-            /* Only record fire tile/obj if we actually built a fire. */ \
-            if (c_fire != 0) then begin \
-                c_cf_map := load_array("campfire_map"); \
-                if (c_cf_map == 0) then c_cf_map := create_array_map; \
-                c_cf_map[c_map_key] := c_fire_tile; \
-                save_array("campfire_map", c_cf_map); \
-                c_fp_map := load_array("campfire_firepit_obj"); \
-                if (c_fp_map == 0) then c_fp_map := create_array_map; \
-                c_fp_map[c_map_key] := c_fire; \
-                save_array("campfire_firepit_obj", c_fp_map); \
-            end \
-            c_bed_map := load_array("campfire_bedrolls"); \
-            if (c_bed_map == 0) then c_bed_map := create_array_map; \
-            c_bed_map[c_map_key] := c_bedrolls_arr; \
-            save_array("campfire_bedrolls", c_bed_map); \
-            c_sl_map := load_array("campfire_sleepers"); \
-            if (c_sl_map == 0) then c_sl_map := create_array_map; \
-            c_sl_map[c_map_key] := c_sleepers_arr; \
-            save_array("campfire_sleepers", c_sl_map); \
-            play_sfx("FLAMETHR"); \
-            display_msg("You make camp. The fire crackles. The party settles in for the night."); \
-            give_exp_points(15); \
         end \
-    end
+        c_npc := list_next(c_lst); \
+    end \
+    list_end(c_lst); \
+    if (c_had_sleeper) then set_global_var(398, 1); /* GVAR_PARTY_NO_FOLLOW */ \
+    tile_refresh_display; \
+    gfade_in(600); \
+    c_map_key := "" + cur_map_index; \
+    c_am_map := load_array("camp_active_map"); \
+    if (c_am_map == 0) then c_am_map := create_array_map; \
+    c_am_map[c_map_key] := 1; \
+    save_array("camp_active_map", c_am_map); \
+    if (c_fire != 0) then begin \
+        c_cf_map := load_array("campfire_map"); \
+        if (c_cf_map == 0) then c_cf_map := create_array_map; \
+        c_cf_map[c_map_key] := c_fire_tile; \
+        save_array("campfire_map", c_cf_map); \
+        c_fp_map := load_array("campfire_firepit_obj"); \
+        if (c_fp_map == 0) then c_fp_map := create_array_map; \
+        c_fp_map[c_map_key] := c_fire; \
+        save_array("campfire_firepit_obj", c_fp_map); \
+    end \
+    c_bed_map := load_array("campfire_bedrolls"); \
+    if (c_bed_map == 0) then c_bed_map := create_array_map; \
+    c_bed_map[c_map_key] := c_bedrolls_arr; \
+    save_array("campfire_bedrolls", c_bed_map); \
+    c_sl_map := load_array("campfire_sleepers"); \
+    if (c_sl_map == 0) then c_sl_map := create_array_map; \
+    c_sl_map[c_map_key] := c_sleepers_arr; \
+    save_array("campfire_sleepers", c_sl_map); \
+    if (c_fire != 0) then play_sfx("FLAMETHR"); \
+    give_exp_points(15);
 
 // ============================================================
-// PACK CAMP -- destroy firepit, wake party, destroy bedrolls.
-// Gates: must have camp on current map.
+// PACK CAMP -- EXEC macro (no gates, no Reply, no display_msg).
+// Caller (CampPackExecute trigger) must have already gated on
+// camp_active_here.
 // ============================================================
 #define CAMP_DO_PACK \
     variable p_map_key; \
@@ -342,12 +328,9 @@ end
     variable p_sweep_obj; \
     variable p_am_map; \
     p_map_key := "" + cur_map_index; \
-    /* Gate on camp_active_map (camp may be fireless). */ \
     p_am_map := load_array("camp_active_map"); \
-    if (p_am_map == 0 or p_am_map[p_map_key] != 1) then begin \
-        display_msg("No camp here to pack."); \
-    end \
-    else begin \
+    if (p_am_map == 0) then p_am_map := create_array_map; \
+    begin \
         gfade_out(300); \
         /* Firepit cleanup (only if camp HAD fire). */ \
         p_cf_map := load_array("campfire_map"); \
@@ -418,7 +401,6 @@ end
         set_global_var(398, 0); /* GVAR_PARTY_NO_FOLLOW */ \
         tile_refresh_display; \
         gfade_in(300); \
-        display_msg("Camp packed. The party moves on."); \
         give_exp_points(10); \
     end
 
@@ -433,12 +415,10 @@ end
     variable s_pass; \
     variable s_has_fire; \
     if (camp_searched_here) then begin \
-        display_msg("You've already picked this area clean."); \
+        Reply("We already picked this place clean. Nothing left out there."); \
     end \
     else begin \
         call camp_mark_searched; \
-        /* Iguana on a stick requires a fire to cook -- gated by */ \
-        /* camp_has_fire_here (not just camp_active_here). */ \
         s_has_fire := camp_has_fire_here; \
         for (s_pass := 0; s_pass < 2; s_pass++) begin \
             s_item := create_object(286, 0, 0); if (s_item != 0) then add_obj_to_inven(dude_obj, s_item); \
@@ -455,10 +435,10 @@ end
         end \
         give_exp_points(100); \
         if (s_has_fire) then begin \
-            display_msg("The party scatters and returns with 2x firewood, 2x iguana on a stick, 2x rock, 2x flint, 2x spore spike, 2x broc flower, 2x xander root, 2x flower, 2x sharpened pole."); \
+            Reply("Decent haul. Scrounged some firewood, rocks, flint and flowers. Even caught an iguana or two -- already sizzling on the stick."); \
         end \
         else begin \
-            display_msg("The party scatters and returns with 2x firewood, 2x rock, 2x flint, 2x spore spike, 2x broc flower, 2x xander root, 2x flower, 2x sharpened pole. No way to cook raw meat without a fire."); \
+            Reply("We poked around. Picked up firewood, rocks, flint, some plants. Found a dead iguana but no fire to cook it on."); \
         end \
     end
 
@@ -470,14 +450,14 @@ end
     variable cs_item; \
     cs_item := create_object(7, 0, 0); /* PID_SPEAR */ \
     if (cs_item == 0) then begin \
-        display_msg("Something goes wrong -- no spear this time."); \
+        Reply("Tried to lash the knife to the pole. Something slipped. Spear didn't come out right."); \
     end \
     else begin \
         call camp_party_consume_pid(320); /* sharpened pole */ \
         if (camp_party_has_pid(4)) then call camp_party_consume_pid(4); \
         else call camp_party_consume_pid(236); \
         add_obj_to_inven(dude_obj, cs_item); \
-        display_msg("You fashion a spear from a sharpened pole and knife."); \
+        Reply("There we go. Proper spear now. Knife bound tight to the pole."); \
         give_exp_points(30); \
     end
 
@@ -488,13 +468,13 @@ end
     variable css_item; \
     css_item := create_object(280, 0, 0); /* PID_SHARPENED_SPEAR */ \
     if (css_item == 0) then begin \
-        display_msg("The flint won't bind -- spear stays plain."); \
+        Reply("Flint won't stay on. Spear stays plain, but we kept the bits."); \
     end \
     else begin \
         call camp_party_consume_pid(7);   /* spear */ \
         call camp_party_consume_pid(278); /* flint */ \
         add_obj_to_inven(dude_obj, css_item); \
-        display_msg("You tip a spear with flint -- sharpened spear."); \
+        Reply("Tipped the spear with flint. That'll go through leather armor now."); \
         give_exp_points(40); \
     end
 
@@ -505,13 +485,13 @@ end
     variable chp_item; \
     chp_item := create_object(273, 0, 0); /* PID_HEALING_POWDER */ \
     if (chp_item == 0) then begin \
-        display_msg("The herbs won't mix. Try again later."); \
+        Reply("The herbs just wouldn't grind together. Weird. We still have them."); \
     end \
     else begin \
         call camp_party_consume_pid(271); /* broc */ \
         call camp_party_consume_pid(272); /* xander */ \
         add_obj_to_inven(dude_obj, chp_item); \
-        display_msg("You grind broc flower and xander root into healing powder."); \
+        Reply("Ground the broc and xander into powder. This should help if someone gets hurt."); \
         give_exp_points(30); \
     end
 
@@ -544,18 +524,18 @@ end
     if (is_success(ca_roll)) then begin \
         ca_item := create_object(49, 0, 0); /* PID_ANTIDOTE */ \
         if (ca_item == 0) then begin \
-            display_msg("The mixture won't set. Ingredients preserved."); \
+            Reply("The mixture curdled. Whoever tried to distill it messed it up. We kept the ingredients."); \
         end \
         else begin \
             call camp_party_consume_pid(92);  /* scorpion tail */ \
             call camp_party_consume_pid(125); /* booze */ \
             add_obj_to_inven(dude_obj, ca_item); \
-            display_msg("You distill venom and booze into antidote."); \
+            Reply("Distilled the venom with the booze. Antidote's ready. Bottoms up if anything bites us."); \
             give_exp_points(50); \
         end \
     end \
     else begin \
-        display_msg("Nobody here has the science to brew an antidote. Ingredients preserved."); \
+        Reply("Nobody here knows their chemistry. We saved the tail and the booze for somebody smarter."); \
     end
 
 // ============================================================
@@ -565,12 +545,12 @@ end
     variable cm_item; \
     cm_item := create_object(159, 0, 0); /* PID_MOLOTOV_COCKTAIL */ \
     if (cm_item == 0) then begin \
-        display_msg("Your lighter fails to catch. Booze saved."); \
+        Reply("Lighter won't catch. Damn thing. Booze is fine though."); \
     end \
     else begin \
         call camp_party_consume_pid(125); /* booze (lighter kept) */ \
         add_obj_to_inven(dude_obj, cm_item); \
-        display_msg("You soak a rag in booze and ignite it -- Molotov cocktail."); \
+        Reply("Soaked the rag in booze, flicked the lighter. One Molotov, ready to throw."); \
         give_exp_points(25); \
     end
 
@@ -713,8 +693,15 @@ end
         a_obj := list_next(a_lst); \
     end \
     list_end(a_lst); \
-    if (a_reloaded == 0) then display_msg("Nobody needs a reload, or no matching ammo to share."); \
-    else display_msg("Ammo redistributed. " + a_reloaded + " weapon(s) topped up.");
+    if (a_reloaded == 0) then begin \
+        Reply("Everyone's already topped off. Or we don't have the right rounds."); \
+    end \
+    else if (a_reloaded == 1) then begin \
+        Reply("Shuffled the ammo around. Topped off one weapon."); \
+    end \
+    else begin \
+        Reply("Shuffled the ammo around. " + a_reloaded + " weapons ready to go."); \
+    end
 
 // ============================================================
 // FOOD & DRINK -- each alive party member eats one food + drinks one
@@ -772,8 +759,18 @@ end
         f_obj := list_next(f_lst); \
     end \
     list_end(f_lst); \
-    if (f_fed == 0 and f_consumed_drink == 0) then display_msg("Party has no food or water to share."); \
-    else display_msg("Party shares rations. Food: " + f_consumed_food + ", drink: " + f_consumed_drink + ".");
+    if (f_fed == 0 and f_consumed_drink == 0) then begin \
+        Reply("Rations are gone. We'll have to find something, or go hungry."); \
+    end \
+    else if (f_fed > 0 and f_consumed_drink > 0) then begin \
+        Reply("Passed around some grub and a canteen. We're good for a bit."); \
+    end \
+    else if (f_fed > 0) then begin \
+        Reply("Ate what we had. Water's short though -- hope we find some soon."); \
+    end \
+    else begin \
+        Reply("Drank what was left. Nothing solid to eat, but at least we're not parched."); \
+    end
 
 // ============================================================
 // WOUNDED CHECK -- report who's hurt + auto-apply healing powder
