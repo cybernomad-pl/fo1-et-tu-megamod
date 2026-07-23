@@ -50,6 +50,7 @@ procedure camp_clear_map_entry(variable key, variable arr_name);
 procedure camp_build_camp;
 procedure camp_teardown_camp;
 procedure camp_scout_haul;
+procedure camp_obj_is_live(variable obj);
 
 // Returns 1 if campfire (actual fire) exists on current map, 0 otherwise.
 // Used by shovel handler and by camp_active_here check.
@@ -283,6 +284,30 @@ procedure camp_build_camp begin
 end
 
 // ------------------------------------------------------------
+// camp_obj_is_live -- returns 1 if `obj` matches a currently-live
+// critter on the map (found by walking LIST_CRITTERS), else 0.
+// Guards against dangling object pointers saved in campfire_sleepers:
+// those go stale across save/load or when an NPC leaves the party, and
+// touching a stale pointer (is_critter_dead / reg_anim) hard-crashes.
+// ------------------------------------------------------------
+procedure camp_obj_is_live(variable obj) begin
+    variable lst;
+    variable o;
+    if (obj == 0) then return 0;
+    lst := list_begin(LIST_CRITTERS);
+    o := list_next(lst);
+    while (o) do begin
+        if (o == obj) then begin
+            list_end(lst);
+            return 1;
+        end
+        o := list_next(lst);
+    end
+    list_end(lst);
+    return 0;
+end
+
+// ------------------------------------------------------------
 // camp_teardown_camp -- destroy firepit(s), wake sleepers, destroy
 // bedrolls, clear all state save_arrays. Caller does gfade_out/in.
 // ------------------------------------------------------------
@@ -321,10 +346,19 @@ procedure camp_teardown_camp begin
         if (sleepers != 0) then begin
             for (i := 0; i < len_array(sleepers); i++) begin
                 obj := sleepers[i];
-                if (obj != 0 and not(is_critter_dead(obj))) then begin
-                    reg_anim_begin();
-                    reg_anim_animate(obj, ANIM_back_to_standing, -1);
-                    reg_anim_end();
+                // Validate against LIST_CRITTERS first: a saved object
+                // pointer can go stale across save/load or if the NPC left
+                // the party -- calling is_critter_dead() on a dangling
+                // pointer hard-crashes. SSL 'and' is NOT short-circuit, so
+                // the guard MUST be nested, not combined with 'and'.
+                if (obj != 0) then begin
+                    if (camp_obj_is_live(obj)) then begin
+                        if (not(is_critter_dead(obj))) then begin
+                            reg_anim_begin();
+                            reg_anim_animate(obj, ANIM_back_to_standing, -1);
+                            reg_anim_end();
+                        end
+                    end
                 end
             end
             sl_map[map_key] := 0;
@@ -332,19 +366,26 @@ procedure camp_teardown_camp begin
             free_array(sleepers);
         end
     end
-    // Destroy bedrolls.
+    // Destroy bedrolls. Same dangling-pointer hazard as sleepers: the
+    // saved bedroll pointers can go stale after save/load, and
+    // destroy_object() on a stale scenery pointer hard-crashes. So sweep
+    // LIST_SCENERY by PID instead (same approach as the firepit sweep
+    // above) -- on a wilderness encounter map the camp is the only source
+    // of these bed PIDs. Still clear the saved array so state stays clean.
+    sweep_lst := list_begin(LIST_SCENERY);
+    sweep_obj := list_next(sweep_lst);
+    while (sweep_obj) do begin
+        if (sweep_obj != 0
+            and (obj_pid(sweep_obj) == CAMP_PID_BED_1
+              or obj_pid(sweep_obj) == CAMP_PID_BED_2)) then
+            destroy_object(sweep_obj);
+        sweep_obj := list_next(sweep_lst);
+    end
+    list_end(sweep_lst);
     bed_map := load_array("campfire_bedrolls");
     if (bed_map != 0) then begin
-        bedrolls := bed_map[map_key];
-        if (bedrolls != 0) then begin
-            for (i := 0; i < len_array(bedrolls); i++) begin
-                obj := bedrolls[i];
-                if (obj != 0) then destroy_object(obj);
-            end
-            bed_map[map_key] := 0;
-            save_array("campfire_bedrolls", bed_map);
-            free_array(bedrolls);
-        end
+        bed_map[map_key] := 0;
+        save_array("campfire_bedrolls", bed_map);
     end
     // Clear map keys on remaining tracked state.
     call camp_clear_map_entry(map_key, "campfire_firepit_obj");

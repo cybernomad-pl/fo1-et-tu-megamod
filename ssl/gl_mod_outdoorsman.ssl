@@ -56,6 +56,7 @@ variable sleepers_map;       // "<map_idx>" -> list of npc obj_ids put to sleep
 variable last_map_idx;       // for map-change detection
 variable flicker_counter;    // map_update tick counter (flicker throttle)
 variable last_no_follow;     // edge detect GVAR 1->0 transition (hotkey wake)
+variable bury_queue;         // deferred corpse-destroy list (see useobjon bury)
 
 procedure start;
 procedure useobj_handler;
@@ -64,6 +65,8 @@ procedure gamemode_handler;
 procedure keypress_handler;
 procedure map_update_p_proc;
 procedure handle_lighter(variable item);
+procedure handle_firewood(variable item);
+procedure handle_shovel_use;
 procedure handle_shovel_on_firepit;
 procedure handle_player_bedroll_rest;
 procedure is_wilderness;
@@ -123,6 +126,8 @@ procedure start begin
         // (1->0) works correctly after save/load (not reset to 0).
         flicker_counter := 0;
         last_no_follow  := global_var(GVAR_PARTY_NO_FOLLOW);
+        // Stale obj pointers from a previous session are invalid after load.
+        bury_queue := 0;
 
         // NEW GAME only -- give LIGHTER / SHOVEL / ROPE once.
         // is_loading_game proved unreliable (2026-04-18: fired FALSE on load),
@@ -138,7 +143,13 @@ procedure start begin
         // Force USE flag on any existing lighter in dude's inventory
         // (proto change doesn't retroactively update obj instances).
         call refresh_lighter_flags;
-        // Shovel already has USE_ON via other mods (gl_shovel.ssl)
+
+        // Firewood: USE to make camp (requires a lighter in inventory).
+        set_proto_data(PID_FIREWOOD, PROTO_IT_FLAGS,
+            get_proto_data(PID_FIREWOOD, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE);
+        // Shovel: USE to smother the camp here, USE ON a dead critter to bury it.
+        set_proto_data(PID_SHOVEL, PROTO_IT_FLAGS,
+            get_proto_data(PID_SHOVEL, PROTO_IT_FLAGS) bwor ITEM_ACTION_USE bwor ITEM_ACTION_USEON);
 
         register_hook_proc(HOOK_USEOBJ, useobj_handler);
         register_hook_proc(HOOK_USEOBJON, useobjon_handler);
@@ -256,6 +267,18 @@ procedure useobj_handler begin
         return;
     end
 
+    // USE firewood (with a lighter carried) -> make camp.
+    if (obj_pid(item) == PID_FIREWOOD) then begin
+        call handle_firewood(item);
+        return;
+    end
+
+    // USE shovel -> smother the camp here (if any).
+    if (obj_pid(item) == PID_SHOVEL) then begin
+        call handle_shovel_use;
+        return;
+    end
+
     // USE on any bedroll -> rest until morning.
     LOG("useobj", "item_pid", obj_pid(item));
     if (obj_pid(item) == PID_BED_1 or obj_pid(item) == PID_BED_2) then begin
@@ -300,6 +323,47 @@ procedure useobjon_handler begin
     else if (obj_pid(arg1) == PID_SHOVEL) then item := arg1;
     else if (obj_pid(arg2) == PID_SHOVEL) then item := arg2;
     else item := 0;
+
+    // --- Shovel on a DEAD critter -> bury it (fade + remove corpse). ---
+    // SSL 'and' is NOT short-circuit, so obj_type/is_critter_dead guards
+    // MUST be nested (is_critter_dead on a non-critter would still run).
+    if (item != 0) then begin
+        variable corpse;
+        corpse := 0;
+        if (arg0 != 0) then begin
+            if (obj_type(arg0) == OBJ_TYPE_CRITTER) then begin
+                if (is_critter_dead(arg0)) then corpse := arg0;
+            end
+        end
+        if (corpse == 0 and arg1 != 0) then begin
+            if (obj_type(arg1) == OBJ_TYPE_CRITTER) then begin
+                if (is_critter_dead(arg1)) then corpse := arg1;
+            end
+        end
+        if (corpse == 0 and arg2 != 0) then begin
+            if (obj_type(arg2) == OBJ_TYPE_CRITTER) then begin
+                if (is_critter_dead(arg2)) then corpse := arg2;
+            end
+        end
+        if (corpse != 0) then begin
+            if (combat_is_initialized) then begin
+                display_msg("No time to dig graves in the middle of a fight.");
+                set_sfall_return(-1);
+                return;
+            end
+            // DEFER the destroy. Freeing the USEOBJON *target* inside the hook
+            // frees an object the engine still dereferences after we return
+            // -> hard crash (this bit us in-game). Queue the corpse, fade to
+            // black NOW; map_update_p_proc destroys it + fades in next tick.
+            if (bury_queue == 0) then bury_queue := create_array(0, 4);
+            resize_array(bury_queue, len_array(bury_queue) + 1);
+            bury_queue[len_array(bury_queue) - 1] := corpse;
+            gfade_out(300);
+            play_sfx("STEAM");
+            set_sfall_return(-1);
+            return;
+        end
+    end
 
     if (obj_pid(arg0) == PID_FIRE_PIT) then target := arg0;
     else if (obj_pid(arg1) == PID_FIRE_PIT) then target := arg1;
@@ -376,9 +440,12 @@ procedure gamemode_handler begin
             for (i := 0; i < len_array(sleepers); i++) begin
                 obj := sleepers[i];
                 if (obj != 0 and not(is_critter_dead(obj))) then begin
-                    reg_anim_begin();
-                    reg_anim_animate(obj, ANIM_back_to_standing, -1);
-                    reg_anim_end();
+                    // Only play stand-up if actually prone (Borys 2026-07-21)
+                    if (is_critter_prone(obj)) then begin
+                        reg_anim_begin();
+                        reg_anim_animate(obj, ANIM_back_to_standing, -1);
+                        reg_anim_end();
+                    end
                 end
             end
             // Drop tracking first (clear save_array ref), then free.
@@ -485,20 +552,8 @@ procedure handle_lighter(variable item) begin
         display_msg("You flick the lighter open. A small flame pushes back the dark.");
         LOG("ltr", "B_turned_on", 1);
 
-        // Create campfire only in wilderness AND no existing camp.
-        if (is_wilderness
-            and not(map_has_campfire)
-            and not(combat_is_initialized)) then begin
-            LOG("ltr", "C_creating_camp", 1);
-            call create_campfire_adjacent;
-            play_sfx("FLAMETHR");
-        end
-        else begin
-            LOG("ltr", "C_no_camp_gate", 0);
-            if not(is_wilderness) then LOG("ltr", "C_fail_not_wild", 1);
-            if (map_has_campfire) then LOG("ltr", "C_fail_has_camp", 1);
-            if (combat_is_initialized) then LOG("ltr", "C_fail_combat", 1);
-        end
+        // Camp building moved to firewood USE (handle_firewood).
+        // The lighter now only provides light -- no camp side effect.
     end
     else begin
         lighter_lit := 0;
@@ -514,6 +569,55 @@ procedure handle_lighter(variable item) begin
     arr["lit"] := lighter_lit;
     save_array("campfire_lighter", arr);
 
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// FIREWOOD (USE from inventory) -- make camp if a lighter is carried.
+// Builds the SAME camp as the party dialog "Make camp" (shared
+// save-arrays via create_campfire_adjacent). Consumes the firewood.
+// ============================================================
+procedure handle_firewood(variable item) begin
+    if not(is_wilderness) then begin
+        display_msg("You can only make camp out in the wilderness.");
+        set_sfall_return(-1);
+        return;
+    end
+    if (map_has_campfire) then begin
+        display_msg("There's already a camp here.");
+        set_sfall_return(-1);
+        return;
+    end
+    if (combat_is_initialized) then begin
+        display_msg("No time to make camp in the middle of a fight.");
+        set_sfall_return(-1);
+        return;
+    end
+    if (obj_is_carrying_obj_pid(dude_obj, PID_LIGHTER) == 0) then begin
+        display_msg("You need a lighter to get the fire going.");
+        set_sfall_return(-1);
+        return;
+    end
+
+    // Burn the firewood, raise the camp.
+    rm_obj_from_inven(dude_obj, item);
+    destroy_object(item);
+    call create_campfire_adjacent;
+    play_sfx("FLAMETHR");
+    set_sfall_return(-1);
+end
+
+// ============================================================
+// SHOVEL (USE from inventory) -- smother the camp on this map, if any.
+// Same teardown as USE-ON-firepit. No camp here -> explicit no-op.
+// ============================================================
+procedure handle_shovel_use begin
+    if (map_has_campfire) then begin
+        call handle_shovel_on_firepit;
+        set_sfall_return(-1);
+        return;
+    end
+    display_msg("Nothing here to bury or break down.");
     set_sfall_return(-1);
 end
 
@@ -585,9 +689,13 @@ procedure handle_shovel_on_firepit begin
         for (i := 0; i < len_array(sleepers); i++) begin
             obj := sleepers[i];
             if (obj != 0 and not(is_critter_dead(obj))) then begin
-                reg_anim_begin();
-                reg_anim_animate(obj, ANIM_back_to_standing, -1);
-                reg_anim_end();
+                // Only play stand-up if actually prone (Borys 2026-07-21) --
+                // skip NPCs already on their feet, no redundant animation.
+                if (is_critter_prone(obj)) then begin
+                    reg_anim_begin();
+                    reg_anim_animate(obj, ANIM_back_to_standing, -1);
+                    reg_anim_end();
+                end
             end
         end
         sleepers_map[map_key] := 0;
@@ -833,10 +941,13 @@ procedure handle_player_bedroll_rest begin
     // Heal dude: restore HP to max via stat_current.
     critter_heal(dude_obj, get_critter_stat(dude_obj, STAT_max_hp));
 
-    tile_refresh_display;
-    gfade_in(600);
+    // Pack up the camp on waking (Borys 2026-07-21). Screen is STILL faded
+    // to black from the rest fade above, so handle_shovel_on_firepit tears
+    // down the firepit + bedrolls under cover, then does the single fade-in.
+    // Dropped loot on the ground is NOT touched -- it stays where it was.
+    call handle_shovel_on_firepit;
 
-    display_msg("You rest until morning. The party is rested.");
+    display_msg("You rest for 7 hours. The party is rested, and you pack up the camp.");
 end
 
 // ============================================================
@@ -863,6 +974,28 @@ end
 // MAP UPDATE (sfall auto-called) -- flicker throttle
 // ============================================================
 procedure map_update_p_proc begin
+    variable bi;
+    variable c;
+
+    // Deferred corpse burial -- destroy queued corpses OUTSIDE the USEOBJON
+    // hook (destroying the hook's target object mid-op crashes the game).
+    // The hook already faded to black; we destroy under cover, then fade in.
+    if (bury_queue != 0) then begin
+        if (len_array(bury_queue) > 0) then begin
+            for (bi := 0; bi < len_array(bury_queue); bi++) begin
+                c := bury_queue[bi];
+                if (c != 0) then begin
+                    destroy_object(c);
+                    give_exp_points(XP_CAMPFIRE_SMOTHER);
+                end
+            end
+            resize_array(bury_queue, 0);
+            tile_refresh_display;
+            gfade_in(300);
+            display_msg("You bury the remains. No one will find them.");
+        end
+    end
+
     flicker_counter := flicker_counter + 1;
     // Throttle: flicker every ~3rd tick (subtle, not strobing).
     if ((flicker_counter % 3) == 0) then begin

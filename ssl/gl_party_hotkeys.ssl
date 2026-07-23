@@ -55,8 +55,14 @@ procedure keypress_handler begin
     // F (33) -- party hold/follow toggle
     if (key == 33) then begin
         current := global_var(GVAR_PARTY_NO_FOLLOW);
-        if (current) then set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
-        else set_global_var(GVAR_PARTY_NO_FOLLOW, 1);
+        if (current) then begin
+            set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
+            display_msg("Party: FOLLOW.");
+        end
+        else begin
+            set_global_var(GVAR_PARTY_NO_FOLLOW, 1);
+            display_msg("Party: HOLD POSITION.");
+        end
         return;
     end
 

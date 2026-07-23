@@ -1,0 +1,164 @@
+/*
+    gl_good_deeds.ssl -- Small kindnesses: feed the poor for XP + local rep.
+    fo1-et-tu-megamod
+
+    IDEA (Borys): give food or water to a beggar-type NPC (skags in the Hub
+    keep moaning "I'm hungry") -> you gain XP and +1 local reputation.
+    Once per NPC (anti-farm: skags beg forever, so a naive reward would let
+    you grind infinite XP off one skag).
+
+    HOW:
+      HOOK_USEOBJON: player uses a food/water item ON a whitelisted critter.
+      - If that critter was already helped -> no reward, food NOT consumed.
+      - First time -> consume the food, +XP, +1 local rep (per-map counter),
+        mark the critter as helped (stable sfall unique id).
+
+    DELIBERATELY does NOT touch the NPC's script or FID. Pure global script,
+    so it works on skags (whose source we don't have) without editing them.
+
+    WHITELIST is EXPLICIT (ZERO FALLBACK): only listed scripts are rewarded.
+    Add a beggar type = add one line to is_beggar_script. Unknown NPC = no
+    reward (never guess who counts as "poor").
+
+    KNOBS (one-line switches, flagged for Borys):
+      - Locality: rep is a per-map counter (key = cur_map_index). Swap to
+        vanilla GVAR_TOWN_REP_* if town-wide rep with game effects is wanted.
+      - Whitelist: currently skags only. Extend is_beggar_script.
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/lib.arrays.h"
+
+/* ---- Config ---- */
+#define XP_GOOD_DEED     (25)
+
+// Beggar scripts eligible for the reward. EXPLICIT whitelist -- add lines.
+// SCRIPT_GENSKAG (575) = Generic Skag of the Hub (scripts.h).
+#define BEGGAR_SKAG      (SCRIPT_GENSKAG)
+
+// Food / water item PIDs that count as "sharing a meal" (no alcohol).
+#define FD_MUTATED_FRUIT     (71)
+#define FD_IGUANA_ON_STICK   (81)
+#define FD_MEAT_ON_STICK     (103)
+#define FD_NUKA_COLA         (106)
+#define FD_WATER_FLASK       (126)
+#define FD_MEAT_JERKY        (284)
+#define FD_VIC_WATER_FLASK   (267)
+
+procedure start;
+procedure useobjon_handler;
+procedure is_food_pid(variable pid);
+procedure is_beggar_script(variable s);
+procedure is_beggar_target(variable obj);
+
+procedure is_food_pid(variable pid) begin
+   if (pid == FD_MUTATED_FRUIT)   then return 1;
+   if (pid == FD_IGUANA_ON_STICK) then return 1;
+   if (pid == FD_MEAT_ON_STICK)   then return 1;
+   if (pid == FD_NUKA_COLA)       then return 1;
+   if (pid == FD_WATER_FLASK)     then return 1;
+   if (pid == FD_MEAT_JERKY)      then return 1;
+   if (pid == FD_VIC_WATER_FLASK) then return 1;
+   return 0;
+end
+
+procedure is_beggar_script(variable s) begin
+   if (s == BEGGAR_SKAG) then return 1;
+   return 0;
+end
+
+// Is 'obj' a living, whitelisted beggar? Nested guards -- SSL 'and' is NOT
+// short-circuit, so get_script/is_critter_dead on a wrong obj would still run.
+procedure is_beggar_target(variable obj) begin
+   if (obj == 0) then return 0;
+   if (obj_type(obj) != OBJ_TYPE_CRITTER) then return 0;
+   if (is_critter_dead(obj)) then return 0;
+   if (is_beggar_script(get_script(obj)) == 0) then return 0;
+   return 1;
+end
+
+procedure start begin
+   if game_loaded then begin
+      // Ensure the food/water protos can be "used on" a target.
+      set_proto_data(FD_MUTATED_FRUIT,   PROTO_IT_FLAGS, get_proto_data(FD_MUTATED_FRUIT,   PROTO_IT_FLAGS) bwor ITEM_ACTION_USEON);
+      set_proto_data(FD_IGUANA_ON_STICK, PROTO_IT_FLAGS, get_proto_data(FD_IGUANA_ON_STICK, PROTO_IT_FLAGS) bwor ITEM_ACTION_USEON);
+      set_proto_data(FD_MEAT_ON_STICK,   PROTO_IT_FLAGS, get_proto_data(FD_MEAT_ON_STICK,   PROTO_IT_FLAGS) bwor ITEM_ACTION_USEON);
+      set_proto_data(FD_NUKA_COLA,       PROTO_IT_FLAGS, get_proto_data(FD_NUKA_COLA,       PROTO_IT_FLAGS) bwor ITEM_ACTION_USEON);
+      set_proto_data(FD_WATER_FLASK,     PROTO_IT_FLAGS, get_proto_data(FD_WATER_FLASK,     PROTO_IT_FLAGS) bwor ITEM_ACTION_USEON);
+      set_proto_data(FD_MEAT_JERKY,      PROTO_IT_FLAGS, get_proto_data(FD_MEAT_JERKY,      PROTO_IT_FLAGS) bwor ITEM_ACTION_USEON);
+      set_proto_data(FD_VIC_WATER_FLASK, PROTO_IT_FLAGS, get_proto_data(FD_VIC_WATER_FLASK, PROTO_IT_FLAGS) bwor ITEM_ACTION_USEON);
+
+      register_hook_proc(HOOK_USEOBJON, useobjon_handler);
+   end
+end
+
+procedure useobjon_handler begin
+   variable a0;
+   variable a1;
+   variable a2;
+   variable food;
+   variable target;
+   variable uid;
+   variable rewarded;
+   variable reps;
+   variable key;
+
+   a0 := get_sfall_arg;
+   a1 := get_sfall_arg;
+   a2 := get_sfall_arg;
+
+   // Find the food/water item among the args (order not guaranteed by sfall).
+   food := 0;
+   if (a0 != 0) then begin if (is_food_pid(obj_pid(a0))) then food := a0; end
+   if (food == 0 and a1 != 0) then begin if (is_food_pid(obj_pid(a1))) then food := a1; end
+   if (food == 0 and a2 != 0) then begin if (is_food_pid(obj_pid(a2))) then food := a2; end
+   if (food == 0) then return;   // not our case -- let other hooks handle it
+
+   // Find a living whitelisted beggar among the args.
+   target := 0;
+   if (is_beggar_target(a0)) then target := a0;
+   if (target == 0 and is_beggar_target(a1)) then target := a1;
+   if (target == 0 and is_beggar_target(a2)) then target := a2;
+   if (target == 0) then return; // food used on a non-beggar -- not our case
+
+   // Stable per-critter id for anti-farm tracking (persists across save/load).
+   set_unique_id(target);
+   uid := get_object_data(target, OBJ_DATA_ID);
+
+   rewarded := load_array("gooddeeds_fed");
+   if (rewarded == 0) then begin
+      rewarded := create_array_map;
+      save_array("gooddeeds_fed", rewarded);
+   end
+
+   // Already helped this one -> flavor line, DO NOT consume the food.
+   if (rewarded[uid] == 1) then begin
+      display_msg("They've already had your charity today.");
+      set_sfall_return(-1);
+      return;
+   end
+
+   // First time: give the food away, reward the deed.
+   rm_obj_from_inven(dude_obj, food);
+   destroy_object(food);
+   give_exp_points(XP_GOOD_DEED);
+
+   // Local reputation -- per-map counter (KNOB: swap for GVAR_TOWN_REP_*).
+   key := "" + cur_map_index;
+   reps := load_array("gooddeeds_rep");
+   if (reps == 0) then begin
+      reps := create_array_map;
+      save_array("gooddeeds_rep", reps);
+   end
+   reps[key] := reps[key] + 1;
+   save_array("gooddeeds_rep", reps);
+
+   rewarded[uid] := 1;
+   save_array("gooddeeds_fed", rewarded);
+
+   display_msg("You share your food. A small kindness in a hard world. [+" + XP_GOOD_DEED + " XP, local reputation +1]");
+   set_sfall_return(-1);
+end

@@ -1,0 +1,105 @@
+2026-07-24 -- camp items, bury crash-fix, good deeds, party fixes
+================================================================
+
+1. LOPATA NA ZWLOKACH -- CRASH FIX (deferred destroy)
+----------------------------------------------------
+PRZED (crash):
+   HOOK_USEOBJON
+        |
+        +-- destroy_object(corpse)   <-- niszczy CEL hooka
+        |                                w trakcie operacji silnika
+        +-- return  --> silnik dereferencuje zwolniony obiekt
+                        => USE-AFTER-FREE => WYSYP
+
+PO (dziala):
+   HOOK_USEOBJON                     map_update_p_proc (nastepny tick)
+        |                                   |
+        +-- bury_queue[] << corpse          +-- destroy_object(corpse)
+        +-- gfade_out(300)   [czern]        +-- give_exp_points(10)
+        +-- set_sfall_return(-1)            +-- resize_array(queue,0)
+        +-- return                          +-- tile_refresh_display
+                                            +-- gfade_in(300)
+   Trup ginie POD czarnym ekranem, poza kontekstem hooka. Zero crasha.
+
+
+2. REST -- 7h + auto-zwijanie obozu
+-----------------------------------
+   K (klawisz)  [wymaga: wilderness + campfire + nie combat]
+        |
+        +-- gfade_out(600)  [czern]
+        +-- anim: magic_hands_ground
+        +-- game_time_advance(7h)
+        +-- critter_heal(dude -> max HP)
+        +-- call handle_shovel_on_firepit   <-- teardown POD czernia
+        |        |
+        |        +-- destroy firepit + bedrolls
+        |        +-- wake sleepers (tylko jesli is_critter_prone!)
+        |        +-- GVAR_PARTY_NO_FOLLOW := 0
+        |        +-- gfade_in(300)          <-- JEDEN fade-in
+        |
+        +-- "You rest for 7 hours. ... you pack up the camp."
+
+   LOOT NA ZIEMI: NIETKNIETY (teardown rusza tylko firepit + bedrolle)
+
+
+3. ANIMACJA WSTAWANIA -- guard na prone
+---------------------------------------
+   PRZED:  for each sleeper -> ANIM_back_to_standing  (zawsze)
+   PO:     for each sleeper -> if (is_critter_prone) -> ANIM_back_to_standing
+   Poprawione w 2 miejscach global scriptu (wake edge-detect + teardown).
+   TODO: trzecie miejsce w camp_actions.h:358 -- czeka na rebuild NPC.
+
+
+4. GOOD DEEDS (nowy mod) -- gl_good_deeds.ssl
+---------------------------------------------
+   HOOK_USEOBJON: jedzenie/woda  -->  NPC
+        |
+        +-- is_food_pid(item)?      [7 PIDow, BEZ alkoholu]
+        +-- is_beggar_target(npc)?  [WHITELIST: SCRIPT_GENSKAG]
+        |        (zagniezdzone guardy -- SSL 'and' NIE jest short-circuit)
+        |
+        +-- uid := unique_id(npc)
+        +-- rewarded[uid] == 1 ?
+        |      TAK -> "already had your charity"  (jedzenie NIE zuzyte)
+        |      NIE -> consume food
+        |              +25 XP
+        |              local rep +1  (licznik per-mapa)
+        |              rewarded[uid] := 1
+        |
+        ZERO FALLBACK: nieznany NPC = brak nagrody (nie zgadujemy kto biedny)
+
+
+5. PARTY HOLD -- feedback na ekranie
+------------------------------------
+   F (33)  -->  toggle GVAR_PARTY_NO_FOLLOW
+                  0 -> 1 : "Party: HOLD POSITION."
+                  1 -> 0 : "Party: FOLLOW."
+   Mechanika juz istniala (40 skryptow NPC honoruje ten GVAR),
+   brakowalo TYLKO komunikatu -- stad wrazenie ze nie dziala.
+
+
+6. PARTY ARMOR -- Harold (sprite ghoula)
+----------------------------------------
+   PROBLEM:  Harold uzywa art_idx 28 = "naghul" (sprite GHOULA).
+             Rodzina ghoula NIE MA klatek leather/metal/combat armor.
+             fid_to_base(28) = 0  ->  SET_NONE  ->  skip
+             => Metal Armor Harolda nie renderuje sie wcale.
+
+   FIX (decyzja Borysa "fixuj" -- pancerz ma byc widoczny):
+             fid_to_set(28)  := SET_HM_WHITE
+             fid_to_base(28) := 16777227 (HMJMPS)
+                  |
+                  v
+             worn=Metal Armor -> ARM_METAL -> HMMETL (16777230)
+
+   EFEKT UBOCZNY (swiadomy): Harold na MAPIE wyglada jak czlowiek
+   (bez zbroi = kombinezon). Glowa w dialogu bez zmian.
+   REVERT: skasowac 2 linijki (fid_to_set + fid_to_base).
+
+
+PLIKI
+-----
+   ssl/gl_mod_outdoorsman.ssl   (1,2,3)   -> 17658 B
+   ssl/gl_good_deeds.ssl        (4) NOWY  ->  2604 B
+   ssl/gl_party_hotkeys.ssl     (5)       ->  2704 B
+   ssl/gl_party_armor_ext.ssl   (6)       -> 14252 B

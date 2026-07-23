@@ -328,6 +328,13 @@ procedure fid_to_set(variable fid) begin
     // the black-haired female sprite with full anim (HFMETL idx 7 etc.).
     if (art_idx == 35) then return SET_NF_NICE;
 
+    // Harold = ghoul sprite naghul(28), which has NO leather/metal/combat
+    // armor frames of its own. Borys 2026-07-21 "fixuj": remap to generic
+    // male set so worn armor actually renders. Trade-off: Harold shows as a
+    // human on the MAP (unarmored = jumpsuit). His dialog talking-head is
+    // unaffected. One-line revert: delete this + the twin in fid_to_base.
+    if (art_idx == 28) then return SET_HM_WHITE;
+
     // SET_HF_WHITE (hero female + generic female NPC fallback):
     //   HFCMBT=3, HFJMPS=4, HFLTHR=5, HFMAXX=6, HFMETL=7, HFPRIM=86,
     //   HFBROH=85, HFCMBL=127, NFCHLD=72, NFVALT=98, NFPRIM=121
@@ -548,6 +555,10 @@ procedure fid_to_base(variable fid) begin
     // NFVALT=98, NFPRIM=121
     if (idx == 33 or idx == 36 or idx == 37 or idx == 38 or idx == 72
         or idx == 98 or idx == 121) then return 16777220;   // HFJMPS
+
+    // naghul (Harold) -> HMJMPS base. Borys 2026-07-21 "fixuj" (twin of the
+    // naghul entry in fid_to_set). Lets Harold's worn armor render.
+    if (idx == 28) then return 16777227;
 
     return 0;   // unknown sprite, refresh_one skips
 end

@@ -1,0 +1,155 @@
+/*
+    gl_party_teleport.ssl -- Party placement on map enter (v3, weryfikowany)
+
+    PROBLEM (Borys): przy duzej party (11 members) po wejsciu na mape --
+    zwlaszcza mala mape random encounter -- widac tylko jednego kompana.
+
+    DLACZEGO v1 ZAWIODLA:
+      v1 liczyla tile na dystansie 3..9 od gracza. Na malej mapie
+      encounter taki tile wypada POZA mapa -> placement bez poprawnego
+      punktu startowego -> kompani nie sa umieszczani.
+
+    ZASADA v3 -- ITERUJ WSZYSTKICH, WERYFIKUJ KAZDEGO, PONAWIAJ:
+      Wzorzec skopiowany z placeCritter() w cvgenenc.h (realny kod
+      generowania encounterow w tej grze): po critter_attempt_placement
+      SPRAWDZ tile_num(obj) i tile_distance() -- czyli gdzie krytter
+      NAPRAWDE wyladowal -- i ponow jesli spudlowal.
+
+      Kaskada dla KAZDEGO party membera (kazdy krok jawnie sprawdzany):
+        1. placement na punkt bazowy grupy (sasiad gracza, dystans 1)
+        2. jesli nie wyladowal blisko -> placement wprost na tile gracza
+        3. jesli DALEJ nie -> move_to(gracz) + placement
+           (member jest w rosterze, ale nie zostal wciagniety na mape)
+        4. jesli i to zawiodlo -> policz jako FAILED i zglos na ekranie
+           (explicit fail -- ZERO cichego zgadywania)
+
+    DLACZEGO NIE create_object_sid (prawdziwy spawn):
+      Member zwrocony przez party_member_list JUZ ISTNIEJE jako obiekt.
+      create_object_sid zrobilby DUPLIKAT (dwoch Ianow). Wiec "spawn"
+      realizujemy jako WCIAGNIECIE istniejacego obiektu na mape
+      (move_to + placement), nie tworzenie nowego.
+
+    CLUSTERING: cala grupa (ci sami get_script) startuje z tego samego
+    punktu bazowego -> silnikowy spiral rozklada ich tuz obok siebie ->
+    naturalny klaster. Rozne grupy -> rozne kierunki -> osobne klastry.
+
+    UWAGA SSL: 'and'/'or' NIE sa short-circuit (oba operandy zawsze
+    liczone) -- warunki na potencjalnie zlym tile MUSZA byc zagniezdzone.
+
+    ZAKRES: tylko placement. Reset follow-distance NIE tutaj
+    (LVAR_FOLLOW_DISTANCE ma inny indeks u kazdego NPC -- brak opcode na
+    named-lvar cudzego obiektu bez zgadywania indeksu; ZERO FALLBACK).
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
+#include "sfall/lib.arrays.h"
+
+#define HEX_DIRECTIONS   (6)    // Fallout hex: 6 kierunkow (0..5)
+#define CLUSTER_DIST     (1)    // punkt bazowy grupy = sasiad gracza
+#define MAX_OK_DIST      (20)   // dalej niz to = nie stoi przy graczu
+
+procedure start;
+procedure map_enter_p_proc;
+procedure place_ok(variable who, variable center);
+
+procedure start begin
+end
+
+/*
+    Czy 'who' stoi na mapie w poblizu gracza?
+    tile_num < 0 => obiekt nie ma poprawnej pozycji na tej mapie.
+    Zagniezdzone ify, bo SSL 'and' liczy oba operandy (tile_distance
+    na zlym tile bylby wywolany mimo falszywego pierwszego warunku).
+*/
+procedure place_ok(variable who, variable center) begin
+   variable cur;
+   cur := tile_num(who);
+   if (cur < 0) then return 0;
+   if (tile_distance(cur, center) > MAX_OK_DIST) then return 0;
+   return 1;
+end
+
+procedure map_enter_p_proc begin
+   variable who;
+   variable center;
+   variable elev;
+   variable s;
+   variable sek;
+   variable dir;
+   variable base;
+   variable seen;         // map: script_num -> (sektor + 1); 0 = nieznany
+   variable next_sektor;
+   variable total;        // ilu party members w ogole
+   variable placed;       // ilu stoi poprawnie przy graczu
+   variable forced;       // ilu trzeba bylo wciagnac przez move_to
+   variable failed;       // ilu NIE udalo sie umiescic
+
+   seen := temp_array_map;
+   next_sektor := 0;
+   total := 0;
+   placed := 0;
+   forced := 0;
+   failed := 0;
+
+   center := tile_num(dude_obj);
+   elev := elevation(dude_obj);
+
+   foreach (who in party_member_list(0)) begin
+      // Gracza nie ruszamy -- ochrona, nie fallback.
+      if (who != dude_obj) then begin
+         total := total + 1;
+
+         // Sektor (kierunek) dla grupy tego skryptu; 1-based w mapie.
+         s := get_script(who);
+         sek := seen[s];
+         if (sek == 0) then begin
+            next_sektor := next_sektor + 1;
+            seen[s] := next_sektor;
+            sek := next_sektor;
+         end
+         sek := sek - 1;
+
+         // Modulo w OSOBNYM przypisaniu (nie inline w argumencie) --
+         // unika bledu 'expecting ;' compilera SSL.
+         dir := sek % HEX_DIRECTIONS;
+
+         // Punkt bazowy grupy = sasiad gracza. Guard na skraj mapy.
+         base := tile_num_in_direction(center, dir, CLUSTER_DIST);
+         if (base < 0) then base := center;
+
+         // --- KROK 1: normalny placement na punkt grupy ---
+         critter_attempt_placement(who, base, elev);
+
+         // --- KROK 2: nie wyszlo -> wprost na tile gracza ---
+         if (place_ok(who, center) == 0) then begin
+            critter_attempt_placement(who, center, elev);
+         end
+
+         // --- KROK 3: dalej nie -> wciagnij na mape sila ---
+         // (member jest w rosterze, ale nie zostal przeniesiony)
+         if (place_ok(who, center) == 0) then begin
+            move_to(who, center, elev);
+            critter_attempt_placement(who, center, elev);
+            if (place_ok(who, center) == 1) then begin
+               forced := forced + 1;
+            end
+         end
+
+         // --- KROK 4: wynik, jawnie ---
+         if (place_ok(who, center) == 1) then begin
+            placed := placed + 1;
+         end
+         else begin
+            failed := failed + 1;
+            debug_msg("gl_party_teleport: FAILED to place party member, script " + s);
+         end
+      end
+   end
+
+   display_msg("[party] " + placed + "/" + total + " rozstawionych, " + forced + " wciagnietych, " + failed + " BLEDOW, " + next_sektor + " klastrow");
+   debug_msg("gl_party_teleport: placed=" + placed + " total=" + total + " forced=" + forced + " failed=" + failed + " clusters=" + next_sektor);
+end
