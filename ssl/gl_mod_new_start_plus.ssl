@@ -51,6 +51,19 @@ procedure start begin
             add_obj_to_inven(dude_obj, create_object(PID_LEATHER_JACKET, 0, 0));
             display_msg("You check your pack. Shades, combat jacket, knife, spare jackets.");
 
+            // Motorcycle from the start (Borys 2026-07-24). State machine
+            // verified in headers:
+            //   GVAR_PLAYER_GOT_CAR: 0=none, 1=bike (dude_has_bike),
+            //                        2=upgraded bike.
+            //   car_on_wm = (GVAR_PLAYER_GOT_CAR != 0) and
+            //               (GVAR_CAR_CUR_MAP == -1)  -> bike rides on the
+            //   worldmap WITH the player; Et Tu's per-map scripts then place
+            //   PID_DRIVABLE_MOTO1 at each town's car spot on arrival.
+            // Requires GVAR_ENABLE_MOTORCYCLE=1 in config/fo1_settings.ini.
+            set_global_var(GVAR_PLAYER_GOT_CAR, 1);
+            set_global_var(GVAR_CAR_CUR_MAP, -1);
+            display_msg("There's a motorcycle parked outside. The keys are yours.");
+
             // Persist "given" so LOAD SAVE never re-gifts.
             given_arr := create_array_map;
             given_arr["given"] := 1;
