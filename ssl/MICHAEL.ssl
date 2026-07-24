@@ -180,7 +180,7 @@ end
 procedure talk_p_proc begin
    variable talk := true;
 
-   if (self_team == TEAM_PLAYER) then begin
+   if (self_team == TEAM_PLAYER and not(party_wants_normal_talk)) then begin
       start_gdialog(NAME, self_obj, 4, -1, -1);
       gSay_Start;
       call NodePartyMain;

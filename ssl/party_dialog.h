@@ -45,6 +45,8 @@ procedure CraftHealingPowderTrigger;
 procedure CraftAntidoteTrigger;
 procedure CraftMolotovTrigger;
 procedure NodeCampWakeUp;
+procedure NodePartyTalkNormal;
+procedure party_wants_normal_talk;
 
 
 // ============================================================
@@ -65,6 +67,7 @@ procedure NodePartyMain begin
          NOption("Let's scout this area and set up for the night.", CampScoutTrigger, 4);
    end
    NOption("Got a minute?", NodePartyNeeds, 4);
+   NOption("Let's talk about something else.", NodePartyTalkNormal, 4);
    NOption("Later.", NodePartyDone, 4);
 end
 
@@ -91,6 +94,38 @@ procedure NodePartyNeeds begin
    NOption("How is everyone holding up?", PartyWoundedTrigger, 4);
    NOption("On second thought...", NodePartyMain, 4);
    NOption("Later.", NodePartyDone, 4);
+end
+
+// ============================================================
+// NodePartyTalkNormal -- flag THIS npc to open its pre-recruitment
+// dialog on the NEXT talk (one-shot), then close. Player re-clicks the
+// NPC for the normal chat; afterwards it reverts to the party menu
+// automatically. NPC stays in the party the whole time. (Borys task 5.)
+// Flag store: save_array "party_talk_normal" -> obj handle (session).
+// ============================================================
+procedure NodePartyTalkNormal begin
+   variable arr;
+   arr := load_array("party_talk_normal");
+   if (arr == 0) then arr := create_array_map;
+   arr["obj"] := self_obj;
+   save_array("party_talk_normal", arr);
+   Reply("(They ease out of soldier mode.) Sure -- talk to me again, I'm all yours for a moment.");
+   NOption("Alright.", NodePartyDone, 4);
+end
+
+// Returns 1 exactly ONCE if this npc was flagged by NodePartyTalkNormal,
+// consuming the flag; otherwise 0. Called from each NPC's talk gate:
+//   if (self_team == TEAM_PLAYER and not(party_wants_normal_talk)) ...
+// SSL 'and' is not short-circuit, so this runs every talk -- safe: it
+// only matches (and consumes) when the stored obj == self_obj.
+procedure party_wants_normal_talk begin
+   variable arr;
+   arr := load_array("party_talk_normal");
+   if (arr == 0) then return 0;
+   if (arr["obj"] != self_obj) then return 0;
+   arr["obj"] := 0;
+   save_array("party_talk_normal", arr);
+   return 1;
 end
 
 // ============================================================
