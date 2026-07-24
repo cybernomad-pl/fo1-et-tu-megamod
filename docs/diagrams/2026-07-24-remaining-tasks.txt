@@ -1,0 +1,70 @@
+2026-07-24 -- pozostale zadania: bed-rest, auto-craft, bulk-bury
+===============================================================
+
+TASK 7 -- K-REST PRZY DOWOLNYM LOZKU + PROMPT   (gl_mod_outdoorsman.ssl)
+-----------------------------------------------------------------------
+   keypress K (37)
+        |
+        +-- combat?            -> "Can't rest during combat."
+        +-- wilderness+campfire -> handle_player_bedroll_rest  (obozowy, zwija oboz)
+        +-- near_a_bed?         -> handle_bed_rest              (spanie 8h, leczy party)
+        +-- else                -> "need campfire or a bed"
+
+   near_a_bed(): skan pola gracza + 6 sasiednich o PID:
+        MATTRESS_1/2 (33554638/9), BED_1/2 (33554640/1)  -> tile_contains_obj_pid
+
+   PROMPT (map_update_p_proc, edge-triggered):
+        HP<max  AND  (evening OR night, >=18:00)  AND  near_a_bed
+             |
+             +-- bed_prompt_shown==0 -> display "Press K to rest until morning"
+                                        bed_prompt_shown := 1
+        warunek falszywy -> bed_prompt_shown := 0  (moze pokazac znowu)
+
+
+TASK cz.3 -- AUTO-CRAFT NA KLAWISZ C (46)        (gl_mod_outdoorsman.ssl)
+------------------------------------------------------------------------
+   handle_autocraft():  petla "wybierz najlepsza, zrob, powtorz"
+
+     while (cos da sie zrobic):
+        best := recepta o NAJWYZSZYM pid_cost(output) ktora ac_can()==1
+        if best == -1: STOP
+        ac_do(best)   -> consume inputs z inv GRACZA, +output, +XP
+        total++
+
+   -> value-priority + MAX kazdego + LANCUCHY (spear zrobiony w tej iteracji
+      zasila sharp-spear w nastepnej). Zero sortowania -- selekcja max co iter.
+
+   RECEPTY (5):
+     r0 spear(7)          = pole(320) + KNIFE(4, ZWYKLY! nie 236)   +30
+     r1 sharp spear(280)  = spear(7) + flint(278)                   +40
+     r2 heal powder(273)  = broc(271) + xander(272)                 +30
+     r3 antidote(49)      = tail(92) + booze(125) + SCIENCE>=50     +50
+     r4 molotov(159)      = booze(125) + lighter(101, ZOSTAJE)      +25
+
+
+TASK 4 -- BULK "ZAKOP CIALA" (party order)       (party_dialog.h -> 37 NPC)
+--------------------------------------------------------------------------
+   NodePartyMain (map_is_encounter AND camp_active_here):
+        NOption "Let's bury the dead around here." -> CampBuryTrigger
+
+   CampBuryTrigger  -> "Do it." -> CampBuryExecute
+
+   CampBuryExecute:
+        PASS 1 (bezpiecznie): list_begin(LIST_CRITTERS)
+              zbierz wszystkie is_critter_dead != dude  -> arr[]
+              list_end                     (NIE niszcz w trakcie iteracji!)
+        PASS 2: gfade_out
+              for each corpse in arr:
+                 zrzuc loot na ziemie:  inven_ptr(corpse,0) -> rm + move_to(tile)
+                 destroy_object(corpse)
+              gfade_in, +10 XP
+        -> "The party buries the dead. Belongings left on the ground."
+
+   LOOT ZOSTAJE: kazdy przedmiot z trupa lezy na jego kaflu przed usunieciem.
+
+
+PLIKI
+-----
+   ssl/gl_mod_outdoorsman.ssl   (task7 + autocraft)  -> 21962 B
+   ssl/party_dialog.h           (task4 bury option)
+   ssl/[37 NPC].ssl             (rekompilacja przez party_dialog.h)

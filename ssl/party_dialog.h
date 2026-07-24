@@ -35,6 +35,8 @@ procedure CampScoutTrigger;
 procedure CampScoutExecute;
 procedure CampPackTrigger;
 procedure CampPackExecute;
+procedure CampBuryTrigger;
+procedure CampBuryExecute;
 procedure CampIdeasTrigger;
 procedure PartyAmmoTrigger;
 procedure PartyFoodTrigger;
@@ -61,8 +63,10 @@ procedure NodePartyMain begin
    end
    NOption("About your orders...", NodePartyTactics, 4);
    if (map_is_encounter) then begin
-      if (camp_active_here) then
+      if (camp_active_here) then begin
          NOption("Time to break camp.", CampPackTrigger, 4);
+         NOption("Let's bury the dead around here.", CampBuryTrigger, 4);
+      end
       else if not(camp_searched_here) then
          NOption("Let's scout this area and set up for the night.", CampScoutTrigger, 4);
    end
@@ -217,6 +221,89 @@ end
 
 procedure CampPackExecute begin
    CAMP_DO_PACK
+end
+
+// ============================================================
+// BURY THE DEAD (Borys task 4) -- party order, camp active on an encounter
+// map. Buries EVERY corpse on the map. Loot is NOT destroyed: each corpse's
+// belongings are dropped onto its tile (floor) before the body is removed,
+// so the player must still pick them up.
+// ============================================================
+procedure CampBuryTrigger begin
+   if (combat_is_initialized) then begin
+      Reply("Not while there's still shooting, boss.");
+      NOption("Forget it.", NodePartyMain, 4);
+   end
+   else begin
+      Reply("Grim work, but alright. We'll put them under. Whatever they were carrying stays on the ground.");
+      NOption("Do it.", CampBuryExecute, 4);
+      NOption("Forget it.", NodePartyMain, 4);
+   end
+end
+
+procedure CampBuryExecute begin
+   variable lst;
+   variable obj;
+   variable arr;
+   variable k;
+   variable corpse;
+   variable item;
+   variable t;
+   variable elev;
+   variable cnt;
+   variable guard;
+
+   // Pass 1: collect dead critters. Never destroy while iterating the
+   // engine's LIST_CRITTERS (stale-pointer crash) -- collect, then act.
+   arr := create_array(0, 4);
+   lst := list_begin(LIST_CRITTERS);
+   obj := list_next(lst);
+   while (obj) do begin
+      if (obj != 0) then begin
+         if (obj != dude_obj) then begin
+            if (is_critter_dead(obj)) then begin
+               resize_array(arr, len_array(arr) + 1);
+               arr[len_array(arr) - 1] := obj;
+            end
+         end
+      end
+      obj := list_next(lst);
+   end
+   list_end(lst);
+
+   if (len_array(arr) == 0) then begin
+      free_array(arr);
+      Reply("Nothing here to bury.");
+      NOption("Right.", NodePartyMain, 4);
+   end
+   else begin
+      gfade_out(300);
+      cnt := 0;
+      for (k := 0; k < len_array(arr); k++) begin
+         corpse := arr[k];
+         if (corpse != 0) then begin
+            t := tile_num(corpse);
+            elev := elevation(corpse);
+            // Drop this corpse's loot onto its ground tile before removing
+            // it (destroy_object would take the loot with it otherwise).
+            guard := 0;
+            item := inven_ptr(corpse, 0);
+            while (item and guard < 100) do begin
+               rm_obj_from_inven(corpse, item);
+               move_to(item, t, elev);
+               guard := guard + 1;
+               item := inven_ptr(corpse, 0);
+            end
+            destroy_object(corpse);
+            cnt := cnt + 1;
+         end
+      end
+      free_array(arr);
+      tile_refresh_display;
+      gfade_in(300);
+      give_exp_points(10);
+      display_msg("The party buries the dead. Their belongings are left on the ground.");
+   end
 end
 
 // ============================================================
