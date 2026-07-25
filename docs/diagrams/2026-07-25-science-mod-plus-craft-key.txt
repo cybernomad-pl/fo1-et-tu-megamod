@@ -1,0 +1,56 @@
+2026-07-25 -- GENERAL SCIENCE ON + AUTO-CRAFT KEY C->G
+========================================================
+
+1) GENERAL SCIENCE -- AKTYWACJA
+------------------------------
+   Skrypt globalny gl_general_science.int istnial (out/), ale mod
+   nie byl w mods_order -> nie ladowal sie.
+
+   JAK DZIALA (gl_general_science.ssl, hook HOOK_USESKILLON):
+     uzyj skillu SCIENCE na dowolnym obiekcie
+        |
+        +-- juz badany ten PID?  (sfall array "megamod_science")
+        |      TAK -> krotki msg, brak XP (zero farmienia)
+        |      NIE -> observation wg kategorii + XP, zapisz PID
+        |
+        kategorie -> tekst + XP:
+           critter zywy    -> obserwacja               +5  (BASE)
+           critter martwy  -> AUTOPSJA, skill check:
+                                 pass -> slabe punkty  +25 (AUTOPSY)
+                                 fail -> nic ciekawego  +3
+           komputer/tech   -> obserwacja               +5 / +15 rzadkie
+           roslina         -> obserwacja               +5
+           scenery         -> obserwacja               +5
+           item            -> obserwacja               +5
+     XP skaluje: RARE_XP=15 dla ciekawych obiektow.
+     Tracking per-PID w save (autopsy osobna tablica "megamod_autopsy").
+
+   INSTALACJA:
+     mods/fo1_mod_science/scripts/gl_general_science.int   (nowy folder)
+     mods_order.txt: + fo1_mod_science  (po fo1_mod_outdoorsman)
+
+2) AUTO-CRAFT: KLAWISZ C (46) -> G (34)
+---------------------------------------
+   PROBLEM: C = vanilla Character screen. Nacisniecie C otwieralo
+            ekran postaci ORAZ odpalalo auto-craft. Kolizja.
+
+   FIX (gl_mod_outdoorsman.ssl, keypress_handler):
+            if (key == 46)  ->  if (key == 34)
+
+   MAPA KLAWISZY NASZYCH MODOW (po zmianie):
+        37 K  = rest (oboz / lozko)
+        34 G  = auto-craft            <-- BYLO 46 C
+        45 X  = wyjscie na worldmap (encounter)
+        38 L  = zapalniczka toggle
+        33 F  = party HOLD / FOLLOW
+        26 [  = party (hotkeys)
+        27 ]  = party (hotkeys)
+   G nie jest vanilla-hotkeyem FO (ekrany I/P/C/S, walka A).
+   Gdyby jednak kolidowal u gracza -> zmiana jednej liczby (34).
+
+PLIKI
+-----
+   ssl/gl_mod_outdoorsman.ssl              (key 46->34)
+   fo1_megamod/scripts/gl_mod_outdoorsman.int
+   fo1_megamod/scripts/gl_general_science.int   (bez zmian, juz w repo)
+   docs/mods_order-2026-07-25.txt          (snapshot z fo1_mod_science)

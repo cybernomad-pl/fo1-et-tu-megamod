@@ -208,9 +208,11 @@ procedure keypress_handler begin
         return;
     end
 
-    // DIK_C (46) = auto-craft: make everything possible from your pack,
+    // DIK_G (34) = auto-craft: make everything possible from your pack,
     // highest in-game value first, max of each (Borys cz.3).
-    if (key == 46) then begin
+    // NOTE 2026-07-25: moved off DIK_C (46) -- C is the vanilla Character
+    // screen hotkey, pressing it opened char screen AND triggered craft.
+    if (key == 34) then begin
         if (combat_is_initialized) then begin
             display_msg("No time for crafting in a fight.");
             return;
