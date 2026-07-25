@@ -228,6 +228,8 @@ procedure map_update_p_proc begin
 end
 
 procedure map_enter_p_proc begin
+   // B3 fix (Klaudia 2026-07-25): in party -> keep team, no home teleport.
+   if (self_team == TEAM_PLAYER) then return;
    if (local_var(LVAR_Home_Tile) == 0) then begin
       set_local_var(LVAR_Home_Tile, self_tile);
       set_local_var(LVAR_Home_Rotation, self_cur_rot);

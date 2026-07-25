@@ -172,6 +172,8 @@ procedure push_p_proc begin
 end
 
 procedure map_enter_p_proc begin
+   // B3 fix (Klaudia 2026-07-25): in party -> keep team, no home teleport.
+   if (self_team == TEAM_PLAYER) then return;
    if not(Vasquez_In_Party) then begin
       set_self_team(TEAM_JUNKTOWNER);
    end

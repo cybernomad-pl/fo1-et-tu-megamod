@@ -1,0 +1,53 @@
+2026-07-25 -- BUG B3: RESET DRUZYNY NPC PRZY ZMIANIE MAPY
+==========================================================
+
+OBJAW
+-----
+Rekrutowany NPC wypada z party po przejsciu na inna mape.
+Potwierdzone przez Borysa: MARCELLE, TRISH, SINTHIA.
+
+PRZYCZYNA
+---------
+map_enter_p_proc bezwarunkowo resetowal team + teleportowal
+NPC "do domu":
+
+   procedure map_enter_p_proc begin
+        critter_attempt_placement(self_obj, HOME_TILE, elev)   // teleport
+        set_self_team(TEAM_JUNKTOWNER)                         // <- reset team
+        ...
+
+   NPC w party ma self_team == TEAM_PLAYER. set_self_team go
+   wypycha z druzyny -> nie followuje, wraca na spawn.
+
+WZORZEC POPRAWNY (OFFICER/THERESA -- juz mialy):
+   if (self_team == TEAM_PLAYER) then begin return; end
+   set_self_team(TEAM_VAULT13)
+
+FIX
+---
+Na poczatku map_enter_p_proc, PRZED jakimkolwiek placement/set_team:
+
+   procedure map_enter_p_proc begin
+        // B3 fix (Klaudia 2026-07-25): w party -> trzymaj team, zero teleportu.
+        if (self_team == TEAM_PLAYER) then return;
+        ...reszta oryginalnej logiki bez zmian...
+
+   W party  -> return natychmiast, team i pozycja nietkniete.
+   Poza party -> zachowanie vanilla (placement + set_self_team).
+
+   ZERO FALLBACKU: guard jest explicit na znany stan (TEAM_PLAYER).
+   Nieznany team nie jest zgadywany -- leci oryginalna sciezka.
+
+ZAKRES (18 NPC z Group A -- brak guardu w map_enter):
+   ARADESH  CINDY    CURTIS   GENVAULT IAN      ISMARC
+   LENORE   LYLE     MARCELLE REBEL    SINTHIA  TANDI
+   TGUARD   TRISH    VALTCTZN VASQUEZ  WTRTHIEF JARVIS
+
+   Group B (OFFICER, THERESA) juz mialy guard -- nietkniete.
+
+WERYFIKACJA
+-----------
+   test-compile MARCELLE/TRISH/SINTHIA -> exit 0
+   full rebuild compile_all.sh -> out/invasion/*.int
+   deploy 66 .int -> mods/fo1_mod_npc_party/scripts/
+   repo: 18x ssl/*.ssl + fo1_megamod/scripts/*.int zsync

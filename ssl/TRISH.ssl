@@ -152,6 +152,8 @@ procedure look_at_p_proc begin
 end
 
 procedure map_enter_p_proc begin
+   // B3 fix (Klaudia 2026-07-25): in party -> keep team, no home teleport.
+   if (self_team == TEAM_PLAYER) then return;
    Trish_ptr := self_obj;
    set_self_team(TEAM_JUNKTOWNER);
    if CUR_MAP_JUNKCSNO then begin

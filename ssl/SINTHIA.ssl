@@ -150,6 +150,8 @@ procedure look_at_p_proc begin
 end
 
 procedure map_enter_p_proc begin
+   // B3 fix (Klaudia 2026-07-25): in party -> keep team, no home teleport.
+   if (self_team == TEAM_PLAYER) then return;
    set_self_team(TEAM_JUNKTOWNER);
    Sinthia_ptr := self_obj;
    home_tile := 17485;

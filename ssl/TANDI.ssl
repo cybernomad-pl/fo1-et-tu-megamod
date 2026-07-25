@@ -697,6 +697,8 @@ procedure TandiSchedule begin
 end
 
 procedure map_enter_p_proc begin
+   // B3 fix (Klaudia 2026-07-25): in party -> keep team, no home teleport.
+   if (self_team == TEAM_PLAYER) then return;
    if shady_invaded and CUR_AREA_SHADY_SANDS and (global_var(GVAR_TANDI_HIRELING_STATUS) != 5) then begin
       invasion_kill_critter;
    end
