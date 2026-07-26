@@ -80,8 +80,11 @@ procedure critter_p_proc begin
 end
 
 procedure map_enter_p_proc begin
-   // Agatha is ALWAYS hfprim (index 86) -- what Tandi was before
-   art_change_fid_num(self_obj, 86);
+   // Agatha tribal hfprim (86). Set ONCE and only when NOT in party, so it
+   // stops re-swapping every map enter and no longer wipes armor FID
+   // on recruited Agatha (Borys 2026-07-26).
+   if (self_team != TEAM_PLAYER and (obj_art_fid(self_obj) bwand 4095) != 86) then
+      art_change_fid_num(self_obj, 86);
 
    if shady_invaded then begin
       invasion_kill_critter;

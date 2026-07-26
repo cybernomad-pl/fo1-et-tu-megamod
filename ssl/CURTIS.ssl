@@ -116,8 +116,10 @@ end
 procedure map_enter_p_proc begin
    // B3 fix (Klaudia 2026-07-25): in party -> keep team, no home teleport.
    if (self_team == TEAM_PLAYER) then return;
-   // Curtis is ALWAYS tribal warrior (hmwarr, index 130)
-   art_change_fid_num(self_obj, 130);
+   // Curtis tribal warrior (hmwarr, 130). Set ONCE -- skip if already tribal
+   // so it stops re-swapping every map enter (Borys 2026-07-26).
+   if ((obj_art_fid(self_obj) bwand 4095) != 130) then
+      art_change_fid_num(self_obj, 130);
 
    if shady_invaded then begin
       invasion_kill_critter;

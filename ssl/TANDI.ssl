@@ -268,7 +268,10 @@ procedure tandi00 begin
    NOption(102, tandi00_1, 4);
    NOption(103, tandi23, 5);
    NOption(104, tandi24, 4);
-   NOption("Join me.", NodeRecruit, 4);
+   // Join me only AFTER she leaves Shady Sands kidnapped by raiders
+   // (kidnapped or already rescued). Borys 2026-07-26.
+   if (tandi_is_kidnapped or tandi_is_rescued) then
+      NOption("Join me.", NodeRecruit, 4);
    NOption(105, tandi28, 4);
 end
 

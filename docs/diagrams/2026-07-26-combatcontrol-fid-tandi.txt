@@ -1,0 +1,53 @@
+2026-07-26 -- COMBAT CONTROL (fix wlasciwy) + FID re-swap + Tandi
+==================================================================
+
+1) COMBAT CONTROL -- gl_partycontrol.int (z backupu NordLocker)
+--------------------------------------------------------------
+   PROBLEM: gl_partycontrol.int NIE byl zainstalowany. sfall 4.5 wynioslo
+   combat control z silnika DO tego skryptu ("Previously was part of sfall
+   itself, now a separate mod"). Bez skryptu silnik leakowal -> sterowanie
+   KAZDYM critterem na mapie.
+
+   AllowControl(pid, critter):
+        talisman?          -> tak (PID_TALISMAN)
+        pidList ustawiony? -> pid w liscie?
+        pidList PUSTY      -> party_member_obj(pid)   <-- tylko REALNI party
+
+   FIX: deploy fo1_mod_combatcontrol/scripts/gl_partycontrol.int
+        + PIDList PUSTY w sfall-mods.ini
+   => sterujesz TYLKO zwerbowanymi, WSZYSTKIMI, niezaleznie od proto.
+      Zero listy, zero problemu z generykami.
+
+2) FID re-swap (Curtis / Agatha / Tandi) -- zostaje tribal, znika re-swap
+------------------------------------------------------------------------
+   art_change_fid_num byl wolany KAZDY map_enter -> nadpisywal FID pancerza
+   (armor znikal). Guard: swapuj tylko gdy NIE juz tribal (i nie w party).
+
+   CURTIS  (map_enter):  if (fid & 4095 != 130) then art_change(130)  // hmwarr
+   AGATHA  (map_enter):  if (not party and fid&4095 != 86) then art_change(86)
+   Tandi   (gl_mod_tandi gamemode hook): if (not party and fid&4095 != 86)
+                                          then set OBJ_DATA_FID = hfprim
+
+   tribal sprite ZOSTAJE, ale nie jest re-swapowany co wejscie -> pancerz
+   na zwerbowanym nie znika.
+
+   UWAGA: gl_mod_tandi NIE byl wdrozony -> Tandi nie byla tribal (proto=art39).
+   Teraz deploy fo1_mod_tandi/scripts/gl_mod_tandi.int -> proto FID=hfprim(86)
+   + patch istniejacych. Tandi tribal.
+
+3) TANDI -- "Join me" tylko po porwaniu
+---------------------------------------
+   tandi00 node: NOption "Join me." owiniete warunkiem:
+        if (tandi_is_kidnapped or tandi_is_rescued) then NOption(...)
+   = HIRELING_STATUS 1 (porwana) lub 2 (uratowana). W Shady Sands
+     (status 0) opcji NIE ma -- pojawia sie dopiero gdy raiderzy ja porwa.
+
+PLIKI
+-----
+   ssl/gl_partycontrol.ssl (+int)   ssl/CURTIS.ssl ssl/AGATHA.ssl ssl/TANDI.ssl
+   ssl/gl_mod_tandi.ssl (+int)
+   config: sfall-mods.ini (PIDList pusty), mods_order (+combatcontrol +tandi)
+
+TODO (odlozone -- czesc migracji MyMod):
+   TALISMAN: wymaga wpisu w scripts.lst (SCRIPT_TALISMAN) + rekompilacji
+   gl_peace/TALISMAN pod nasze headery (backup uzywa sfall_headers\).

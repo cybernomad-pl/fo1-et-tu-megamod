@@ -48,8 +48,14 @@ procedure gamemode_handler begin
     while (obj) do begin
         if (obj != 0) then begin
             if (obj_pid(obj) == PID_TANDI) then begin
-                set_object_data(obj, OBJ_DATA_FID, FID_HFPRIM_FULL);
-                LOG("tandi_mod", "swapped", 1);
+                // Only when NOT in party and not already hfprim -- stops the
+                // re-swap from wiping armored Tandi's FID (Borys 2026-07-26).
+                if (get_team(obj) != TEAM_PLAYER) then begin
+                    if ((obj_art_fid(obj) bwand 4095) != 86) then begin
+                        set_object_data(obj, OBJ_DATA_FID, FID_HFPRIM_FULL);
+                        LOG("tandi_mod", "swapped", 1);
+                    end
+                end
             end
         end
         obj := list_next(lst);
