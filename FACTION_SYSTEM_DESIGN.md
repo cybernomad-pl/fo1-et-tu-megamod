@@ -197,12 +197,24 @@ Kandydaci na implementacje (do prototypu -- FO/sfall):
 - Frakcje przyjazne (Guards/BoS gdy masz reputacje) moga byc krotkotrwalymi
   sojusznikami (despawn po walce), zamiast wrogami-po-czasie.
 
-### Otwarte decyzje (do ustalenia z Borysem)
+### Zachowanie zalezne od REPUTACJI (Borys 2026-07-26)
+Kluczowy podzial: kto przychodzi I jak sie zachowuje zalezy od Twojej
+**reputacji w danym miescie/frakcji**:
+- **Dobra reputacja** -> frakcja PRZYJAZNA. Bije Twoich wrogow, po walce
+  **NIC Ci nie robi** (nie odwraca sie), mozna z nia nawet **BARTEROWAC**.
+  Realna odsiecz + mobilny handel.
+- **Zla reputacja / dzicz / pech** -> frakcja WROGA (albo zwabieni Raiders).
+  Wtedy dziala mechanika "enemies-first, potem TY": najpierw wybija to z czym
+  walczysz, potem bierze sie za Ciebie.
+
+Czyli reputacja decyduje o teamie wezwanych: przyjazni ~ sojusznik/barter,
+wrodzy ~ dwufazowy team-flip.
+
+### Otwarte decyzje (do ustalenia)
 - Mapowanie region worldmapy / mapa -> frakcja (pelna tabela).
-- Szansa na Raiders (staly % czy funkcja reputacji/lokacji?).
-- Czy przyjazne frakcje zostaja na stale, znikaja po walce, czy tez sie
-  odwracaja jak wrogie?
-- Czy trzyma cooldown / limit uzyc?
+- Progi reputacji przyjazny/wrogi per miasto.
+- Szansa na Raiders przy braku lokalnej frakcji (staly % czy funkcja rep?).
+- Cooldown / limit uzyc radia?
 
 ### Status
 Design. Obecny `gl_radio.ssl` (sekwencyjny, TEAM_PLAYER) to baza do przepisania,
