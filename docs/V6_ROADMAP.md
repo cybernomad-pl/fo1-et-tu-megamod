@@ -1,7 +1,19 @@
 # fo1-et-tu-megamod v6 Roadmap -- Issues + Refactor Plan
 
-**Data:** 2026-04-18
+**Data:** 2026-04-18 (plan) -- **zaktualizowano 2026-07-26**
 **Branch:** draft -- czeka na zatwierdzenie Borysa przed `gh issue create`
+
+> **AKTUALIZACJA 2026-07-26.** Bieżący, faktyczny stan wdrożenia trzyma
+> [`STATUS.md`](STATUS.md) -- ten plik to plan/backlog. Skrót zmian od kwietnia:
+> - **B2 (FID per-FID)** -- ZROBIONE (party armor sprite mapowany po base FID).
+> - **B3 (team reset po map change)** -- ZROBIONE (guard `self_team==TEAM_PLAYER`
+>   dodany do 18 NPC; nie tylko Theresa/Officer).
+> - **Combat control** -- ZROBIONE (deploy `gl_partycontrol` + pusty `PIDList`).
+> - **General Science, auto-craft, camp, bury, bed-rest, good deeds** -- LIVE.
+> - **Tandi**: tribal sprite (hfprim) LIVE + "Join me" gated na porwaniu.
+> - **B1 (czarna mapa worldmap exit)** -- status nieznany, do ponownej weryfikacji.
+> - **OPEN**: crash w Vault 15 na starym savie (patrz `STATUS.md`).
+> - F1 (motocykl) czesciowo; F2/F3 (biker gang, stat boosters) nadal w planie.
 
 ## CEL
 
