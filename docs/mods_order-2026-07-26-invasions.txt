@@ -1,0 +1,49 @@
+; ============================================================
+; Odtworzone 2026-07-24 po utracie instalki.
+; Kolejnosc = oryginalna z poprzedniej instalki
+; (KLAUDIA/fallout-ettu-config/mods_order-AKTUALNY-2026-07-24.txt)
+;
+; Wpisy z ';' = mod NIE jest jeszcze zainstalowany. Po wgraniu
+; folderu do mods/ wystarczy usunac srednik z danej linii.
+; ============================================================
+
+fo1_base
+fo1_interface
+Anim_ImprovedSMutantDeath
+fo1_alternative_Junktown_Endings
+fo1_alternative_forcefields
+fo1_barter_formula
+;fo1_ShadyTrader            BRAK - do sciagniecia
+;fo1_KenjiRearmed           BRAK - do sciagniecia
+InterfaceUpscaled
+fo1_footprints
+;fo1_tycho_as_ranger        BRAK - do sciagniecia
+fo1_maps_mountains
+;fo2tweaks                  BRAK - do sciagniecia
+;InventoryFilter.dat        BRAK - do sciagniecia
+;F2MechanicsMiniRework      BRAK - do sciagniecia
+;fo1_big_party_mod          BRAK - KRYTYCZNY (baza dla naszych 60 NPC)
+
+; --- nasza warstwa (cybernomad) ---
+fo1_mod_party_hotkeys
+fo1_mod_new_start_plus
+fo1_mod_outdoorsman
+fo1_mod_science
+fo1_mod_emergency_radio
+fo1_mod_combatcontrol
+fo1_mod_tandi
+fo1_mod_party_armor_ext
+fo1_mod_legendary_gear
+; 66 nadpisan skryptow NPC (39 rekrutowalnych: Join me / follow / rozkazy).
+; MUSI byc po fo1_base i po fo1_big_party_mod -- ostatni wygrywa.
+fo1_mod_npc_party
+
+; --- dostepne w paczce 1.16, wylaczone (nie bylo ich w twojej kolejnosci) ---
+;fo1_lang_german
+;fo1_lang_french
+;fo1_lang_czech
+fo1_robodog
+ShowLootWeight
+InventoryAPcosts
+;fo1_new_premades
+fo1_v15_rework
