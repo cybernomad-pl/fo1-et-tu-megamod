@@ -1,0 +1,189 @@
+/*
+    EMERGENCY RADIO -- prototype (Borys 2026-07-26)
+
+    USE the radio -> call location-based reinforcements.
+      - good town reputation  -> FRIENDLY squad (TEAM_PLAYER, helps, stays)
+      - bad rep / wilderness   -> HOSTILE squad ("enemies-first, then you")
+
+    "enemies-first" mechanic (kept simple, per Borys):
+      1. On radio use, scan LIST_CRITTERS for the player's current attackers
+         (critters whose current target == dude_obj).
+      2. Spawn the squad. For a HOSTILE squad, point each spawned critter at one
+         of those enemies via set_object_data(npc, OBJ_DATA_WHO_HIT_ME, enemy).
+         Once one swings, Fallout combat AI cascades -- the rest join in.
+      3. Phase 2: once no player-attacker is left alive, re-point the hostile
+         squad at dude_obj -> they turn on the player.
+
+    NOT wired to the town-reputation barter yet (friendly squad is TEAM_PLAYER
+    for now). Location table is minimal -- expand CUR_AREA cases as needed.
+
+    PROTOTYPE: needs in-game tuning of the WHO_HIT_ME kickoff behaviour.
+*/
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
+
+#define LOG(s, k, v)   set_ini_setting("emrad.ini|" + s + "|" + k, v)
+
+#define EMRAD_SQUAD        (3)
+#define TEAM_EMRAD_HOSTILE (TEAM_RAIDERS_OTHER)   // distinct from TEAM_PLAYER
+
+procedure start;
+procedure useobjon_handler;
+procedure gamemode_handler;
+procedure do_summon;
+procedure collect_enemies;
+procedure first_live_enemy(variable enemies);
+procedure faction_proto;
+procedure town_rep_here;
+
+variable emrad_squad;    // array of hostile-squad objs (phase-2 turn)
+variable emrad_active;   // 1 while a hostile squad is in "enemies-first" phase
+
+procedure start begin
+    if game_loaded then begin
+        emrad_squad  := 0;
+        emrad_active := 0;
+        register_hook_proc(HOOK_USEOBJON, useobjon_handler);
+        register_hook_proc(HOOK_GAMEMODECHANGE, gamemode_handler);
+        LOG("start", "loaded", 1);
+    end
+end
+
+// ------- radio USE -------
+procedure useobjon_handler begin
+    variable item;
+    variable user;
+
+    item := get_sfall_arg;
+    user := get_sfall_arg;
+
+    if (user != dude_obj) then return;
+    if (item == 0) then return;
+    if (obj_pid(item) != PID_RADIO) then return;
+
+    call do_summon;
+    set_sfall_return(-1);   // consume -- no default "nothing happens"
+end
+
+// ------- location -> which critter proto to spawn -------
+// Minimal table; wilderness / unknown -> raiders.
+procedure faction_proto begin
+    if (CUR_AREA_SHADY_SANDS) then return PID_GUARD;
+    if (CUR_AREA_JUNKTOWN)    then return PID_GUARD;
+    return PID_RAIDER;   // wilderness / unlucky
+end
+
+// ------- reputation of the town you are in (>0 = friendly) -------
+procedure town_rep_here begin
+    if (CUR_AREA_SHADY_SANDS) then return global_var(GVAR_TOWN_REP_SHADYSANDS);
+    if (CUR_AREA_JUNKTOWN)    then return global_var(GVAR_TOWN_REP_JUNKTOWN);
+    return -1;   // wilderness -> treated as hostile
+end
+
+// ------- collect critters currently attacking the player -------
+procedure collect_enemies begin
+    variable enemies;
+    variable lst;
+    variable obj;
+
+    enemies := create_array(0, 4);
+    lst := list_begin(LIST_CRITTERS);
+    obj := list_next(lst);
+    while (obj) do begin
+        if (obj != 0 and obj != dude_obj) then begin
+            if (not(is_critter_dead(obj))) then begin
+                if (get_team(obj) != TEAM_PLAYER) then begin
+                    if (get_object_data(obj, OBJ_DATA_WHO_HIT_ME) == dude_obj) then begin
+                        resize_array(enemies, len_array(enemies) + 1);
+                        enemies[len_array(enemies) - 1] := obj;
+                    end
+                end
+            end
+        end
+        obj := list_next(lst);
+    end
+    list_end(lst);
+    return enemies;
+end
+
+procedure first_live_enemy(variable enemies) begin
+    variable i;
+    variable e;
+    for (i := 0; i < len_array(enemies); i++) begin
+        e := enemies[i];
+        if (e != 0 and not(is_critter_dead(e))) then return e;
+    end
+    return 0;
+end
+
+// ------- the summon -------
+procedure do_summon begin
+    variable friendly;
+    variable proto;
+    variable enemies;
+    variable target;
+    variable i;
+    variable npc;
+    variable tile;
+
+    proto    := faction_proto;
+    friendly := (town_rep_here > 0);
+    enemies  := collect_enemies;
+    target   := first_live_enemy(enemies);
+
+    if (friendly) then
+        emrad_squad := 0;
+    else begin
+        emrad_squad  := create_array(0, 4);
+        emrad_active := 1;
+    end
+
+    for (i := 0; i < EMRAD_SQUAD; i++) begin
+        tile := tile_num_in_direction(tile_num(dude_obj), random(0, 5), random(2, 4));
+        npc  := create_object(proto, tile, dude_elevation);
+        if (npc != 0) then begin
+            if (friendly) then begin
+                set_team(npc, TEAM_PLAYER);          // ally, fights enemies, stays
+            end
+            else begin
+                set_team(npc, TEAM_EMRAD_HOSTILE);
+                if (target != 0) then
+                    set_object_data(npc, OBJ_DATA_WHO_HIT_ME, target);  // enemies-first
+                resize_array(emrad_squad, len_array(emrad_squad) + 1);
+                emrad_squad[len_array(emrad_squad) - 1] := npc;
+            end
+        end
+    end
+
+    if (friendly) then
+        display_msg("Reinforcements answer your call.");
+    else
+        display_msg("Something answered the call. It is not friendly.");
+    LOG("summon", "friendly", friendly);
+    LOG("summon", "enemies", len_array(enemies));
+end
+
+// ------- phase 2: when the player's attackers are gone, turn the squad on the player -------
+procedure gamemode_handler begin
+    variable enemies;
+    variable i;
+    variable npc;
+
+    if (emrad_active != 1) then return;
+    if (emrad_squad == 0)  then return;
+
+    enemies := collect_enemies;
+    if (first_live_enemy(enemies) != 0) then return;   // still fighting the player's foes
+
+    // no player-attacker left alive -> the hostile squad turns on you
+    for (i := 0; i < len_array(emrad_squad); i++) begin
+        npc := emrad_squad[i];
+        if (npc != 0 and not(is_critter_dead(npc))) then
+            set_object_data(npc, OBJ_DATA_WHO_HIT_ME, dude_obj);
+    end
+    emrad_active := 0;
+    LOG("phase2", "turned_on_player", 1);
+end
