@@ -71,7 +71,7 @@ procedure NodePartyMain begin
          NOption("Let's scout this area and set up for the night.", CampScoutTrigger, 4);
    end
    NOption("Got a minute?", NodePartyNeeds, 4);
-   NOption("Let's talk about something else.", NodePartyTalkNormal, 4);
+   NOption("Relax. Tell me something.", NodePartyTalkNormal, 4);
    NOption("Later.", NodePartyDone, 4);
 end
 
@@ -113,7 +113,7 @@ procedure NodePartyTalkNormal begin
    if (arr == 0) then arr := create_array_map;
    arr["obj"] := self_obj;
    save_array("party_talk_normal", arr);
-   Reply("(They ease out of soldier mode.) Sure -- talk to me again, I'm all yours for a moment.");
+   Reply("Sure -- talk to me again, I'm all yours for a moment.");
    NOption("Alright.", NodePartyDone, 4);
 end
 
