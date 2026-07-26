@@ -160,3 +160,50 @@ USE Radio ->
 10. Necropolis (Set's ghouls + Harold)
 11. Inventory tracking system
 12. Vincent permanent party fix
+
+---
+
+## EMERGENCY RADIO -- ewolucja radia (design 2026-07-26, Borys)
+
+Docelowo radio przestaje byc "sekwencyjnym summonem sojusznikow do TEAM_PLAYER"
+i staje sie **EMERGENCY RADIO** -- ryzykowna, strategiczna zaslona dymna.
+
+### Zasada
+- **USE radio = wezwij POMOC ZALEZNA OD LOKACJI.** Kto przyjdzie zalezy od tego
+  GDZIE jestes (aktualna mapa / obszar / region worldmapy):
+    - okolice Junktown        -> Junktown Guards
+    - okolice Shady Sands      -> Shady Sands Guards
+    - okolice Brotherhood      -> Brotherhood patrol
+    - okolice Bazy Wojskowej / Katedry -> Mutants (Super Mutant patrol)
+    - ... (mapowanie region -> frakcja, rozszerzalne)
+- **Pech = zwabiasz Raiders.** Losowa szansa (np. przy zlej reputacji / w dziczy),
+  ze zamiast pomocy przyjdzie wroga banda.
+
+### Kluczowa mechanika -- "najpierw wrogowie, potem TY"
+Wezwana frakcja -- **nawet wroga** -- NAJPIERW atakuje Twoich przeciwnikow, a
+dopiero potem Ciebie. Dzieki temu nawet "pech" (Raiders / Mutants) jest
+taktycznie uzyteczny: wpuszczasz trzecia strone, ktora najpierw wybija to z czym
+walczysz.
+
+To NIE jest `TEAM_PLAYER` (jak w obecnym gl_radio). Wezwani NIE sa sojusznikami.
+
+Kandydaci na implementacje (do prototypu -- FO/sfall):
+- **Dwufazowo (preferowane):** spawn na neutralnym/wlasnym teamie frakcji, ustaw
+  wrogosc do teamu Twoich AKTUALNYCH przeciwnikow -> bija ich. Po smierci wrogow
+  (albo timer / gdy brak wrogow w combacie) -> flip teamu na wrogi graczowi.
+- **Jednofazowo:** team wrogi i graczowi, i przeciwnikom; wymusic AI target na
+  przeciwnikach na start (sfall combat target). Ryzyko: FO AI celuje w
+  najblizszego/najslabszego -> "najpierw wrogowie" nie gwarantowane.
+- Frakcje przyjazne (Guards/BoS gdy masz reputacje) moga byc krotkotrwalymi
+  sojusznikami (despawn po walce), zamiast wrogami-po-czasie.
+
+### Otwarte decyzje (do ustalenia z Borysem)
+- Mapowanie region worldmapy / mapa -> frakcja (pelna tabela).
+- Szansa na Raiders (staly % czy funkcja reputacji/lokacji?).
+- Czy przyjazne frakcje zostaja na stale, znikaja po walce, czy tez sie
+  odwracaja jak wrogie?
+- Czy trzyma cooldown / limit uzyc?
+
+### Status
+Design. Obecny `gl_radio.ssl` (sekwencyjny, TEAM_PLAYER) to baza do przepisania,
+NIE jest w aktywnym load orderze. Wymaga prototypu mechaniki "enemies-first".
