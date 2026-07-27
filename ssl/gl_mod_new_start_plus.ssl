@@ -51,17 +51,27 @@ procedure start begin
             add_obj_to_inven(dude_obj, create_object(PID_LEATHER_JACKET, 0, 0));
             display_msg("You check your pack. Shades, combat jacket, knife, spare jackets.");
 
-            // Motorcycle from the start (Borys 2026-07-24). State machine
-            // verified in headers:
-            //   GVAR_PLAYER_GOT_CAR: 0=none, 1=bike (dude_has_bike),
-            //                        2=upgraded bike.
-            //   car_on_wm = (GVAR_PLAYER_GOT_CAR != 0) and
-            //               (GVAR_CAR_CUR_MAP == -1)  -> bike rides on the
-            //   worldmap WITH the player; Et Tu's per-map scripts then place
-            //   PID_DRIVABLE_MOTO1 at each town's car spot on arrival.
+            // Motorcycle from the start (Borys 2026-07-24; FIXED 2026-07-27).
+            //
+            // BUG: setting only GVAR_PLAYER_GOT_CAR + GVAR_CAR_CUR_MAP did NOT
+            // make the bike appear anywhere -- the ENGINE never registered the
+            // vehicle, so Et Tu's per-map Create_Moto1 spots stayed empty.
+            //
+            // FULL grant (what Smitty's quest actually does):
+            //   1. GVAR_PLAYER_GOT_CAR=1  -> it's a (non-upgraded) bike.
+            //   2. GVAR_CAR_CUR_MAP=-1     -> bike travels on the worldmap
+            //      WITH the player (car_on_wm); town map_enter then places
+            //      PID_DRIVABLE_MOTO1 at each town's car spot.
+            //   3. car_give_to_party (metarule 31) -> ENGINE registers the
+            //      vehicle to the party. THIS is what was missing.
+            //   4. car_give_gas (metarule 32) -> fuel it, else 0% / won't start.
+            //   5. PID_MOTO_KEY (534) in pack -> {452} "key fits", not {454}.
             // Requires GVAR_ENABLE_MOTORCYCLE=1 in config/fo1_settings.ini.
             set_global_var(GVAR_PLAYER_GOT_CAR, 1);
             set_global_var(GVAR_CAR_CUR_MAP, -1);
+            car_give_to_party;
+            car_give_gas(30000);
+            add_obj_to_inven(dude_obj, create_object(PID_MOTO_KEY, 0, 0));
             display_msg("There's a motorcycle parked outside. The keys are yours.");
 
             // Persist "given" so LOAD SAVE never re-gifts.

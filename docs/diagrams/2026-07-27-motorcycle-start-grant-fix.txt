@@ -1,0 +1,38 @@
+MOTORCYCLE START GRANT -- FIX (2026-07-27)
+==========================================
+
+BUG (Borys: "motocykl nie dziala -- nie ma go nigdzie")
+-------------------------------------------------------
+Stary grant ustawial TYLKO 2 globalne:
+    set_global_var(GVAR_PLAYER_GOT_CAR, 1)   ; to bike
+    set_global_var(GVAR_CAR_CUR_MAP, -1)     ; on worldmap
+-> silnik NIGDY nie rejestrowal pojazdu -> Create_Moto1 spoty
+   w miastach zostawaly puste -> motocykla NIE MA NIGDZIE.
+
+FLOW POPRAWNEGO GRANTU (co robi quest Smitty'ego)
+-------------------------------------------------
+   new game -> game_loaded (first run, given!=1)
+        |
+        v
+   [1] GVAR_PLAYER_GOT_CAR = 1      (dude_has_bike)
+   [2] GVAR_CAR_CUR_MAP    = -1     (car_on_wm: jedzie z graczem)
+   [3] car_give_to_party            <== BRAKOWALO (metarule 31)
+        |   silnik rejestruje pojazd party
+        v
+   [4] car_give_gas(30000)          <== BRAKOWALO (metarule 32)
+        |   paliwo, bez tego 0% / nie odpali
+        v
+   [5] add PID_MOTO_KEY (534)       <== BRAKOWALO
+        |   klucz w plecaku -> {452} "key fits", nie {454}
+        v
+   save_array given=1  (idempotent: raz na gre)
+
+REZULTAT
+--------
+   worldmap / wjazd do miasta:
+       town map_enter -> Create_Moto1(hex,elev)
+       -> PID_DRIVABLE_MOTO1 na car-spot
+       -> USE -> klucz pasuje -> jedzie, bagaznik MOTO1_TRUNK dziala
+
+UWAGA: grant idempotentny (given=1). Stare save'y maja juz
+flage -> poprawka dziala TYLKO na NOWEJ GRZE.
