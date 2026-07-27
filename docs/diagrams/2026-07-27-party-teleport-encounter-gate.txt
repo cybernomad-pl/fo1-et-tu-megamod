@@ -1,0 +1,48 @@
+PARTY TELEPORT -- ENCOUNTER GATE + GWARANTOWANY PLACEMENT (2026-07-27)
+=====================================================================
+
+OBJAWY (Borys): "Ian po zwerbowaniu znika z mapy; przy przejsciu
+Shady Sands -> SHADYW (zagrody+kupiec) gra sie wysypuje."
+
+WYKLUCZONE (dowodami, nie zgadywaniem):
+  - gl_mod_car_encounter -> NIE zaladowany w sesji (log sfall) -> nie to.
+  - fo1_ShadyTrader (kupiec) -> nie wolany przez zaden aktywny skrypt
+    (scripts.h ma tylko slot map-scriptu SHADYWST; TANDI.ssl tylko komentarz)
+    -> brak kupca to osobny niezainstalowany mod, NIE crash.
+  - SHADYWST.int (map-script) -> obecny w fo1_base.
+
+PRZYCZYNA (hipoteza mocna): gl_party_teleport biegl na KAZDEJ mapie,
+tez w miastach. Kaskada placementu mogla zostawic membera POZA mapa:
+     KROK3: move_to(center) [on-map] -> critter_attempt_placement
+            -> na ciasnej mapie spycha z powrotem OFF-MAP -> place_ok=0
+            -> member znika; off-map member przy zapisie mapy = crash.
+
+FLOW PO POPRAWCE:
+   map_enter_p_proc
+       |
+       v
+   [GATE] not map_is_encounter ? --tak--> return
+       |     (miasta/vaulty/jaskinie: silnik rozstawia party SAM,
+       |      poprawnie, przy siatce wyjscia -> NIE dotykamy)
+       | nie (tylko dzicz/encounter)
+       v
+   foreach party member:
+       krok1 placement na punkt grupy
+       krok2 placement na tile gracza
+       krok3 move_to + placement
+             + JESLI dalej off-map -> move_to(center) [GWARANCJA on-map]
+       krok4 wynik (placed/forced/failed)
+       |
+       v
+   LOG -> testing.ini (ptp_last: map/total/placed/forced/failed;
+                        ptp_fail: script) -- przezywa crash.
+
+EFEKT:
+  - SHADYW (miasto) -> party_teleport NIE rusza -> silnik stawia Iana ->
+    brak znikania, brak off-map membera -> crash vector usuniety.
+  - Dzicz -> nikt nie zostaje off-map (gwarantowany move_to). Naprawia
+    tez stary bug znikajacego Vault 13 citizen.
+
+WERYFIKACJA: restart gry, przejscie SHADYE->SHADYW. Jesli crash zniknie
+-> potwierdzone. Jesli nie -> testing.ini + sfall-log (DebugMode=1)
+wskaza nastepny trop.

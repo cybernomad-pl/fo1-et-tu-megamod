@@ -52,6 +52,8 @@
 #define CLUSTER_DIST     (1)    // punkt bazowy grupy = sasiad gracza
 #define MAX_OK_DIST      (20)   // dalej niz to = nie stoi przy graczu
 
+#define LOG(s, k, v)     set_ini_setting("testing.ini|ptp_" + s + "|" + k, v)
+
 procedure start;
 procedure map_enter_p_proc;
 procedure place_ok(variable who, variable center);
@@ -87,6 +89,14 @@ procedure map_enter_p_proc begin
    variable placed;       // ilu stoi poprawnie przy graczu
    variable forced;       // ilu trzeba bylo wciagnac przez move_to
    variable failed;       // ilu NIE udalo sie umiescic
+
+   // GATE: ten skrypt istnieje TYLKO dla map random-encounter (dzicz),
+   // gdzie silnikowe rozstawianie party zawodzi (widac jednego kompana).
+   // Na mapach miast / vaultow / jaskin silnik rozstawia party POPRAWNIE
+   // przy siatce wyjscia -- tam NIE wolno nam ingerowac. Ingerencja na
+   // SHADYW byla zrodlem znikania party membera i twardego crasha
+   // (off-map member przy zapisie mapy). To design-scope, nie fallback.
+   if (not(map_is_encounter)) then return;
 
    seen := temp_array_map;
    next_sektor := 0;
@@ -134,6 +144,14 @@ procedure map_enter_p_proc begin
          if (place_ok(who, center) == 0) then begin
             move_to(who, center, elev);
             critter_attempt_placement(who, center, elev);
+            // critter_attempt_placement po move_to moze na CIASNEJ mapie
+            // zepchnac membera z powrotem POZA mape -> place_ok == 0 ->
+            // member znika. Ostateczny move_to na tile gracza GWARANTUJE
+            // pozycje na mapie (dystans 0, tile poprawny). Nikt nie zostaje
+            // off-map. To jawna gwarancja, nie zgadywanie zachowania.
+            if (place_ok(who, center) == 0) then begin
+               move_to(who, center, elev);
+            end
             if (place_ok(who, center) == 1) then begin
                forced := forced + 1;
             end
@@ -145,6 +163,7 @@ procedure map_enter_p_proc begin
          end
          else begin
             failed := failed + 1;
+            LOG("fail", "script", s);
             debug_msg("gl_party_teleport: FAILED to place party member, script " + s);
          end
       end
@@ -152,4 +171,10 @@ procedure map_enter_p_proc begin
 
    display_msg("[party] " + placed + "/" + total + " rozstawionych, " + forced + " wciagnietych, " + failed + " BLEDOW, " + next_sektor + " klastrow");
    debug_msg("gl_party_teleport: placed=" + placed + " total=" + total + " forced=" + forced + " failed=" + failed + " clusters=" + next_sektor);
+   // Log przezywajacy crash (ini flushowany na dysk od razu).
+   LOG("last", "map", cur_map_index);
+   LOG("last", "total", total);
+   LOG("last", "placed", placed);
+   LOG("last", "forced", forced);
+   LOG("last", "failed", failed);
 end
