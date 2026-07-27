@@ -1,0 +1,77 @@
+/*
+    fo1_mod_car_encounter -- fo1-et-tu-megamod (Borys 2026-07-27)
+
+    Stawia posiadany pojazd (Highwayman / PID_DRIVABLE_MOTO1) na KAZDEJ
+    mapie random-encounter przy wejsciu -- dokladnie tam, gdzie mozna
+    rozbic oboz (map_is_encounter, ten sam warunek co camp).
+
+    ZAKRES (Borys): "na razie tylko random encounters, tam gdzie mozna
+    rozbic oboz; na innych mapach moze go nie byc". Miasta maja wlasna
+    logike Et Tu (town car-spots) -- ich NIE dotykamy, wiec zero dubli.
+
+    DZIALAJACY BAGAZNIK:
+      party.h:  #define Trunk_Ptr  party_member_obj(PID_MOTO1_TRUNK)
+      Bagaznik jest PARTY MEMBEREM -> silnik wozi go miedzy mapami z
+      zawartoscia. Create_Moto1 gdy Trunk_Ptr != 0 PRZENOSI ten sam
+      bagaznik (loot zachowany), inaczej tworzy nowy. Wywolanie
+      Create_Car tutaj automatycznie reuzywa ten party-bagaznik.
+
+    NIE dotyka silnikowego stanu auta (GVAR_CAR_CUR_MAP / car_give_to_party)
+    -- to jest czysto WIZUALNE postawienie obiektu na mapie encounter.
+    Worldmapowa jazda + placement w miastach dzialaja niezaleznie.
+
+    Create_Moto1 ma wlasny guard 'if (not(is_loading_game))' -> przy
+    wczytaniu save'a nie zespawnuje duplikatu.
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
+
+#define LOG(s, k, v)   set_ini_setting("testing.ini|car_enc_" + s + "|" + k, v)
+
+procedure start;
+procedure map_enter_p_proc;
+
+procedure start begin
+end
+
+procedure map_enter_p_proc begin
+   // Zmienne wymagane przez makra Create_Car -> Create_Moto1 -> Blocking_Cycle.
+   variable Scenery_Creation;
+   variable Scenery_Creation_Hex;
+   variable Scenery_Creation_Count;
+   variable hex;
+   variable elev;
+
+   // 1. Gracz musi posiadac pojazd (1=bike, 2=upgraded). 0 = brak -> nic.
+   if (global_var(GVAR_PLAYER_GOT_CAR) == 0) then return;
+
+   // 2. Tylko mapy random-encounter (dzicz) -- ten sam gate co camp.
+   if (not(map_is_encounter)) then return;
+
+   elev := elevation(dude_obj);
+
+   // 3. Punkt postoju: kilka hexow od gracza. Guard na skraj malej mapy --
+   //    proboj kolejne kierunki, dopiero na koniec tile gracza. To nie
+   //    fallback zachowania, tylko ponawianie wyboru poprawnego hexu.
+   hex := tile_num_in_direction(tile_num(dude_obj), 2, 4);
+   if (hex < 0) then hex := tile_num_in_direction(tile_num(dude_obj), 5, 4);
+   if (hex < 0) then hex := tile_num_in_direction(tile_num(dude_obj), 0, 3);
+   if (hex < 0) then hex := tile_num(dude_obj);
+
+   // 4. Guard na duplikat: jesli na tym hexie juz stoi pojazd -> nie stawiaj.
+   if (tile_contains_obj_pid(hex, elev, PID_DRIVABLE_MOTO1)) then return;
+   if (tile_contains_obj_pid(hex, elev, PID_DRIVABLE_MOTO2)) then return;
+
+   // 5. Postaw. Create_Car sam wybiera Moto1/Moto2 wg GVAR_PLAYER_GOT_CAR
+   //    i reuzywa Trunk_Ptr (party-bagaznik z zawartoscia).
+   //    Makro konczy sie na 'end' -> wolane bez ';', jako jedyna
+   //    instrukcja w bloku begin/end (idiom z map-scriptow Et Tu).
+   LOG("enter", "placed_hex", hex);
+   if (global_var(GVAR_PLAYER_GOT_CAR) != 0) then begin
+      Create_Car(hex, elev)
+   end
+end

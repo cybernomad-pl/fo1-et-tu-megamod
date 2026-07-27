@@ -1,0 +1,43 @@
+POJAZD NA MAPACH ENCOUNTER (mobile camp foundation) -- 2026-07-27
+=================================================================
+
+Borys: "Highwayman jest na mapie, brakuje mi go jako ART na map_enter
+w random encounters -- tam gdzie mozna rozbic oboz. Z dzialajacym
+trunk. Na innych mapach moze go nie byc."
+
+NOWY GLOBAL SCRIPT: gl_mod_car_encounter (fo1_mod_car_encounter)
+----------------------------------------------------------------
+   map_enter_p_proc (kazde wejscie na mape)
+        |
+        v
+   [guard] GVAR_PLAYER_GOT_CAR == 0 ? --tak--> return (brak pojazdu)
+        | nie
+        v
+   [guard] not map_is_encounter ? --tak--> return
+        |     (map_is_encounter = desert/city-ruins/ocean/mountain;
+        |      TEN SAM warunek co camp -> "tam gdzie mozna rozbic oboz")
+        | nie (dzicz)
+        v
+   hex := 4 od gracza (dir 2 -> 5 -> 0 -> tile gracza, guard skraju mapy)
+        |
+        v
+   [guard] pojazd juz na hexie (MOTO1/MOTO2) ? --tak--> return (bez dubla)
+        | nie
+        v
+   Create_Car(hex, elev)
+        |-- GOT_CAR==1 -> Create_Moto1 (PID_DRIVABLE_MOTO1)
+        |-- GOT_CAR==2 -> Create_Moto2 (upgraded)
+        |
+        +-- BAGAZNIK: Trunk_Ptr = party_member_obj(PID_MOTO1_TRUNK)
+              Trunk jest PARTY MEMBEREM -> silnik wozi go miedzy mapami.
+              Trunk_Ptr != 0 -> PRZENOSI ten sam bagaznik (loot zostaje).
+              -> DZIALAJACY TRUNK, ta sama zawartosc na kazdej mapie.
+
+ZAKRES: tylko mapy encounter. Miasta = wlasna logika Et Tu (nie ruszamy
+-> zero dubli). NIE dotyka GVAR_CAR_CUR_MAP/car_give_to_party -> czysto
+wizualne postawienie; worldmap + town-spots dzialaja niezaleznie.
+Create_Moto1 ma guard is_loading_game -> brak dubla przy loadzie save'a.
+
+DODATKOWO: opis startowy "motorcycle" -> "Highwayman" (bo to dziala).
+
+NASTEPNE (mobile camp): marker = zaparkowany Highwayman + rozbity namiot.

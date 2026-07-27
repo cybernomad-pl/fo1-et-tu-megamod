@@ -72,7 +72,7 @@ procedure start begin
             car_give_to_party;
             car_give_gas(30000);
             add_obj_to_inven(dude_obj, create_object(PID_MOTO_KEY, 0, 0));
-            display_msg("There's a motorcycle parked outside. The keys are yours.");
+            display_msg("There's a Highwayman parked outside. The keys are yours.");
 
             // Persist "given" so LOAD SAVE never re-gifts.
             given_arr := create_array_map;
