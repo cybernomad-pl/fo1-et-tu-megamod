@@ -67,12 +67,19 @@ procedure start begin
             //   4. car_give_gas (metarule 32) -> fuel it, else 0% / won't start.
             //   5. PID_MOTO_KEY (534) in pack -> {452} "key fits", not {454}.
             // Requires GVAR_ENABLE_MOTORCYCLE=1 in config/fo1_settings.ini.
-            set_global_var(GVAR_PLAYER_GOT_CAR, 1);
+            // GOT_CAR=2 (UPGRADED) NA STALE (Borys 2026-07-29): silnik
+            // wybiera art IKONY POJAZDU NA WORLDMAP wg GVAR_PLAYER_GOT_CAR
+            // (1=jeden art, 2=drugi) natywnie -- to NIE jest w SSL, robi to
+            // engine. Zablokowanie na 2 zamraza ikone na jednym stanie i
+            // konczy migotanie Highwayman<->motocykl, ktore Borys widzial.
+            set_global_var(GVAR_PLAYER_GOT_CAR, 2);
             set_global_var(GVAR_CAR_CUR_MAP, -1);
             car_give_to_party;
             car_give_gas(30000);
             add_obj_to_inven(dude_obj, create_object(PID_MOTO_KEY, 0, 0));
-            display_msg("There's a Highwayman parked outside. The keys are yours.");
+            // Opis neutralny -- na starcie stawiany jest pojazd, nie klamiemy
+            // o konkretnym modelu (moto vs Highwayman zalezy od GOT_CAR/mapy).
+            display_msg("Your ride is parked outside. The keys are yours.");
 
             // Persist "given" so LOAD SAVE never re-gifts.
             given_arr := create_array_map;

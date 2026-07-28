@@ -1,0 +1,80 @@
+/*
+    fo1_mod_raiders_garage -- fo1-et-tu-megamod (Borys 2026-07-29)
+
+    PRZEGLAD FLOTY: na mapie obozu Raiderow (MAP_RAIDERS = 24) stawia
+    WSZYSTKIE dostepne modele pojazdow jako zaparkowane obiekty. To baza
+    pod przyszly MOD REPAIR -- gracz naprawia wybrany pojazd skillem Repair
+    + dolewa benzyny -> pojazd staje sie jezdzacy (aktywny). Repair to
+    OSOBNY, nastepny krok; TU tylko statyczny przeglad.
+
+    DLACZEGO MAPA RAIDEROW: Borys -- to jedyna lokacja bez MUTANT INVASION,
+    wiec bezpieczny garaz/warsztat floty.
+
+    DLACZEGO GLOBALNY SKRYPT (gl_*): zrodel skryptu mapy RaidMap.ssl BRAK
+    w drzewie (jest tylko skompilowany RAIDMAP.int). Globalny map_enter
+    z gejtem cur_map_index == MAP_RAIDERS robi to samo bez ruszania mapy.
+
+    DOSTEPNE MODELE (proto potwierdzone w scenepid.h):
+      PID_DRIVABLE_CAR   (33555441) -- Highwayman (car100.frm)
+      PID_DRIVABLE_MOTO1 (33556292) -- motocykl
+      PID_DRIVABLE_MOTO2 (33556293) -- motocykl (wariant)
+      PID_CAR_WRECK_1..5 (33554656..33554660) -- wraki samochodow
+
+    ZERO FALLBACK: gdy hex postoju wypada POZA mape (hex < 0) -> pojazdu
+    NIE stawiamy i logujemy jawnie ktory model padl. NIE zgadujemy
+    zapasowego hexu (Borys skoryguje kierunki/dystanse po obejrzeniu).
+
+    STATYCZNE: create_object (script -1) -- czysty obiekt-dekoracja, bez
+    trunku i bez logiki jazdy. Guard tile_contains_obj_pid zapobiega
+    duplikatom przy kazdym ponownym wejsciu na mape.
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
+
+#define GARAGE_MAP     (MAP_RAIDERS)   // 24 -- oboz Khanow, RAIDERS.MAP
+#define LOG(s, k, v)   set_ini_setting("testing.ini|garage_" + s + "|" + k, v)
+
+procedure start;
+procedure map_enter_p_proc;
+procedure place_veh(variable pid, variable dir, variable dist);
+
+procedure start begin
+end
+
+/*
+    Postaw jeden model pojazdu na hexie oddalonym o 'dist' w kierunku
+    'dir' od gracza. Guard skraju mapy + guard duplikatu, oba jawne.
+*/
+procedure place_veh(variable pid, variable dir, variable dist) begin
+   variable hex;
+   variable elev;
+   elev := elevation(dude_obj);
+   hex := tile_num_in_direction(tile_num(dude_obj), dir, dist);
+   if (hex < 0) then begin
+      LOG("skip_offmap", pid, dist);   // poza mapa -> NIE stawiamy (explicit)
+      return;
+   end
+   if (tile_contains_obj_pid(hex, elev, pid)) then return;  // juz stoi -> ok
+   create_object(pid, hex, elev);
+   LOG("placed", pid, hex);
+end
+
+procedure map_enter_p_proc begin
+   // GEJT: tylko oboz Raiderow. Na innych mapach -- nic.
+   if (cur_map_index != GARAGE_MAP) then return;
+
+   // Wachlarz wokol gracza, dwa pierscienie (dist 4 i 7).
+   // Kolejnosc/kierunki do korekty po pierwszym ogladzie w grze.
+   call place_veh(PID_DRIVABLE_CAR,   0, 4);   // Highwayman
+   call place_veh(PID_DRIVABLE_MOTO1, 1, 4);
+   call place_veh(PID_DRIVABLE_MOTO2, 2, 4);
+   call place_veh(PID_CAR_WRECK_1,    3, 4);
+   call place_veh(PID_CAR_WRECK_2,    4, 4);
+   call place_veh(PID_CAR_WRECK_3,    5, 4);
+   call place_veh(PID_CAR_WRECK_4,    0, 7);
+   call place_veh(PID_CAR_WRECK_5,    3, 7);
+end

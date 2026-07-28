@@ -1,0 +1,79 @@
+================================================================
+ 2026-07-29  FLOTA MAD MAX -- FAZA 1: GARAZ NA MAPIE RAIDEROW
+================================================================
+Autor zmian: cybernomad layer (fo1-et-tu-megamod)
+Pliki:  gl_raiders_garage.ssl  (NOWY)
+        gl_mod_new_start_plus.ssl  (GOT_CAR=2 na stale)
+
+----------------------------------------------------------------
+ KONTEKST -- USTALENIA SILNIKOWE (recon 2026-07-29)
+----------------------------------------------------------------
+ FO2 engine zna DOKLADNIE JEDEN jezdzacy pojazd naraz.
+ GVAR_PLAYER_GOT_CAR:  0=brak  1=bike-art  2=upgraded-art
+
+ IKONA NA WORLDMAP: silnik wybiera art IKONY natywnie wg
+ GOT_CAR (1 vs 2). To NIE jest w SSL -> recon w skryptach jej
+ nie znalazl. Borys widzial zmiane Highwayman -> motocykl.
+ FIX: GOT_CAR=2 NA STALE  => ikona zamrozona na 1 stanie.
+
+ KOREKTA vs poprzednia sesja:
+   PID_DRIVABLE_MOTO1/MOTO2 = motocykle (moto1/moto2.frm),
+   NIE Highwayman. Highwayman = osobne proto PID_DRIVABLE_CAR
+   (car100.frm) -- oraz domyslny marker worldmap silnika.
+
+----------------------------------------------------------------
+ CO ROBI FAZA 1
+----------------------------------------------------------------
+ gl_mod_new_start_plus (grant, tylko NOWA GRA):
+    GOT_CAR := 2  (bylo 1)  -> ikona worldmap stabilna
+    opis "Your ride is parked outside" (neutralny, bez klamania
+    o modelu)
+
+ gl_raiders_garage (NOWY global script):
+    map_enter_p_proc:
+       if (cur_map_index != MAP_RAIDERS[24]) return;   <-- GEJT
+       postaw WSZYSTKIE modele jako STATYCZNE obiekty (script -1)
+
+    Dlaczego mapa Raiderow: jedyna lokacja BEZ mutant invasion
+    -> bezpieczny garaz/warsztat floty (Borys).
+    Dlaczego gl_* a nie skrypt mapy: zrodel RaidMap.ssl BRAK
+    (jest tylko RAIDMAP.int) -> globalny map_enter z gejtem.
+
+----------------------------------------------------------------
+ ROZSTAW (wachlarz wokol gracza, 2 pierscienie)
+----------------------------------------------------------------
+                    [WRECK_4]
+                   dir0 d7
+        [WRECK_3]  [DRIV_CAR]  [MOTO1]
+         dir5 d4    dir0 d4    dir1 d4
+              \        |        /
+        [WRECK_2] -- (DUDE) -- [MOTO2]
+         dir4 d4              dir2 d4
+              /        |
+        [WRECK_1]  [WRECK_5]
+         dir3 d4    dir3 d7
+
+    place_veh(pid, dir, dist):
+       hex = tile_num_in_direction(dude, dir, dist)
+       if hex < 0  -> LOG skip_offmap, NIE stawiaj   (ZERO FALLBACK)
+       if tile juz ma ten pid -> return              (anty-duplikat)
+       create_object(pid, hex, elev)  + LOG placed
+
+ MODELE (8, proto potwierdzone w scenepid.h):
+   PID_DRIVABLE_CAR    33555441  Highwayman
+   PID_DRIVABLE_MOTO1  33556292  motocykl
+   PID_DRIVABLE_MOTO2  33556293  motocykl wariant
+   PID_CAR_WRECK_1..5  33554656..33554660  wraki
+
+----------------------------------------------------------------
+ LOG (przezywa crash, testing.ini):
+   garage_placed|<pid>       = hex gdzie postawiono
+   garage_skip_offmap|<pid>  = model wypadl poza mape (do korekty)
+
+----------------------------------------------------------------
+ NASTEPNY KROK (FAZA 2 -- MOD REPAIR, jeszcze NIE zrobione):
+   - wraki/pojazdy w garazu = zepsute
+   - skill Repair na obiekcie + dolanie benzyny -> pojazd
+     staje sie aktywnym jezdzacym (swap-active)
+   - gotowy klocek: gl_general_repair.int juz istnieje w out/
+================================================================
