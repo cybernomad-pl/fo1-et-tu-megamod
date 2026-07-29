@@ -1,0 +1,55 @@
+================================================================
+ 2026-07-29  ART not found hmianjaa.frm -- wylaczony auto FID swap
+================================================================
+Objaw (Borys): log error "ART file not found art/critters/hmianjaa.frm".
+Polecenie: wylaczyc podmiane FIDow party memberow po przylaczeniu;
+           FID zostaje natywny, zmiana TYLKO gdy dostana armor.
+
+----------------------------------------------------------------
+ ZRODLO
+----------------------------------------------------------------
+ gl_party_armor_ext.ssl podmienia sprite party membera wg armora.
+ SET_IAN mapuje leather jacket -> HMIANJ (idx 61):
+    set_armor_to_fid(SET_IAN, ARM_LJ) = 16777277  // HMIANJ
+
+ Plik hmianj*.frm (hmianjaa = standby) NIE ISTNIEJE w instalce:
+    - brak w mods/*/art/critters/
+    - brak w f2_res.dat / sfall.dat
+ => art_change_fid_num(Ian, HMIANJ) -> engine: ART not found.
+
+ TRIGGER byl AUTOMATYCZNY:
+    HOOK_GAMEMODECHANGE -> gamemode_handler -> refresh_all_party
+    (przelicza CALA party przy kazdej zmianie mapy / dialogu / walki)
+
+----------------------------------------------------------------
+ FIX (wg polecenia Borysa)
+----------------------------------------------------------------
+ gamemode_handler:  USUNIETO call refresh_all_party
+                    (zostaje tylko last_map_idx tracking)
+ invenwield_handler: BEZ ZMIAN -- HOOK_INVENWIELD wciaz wola
+                    refresh_one gdy gracz realnie zaklada ekwipunek.
+
+ Efekt:
+   - po przylaczeniu / zmianie mapy: FID NIETKNIETY (natywny sprite)
+   - dopiero zalozenie armora przez gracza -> proba podmiany sprite
+
+   before:  GAMEMODECHANGE --> refresh_all_party --> art swap (auto)
+   after:   GAMEMODECHANGE --> (nic; tylko last_map)
+            INVENWIELD      --> refresh_one       --> art swap (na zyczenie)
+
+----------------------------------------------------------------
+ POZOSTALE RYZYKO (do decyzji Borysa)
+----------------------------------------------------------------
+ Arty HMIAN* (HMIANJ/HMIANR/HMIANP/HMIANC) NIE ISTNIEJA. Wiec gdy
+ gracz ZALOZY Ianowi jakikolwiek armor -> INVENWIELD -> refresh_one
+ -> HMIAN* -> ten sam error wroci (juz nie automatycznie, tylko na
+ reczne zalozenie armora Ianowi).
+
+ Opcje (czekam na decyzje):
+   A) Ian wypada z armor-swap: SET_IAN zawsze zwraca natywny sprite
+      niezaleznie od armora (brak wizualnej zmiany, ZERO crasha).
+   B) Dostarczyc pliki hmian*.frm (art) do art/critters/.
+   C) Zmapowac SET_IAN na istniejace arty (np. SET_HM_WHITE HMMAXX/
+      HMLTHR/HMMETL/HMCMBT -- Ian pokaze generyczny meski sprite w
+      armorze zamiast dedykowanego).
+================================================================

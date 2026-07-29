@@ -107,7 +107,17 @@ end
 // HOOK handlers
 // ============================================================
 procedure gamemode_handler begin
-    call refresh_all_party;
+    // Borys 2026-07-29: NIE podmieniaj FID party memberow automatycznie
+    // (po przylaczeniu / zmianie mapy / trybu gry). Party member zachowuje
+    // swoj NATYWNY sprite. Podmiana artu TYLKO na realne zalozenie
+    // ekwipunku -> HOOK_INVENWIELD (invenwield_handler).
+    //
+    // POWOD: refresh_all_party przy kazdej zmianie trybu przeliczalo art
+    // calej party. Dla Iana (SET_IAN + leather jacket) ustawialo HMIANJ
+    // (idx 61) -> plik hmianj*.frm NIE ISTNIEJE w tej instalce ->
+    // "ART file not found art/critters/hmianjaa.frm".
+    //
+    // refresh_all_party wylaczone. Zostaje tylko sledzenie last_map_idx.
     if (cur_map_index != last_map_idx) then begin
         last_map_idx := cur_map_index;
     end
