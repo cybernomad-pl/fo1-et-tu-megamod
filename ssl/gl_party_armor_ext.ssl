@@ -107,17 +107,11 @@ end
 // HOOK handlers
 // ============================================================
 procedure gamemode_handler begin
-    // Borys 2026-07-29: NIE podmieniaj FID party memberow automatycznie
-    // (po przylaczeniu / zmianie mapy / trybu gry). Party member zachowuje
-    // swoj NATYWNY sprite. Podmiana artu TYLKO na realne zalozenie
-    // ekwipunku -> HOOK_INVENWIELD (invenwield_handler).
-    //
-    // POWOD: refresh_all_party przy kazdej zmianie trybu przeliczalo art
-    // calej party. Dla Iana (SET_IAN + leather jacket) ustawialo HMIANJ
-    // (idx 61) -> plik hmianj*.frm NIE ISTNIEJE w tej instalce ->
-    // "ART file not found art/critters/hmianjaa.frm".
-    //
-    // refresh_all_party wylaczone. Zostaje tylko sledzenie last_map_idx.
+    // Pancerze odswiezaja sie przy KAZDEJ zmianie trybu gry (mapa / dialog /
+    // walka) -- to gwarantuje ze zbroja party membera renderuje sie zawsze,
+    // dla kazdego NPC. (Borys 2026-07-30: przywrocone -- mial byc usuniety
+    // TYLKO vault-suit swap, patrz set_armor_to_fid ARM_NONE ponizej.)
+    call refresh_all_party;
     if (cur_map_index != last_map_idx) then begin
         last_map_idx := cur_map_index;
     end
@@ -366,6 +360,15 @@ end
 // Returns 0 if no mapping for this combination (keep current sprite).
 // ============================================================
 procedure set_armor_to_fid(variable set_id, variable group) begin
+    // Borys 2026-07-30: BEZ pancerza (ARM_NONE = pusty worn slot) NIE
+    // podmieniaj FID -- party member zachowuje swoj NATYWNY sprite.
+    // To usuwa bledna podmiane na VAULT SUIT / jumpsuit gdy NPC nic nie
+    // nosi (to bylo to zle "zdarzalo sie wczesniej"). ARM_JUMPSUIT
+    // (realny PID_V13_VSUIT na sobie) nadal mapuje na jumpsuit ponizej --
+    // dlatego warunki `ARM_NONE or ARM_JUMPSUIT` zostaja bez zmian
+    // (ARM_NONE juz nigdy tam nie dojdzie).
+    if (group == ARM_NONE) then return 0;
+
     // --------- SET_HM_WHITE (Borys 2026-04-18 confirmed) ---------
     if (set_id == SET_HM_WHITE) then begin
         if (group == ARM_NONE or group == ARM_JUMPSUIT) then return 16777227; // HMJMPS (11)
