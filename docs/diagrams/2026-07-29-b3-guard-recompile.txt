@@ -1,0 +1,64 @@
+================================================================
+ 2026-07-29  IAN ZNIKA -- ROZJAZD ZRODLO/BINARKA (guard B3)
+================================================================
+Objaw (Borys): Ian po zrekrutowaniu ZNIKA.
+
+----------------------------------------------------------------
+ DIAGNOZA (fakty, nie domysly)
+----------------------------------------------------------------
+ Commit f6224a3 "B3 team-reset" (25.07 15:20:25) dodal do 18 NPC
+ guard w map_enter_p_proc:
+
+    procedure map_enter_p_proc begin
+       if (self_team == TEAM_PLAYER) then return;   <-- GUARD
+       ... (reszta: set_self_team(SHADY_SANDS) na SHADYW itd.)
+    end
+
+ ALE commit przekompilowal tylko 3 .int (MARCELLE/SINTHIA/TRISH).
+ Pozostale 15 zmian .ssl NIGDY nie trafilo do binarki.
+
+ Skan dat .int w grze vs czas commita (15:20):
+   8 NPC z .int = 25.07 15:19  => SPRZED guarda = STARA binarka:
+     ARADESH CINDY IAN JARVIS TGUARD VALTCTZN VASQUEZ WTRTHIEF
+   10 NPC dokompilowane pozniej (26.07) => OK.
+
+ => Gra wykonywala Iana BEZ guarda.
+
+----------------------------------------------------------------
+ DLACZEGO BRAK GUARDA = "ZNIKA"
+----------------------------------------------------------------
+ Ian mieszka w Shady Sands. Po rekrutacji: team = TEAM_PLAYER,
+ w rosterze party.
+
+ Bez guarda, przy wejsciu na SHADYW (Shady Sands West) po raz
+ pierwszy:
+    if CUR_MAP_SHADYW and map_first_run:
+       set_self_team(TEAM_SHADY_SANDS);   <-- nadpisuje TEAM_PLAYER
+
+ Ian traci przynaleznosc do druzyny gracza (team lokalsow) ->
+ silnik przestaje go ciagnac za graczem -> zostaje / gubi sie
+ = z perspektywy gracza "zniknal".
+
+ Z guardem: team==TEAM_PLAYER -> return NATYCHMIAST, zadnego
+ nadpisania teamu. Zrekrutowany Ian zostaje w party.
+
+----------------------------------------------------------------
+ FIX
+----------------------------------------------------------------
+ Rekompilacja 8 zaleglych NPC (source ml JUZ guard, brakowalo
+ tylko .int) + deploy do gry + sync repo:
+   megamod-build/out/*.int
+     -> gra: mods/fo1_mod_npc_party/scripts/
+     -> repo: fo1_megamod/scripts/
+
+ IAN.int: 25386 B (stary, 15:19) -> 25436 B (+50 B = guard).
+ md5 potrojnie zgodny: out == gra == repo.
+
+----------------------------------------------------------------
+ UWAGA / OGRANICZENIE PEWNOSCI
+----------------------------------------------------------------
+ Guard adresuje mechanizm "team-nadpisanie na SHADYW".
+ Jesli Ian znika w INNYM miejscu / od razu na tej samej mapie
+ (nie w Shady Sands West) -> mechanizm jest inny i trzeba
+ doprecyzowac GDZIE/KIEDY znika. Wtedy log testing.ini + recon.
+================================================================
