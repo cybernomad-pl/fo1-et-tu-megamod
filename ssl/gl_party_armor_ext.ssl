@@ -192,6 +192,16 @@ procedure refresh_one(variable obj) begin
     if (base_fid == 0) then set_id := SET_NONE;
     else set_id := fid_to_set(base_fid);
 
+    // Per-NPC override (Borys 2026-07-30): wymus konkretny sprite-set dla
+    // wybranych NPC, niezaleznie od ich natywnego FID. FID zmienia sie
+    // dopiero PO ZALOZENIU pancerza (bez pancerza ARM_NONE->0 = natywny
+    // sprite zostaje). Wzorowane na starym per-SCRIPT mappingu (a77e2f7).
+    //   Razlo  (lekarz,      natyw. NMDOCC idx57) -> lysy dude   (SET_HM_BALD)
+    //   Agatha (opowiadaczka,natyw. HFPRIM idx86) -> brunetka    (SET_NF_NICE)
+    // Curtis natyw. HMWARR idx130 -> juz SET_HM_WHITE (normalny dude), bez wpisu.
+    if (sid == SCRIPT_RAZLO) then set_id := SET_HM_BALD;
+    else if (sid == SCRIPT_AGATHA) then set_id := SET_NF_NICE;
+
     // Full data dump -- grouped by sid for easy parsing.
     section := "npc_" + sid;
     LOG(section, "name",      obj_name(obj));
