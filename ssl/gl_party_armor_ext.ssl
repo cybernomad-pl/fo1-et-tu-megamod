@@ -82,6 +82,16 @@
 #define ARM_ROBE_PURPLE (10)  // Cathedral purple robe
 #define ARM_ROBE_GREY   (11)  // Bridgekeeper / sand grey robe
 
+// ============================================================
+// ORYGINALNI COMPANIONY FO1 -- Et Tu obsluguje ich pancerz NATYWNIE
+// (standardowe arty: leather armor = HMWARR, combat = HMCMBT itd., ktore
+// ISTNIEJA w critter.dat). NASZ armor_ext ich NIE TYKA. Wczesniej mapowal
+// ich na dedykowane HMIAN*/HMTYC* -- arty ktorych w tej instalce NIE MA
+// -> "ART file not found" crash. To byl NASZ blad, nie Et Tu. (Borys 2026-07-30)
+//   SCRIPT_IAN=235  SCRIPT_TYCHO=389  SCRIPT_KATJA=623  SCRIPT_DOG=229
+// ============================================================
+#define is_original_companion(s)   ((s) == SCRIPT_IAN or (s) == SCRIPT_TYCHO or (s) == SCRIPT_KATJA or (s) == SCRIPT_DOG)
+
 procedure start;
 procedure gamemode_handler;
 procedure invenwield_handler;
@@ -166,6 +176,10 @@ procedure refresh_one(variable obj) begin
     cur_fid := obj_art_fid(obj);
     art_idx := cur_fid bwand 4095;
     sid := get_script(obj);
+
+    // Oryginalni companiony FO1 (Ian/Tycho/Katja/Dogmeat) -- Et Tu robi
+    // ich zbroje NATYWNIE. NASZ mod ich NIE TYKA (patrz makro powyzej).
+    if (is_original_companion(sid)) then return;
 
     // Per Borys spec: take current FID, look up its BASE (jumpsuit of
     // same sprite family) via static fid_to_base map. Then base -> set
