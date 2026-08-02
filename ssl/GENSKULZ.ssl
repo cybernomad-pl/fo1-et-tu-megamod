@@ -1,0 +1,361 @@
+/*
+
+   Junktown - Generic Skulz ganger
+   MEGAMOD: rekrutowalny najemnik (wzorzec GENRAIDR/GENGHOUL).
+   Vanilla logika (bar fight, join-skulz quest, spanie) nietknieta dla
+   nie-partyjnych. TEAM_PLAYER guardy chronia rekruta przed:
+     - resetem teamu na TEAM_JUNKTOWN_SKULZ przy map_enter
+     - destroy_object po quescie Bust the Skulz (GVAR_BUST_SKULZ==2)
+     - gangowym sleeping/waypoint AI
+
+*/
+
+/* Include Files */
+#include "define.h"
+#include "maps/junkcsno.h"
+#include "area/junktown.h"
+
+#define NAME                    SCRIPT_GENSKULZ
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_JUNKTOWN)
+
+#include "command.h"
+#include "modreact.h"
+#include "party_dialog.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure critter_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+procedure map_enter_p_proc;
+procedure map_exit_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+procedure timed_event_p_proc;
+
+procedure set_sleep_tile;
+procedure NodeGreet;
+procedure NodeRecruit;
+
+import variable Neal_ptr;
+import variable Skul_target;
+import variable Trish_ptr;
+
+variable night_person;
+variable wake_time;
+variable sleep_time;
+variable home_tile;
+variable sleep_tile;
+
+variable tmp_dest_tile := 7000;
+variable tmp_hostile;
+variable sleeping_disabled;
+variable waypoint;
+
+#define LVAR_Sleeping                   (4)
+#define LVAR_Home_Tile                  (5)
+#define LVAR_Float                      (6)
+#define LVAR_SkulzTarget                (7)
+
+#define SKULLZ_TARGET_CRITTER_HEX         20082
+
+procedure start begin
+end
+
+procedure critter_p_proc begin
+   /* MEGAMOD: rekrut podaza za graczem, zero gangowego AI */
+   if (self_team == TEAM_PLAYER) then begin
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0 and local_var(13) != 0) then set_local_var(13, 0);
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0 or local_var(13) != 0) then party_follow_dude_point(5, 3)
+      return;
+   end
+   if REP_ENEMY_JUNKTOWN_SKULZ then begin
+      if (self_can_see_dude) then begin
+         attack(dude_obj);
+      end
+   end
+   if (tmp_hostile) then begin
+      tmp_hostile := 0;
+      attack(dude_obj);
+   end
+   else begin
+      if CUR_MAP_JUNKCSNO then begin
+         if ((map_var(MVAR_bar_fight) == 2) and (waypoint == 0)) then begin
+            waypoint := 1;
+            tmp_dest_tile := 26297;
+            sleeping_disabled := 1;
+         end
+         else if (quest_join_skullz_active and (waypoint == 0)) then begin
+            waypoint := 1;
+            sleeping_disabled := 1;
+            add_timer_event(self_obj, game_ticks(8), 3);
+         end
+
+         if (waypoint != 0) then begin
+            if (tile_distance(self_tile, tmp_dest_tile) > 3) then begin
+               self_walk_to_tile(tmp_dest_tile);
+            end
+            else if (waypoint == 1) then begin
+               if (map_var(MVAR_bar_fight) == 0) then begin
+                  tmp_dest_tile := 33519;
+               end
+               else begin
+                  tmp_dest_tile := 20076;
+                  waypoint := 2;
+               end
+            end
+         end
+
+         if (sleeping_disabled == 0) then begin
+            sleeping
+         end
+      end
+      else if CUR_MAP_JUNKKILL then begin
+         if ((global_var(GVAR_BUST_SKULZ) != 2) and (sleeping_disabled == 0)) then begin
+            sleeping
+         end
+      end
+   end
+end
+
+procedure destroy_p_proc begin
+   if (local_var(LVAR_SkulzTarget) == 1) then begin
+      Skul_target := 0;
+   end
+
+   if CUR_MAP_JUNKCSNO and (map_var(MVAR_bar_fight) == 1) then begin
+      dec_map_var(MVAR_Skulz_left);
+   end
+   if source_is_dude  then begin
+      set_global_var(GVAR_DUDE_ENEMY_SKULZ, 1);
+   end
+   inc_evil_critter
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure map_enter_p_proc begin
+   /* MEGAMOD: rekrut NIE wraca do gangu i NIE jest kasowany po Bust the Skulz */
+   if (self_team == TEAM_PLAYER) then return;
+
+   if not(local_var(LVAR_Home_Tile)) then begin
+      set_local_var(LVAR_Home_Tile, self_tile);
+      if (self_tile == SKULLZ_TARGET_CRITTER_HEX) then begin
+         set_local_var(LVAR_SkulzTarget, 1);
+      end
+   end
+   home_tile := local_var(LVAR_Home_Tile);
+
+   set_self_team(TEAM_JUNKTOWN_SKULZ);
+   set_self_ai(AI_SKULZ);
+
+   if CUR_MAP_JUNKENT then begin
+      if (global_var(GVAR_BUST_SKULZ) != 2) then begin
+         if not(is_loading_game) then begin
+            set_self_invisible;
+         end
+      end
+      else begin
+         if not(junktown_invaded) then begin
+            if not(is_loading_game) then begin
+               set_self_visible;
+            end
+         end
+         else begin
+            kill_critter(self_obj, ANIM_stand);
+         end
+      end
+   end
+
+   if (cur_map_index != MAP_JUNKCSNO) then begin
+      if CUR_MAP_JUNKENT then begin
+         if (global_var(GVAR_BUST_SKULZ) == 2) then begin
+            add_timer_event(self_obj, game_ticks(random(30, 60)), 1);
+         end
+      end
+      else if CUR_MAP_JUNKKILL then begin
+         add_timer_event(self_obj, game_ticks(random(30, 60)), 1);
+      end
+   end
+   else begin
+      if (quest_join_skullz_active and (map_var(MVAR_bar_fight) == 0)) then begin
+         destroy_object(self_obj);
+      end
+   end
+
+   if (global_var(GVAR_BUST_SKULZ) == 2) then begin
+      if CUR_MAP_JUNKENT then begin
+         if not(is_loading_game) then set_self_visible;
+      end
+      else begin
+         destroy_object(self_obj);
+      end
+   end
+
+   call set_sleep_tile;
+
+   if ((local_var(LVAR_SkulzTarget) == 1) and CUR_MAP_JUNKCSNO) then begin
+      Skul_target := self_obj;
+   end
+end
+
+procedure map_exit_p_proc begin
+   /* MEGAMOD: rekrut nie podlega czyszczeniu sceny questowej */
+   if (self_team == TEAM_PLAYER) then return;
+
+   if CUR_MAP_JUNKCSNO then begin
+      if (quest_join_skullz_active and (map_var(MVAR_bar_fight) == 0)) then begin
+         destroy_object(tile_contains_pid_obj(SKULLZ_TARGET_CRITTER_HEX, 0, PID_STRANGER)); // Remove the dead body!
+         destroy_object(self_obj);
+      end
+   end
+end
+
+procedure pickup_p_proc begin
+   /* MEGAMOD: dostep do ekwipunku rekruta bez agresji */
+   if (self_team == TEAM_PLAYER) then return;
+
+   float_msg(self_obj, mstr(101), FLOAT_MSG_RED);
+   tmp_hostile := 1;
+end
+
+procedure talk_p_proc begin
+   /* MEGAMOD: party dialog dla rekruta */
+   if (self_team == TEAM_PLAYER and not(party_wants_normal_talk)) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+
+   /* MEGAMOD: zamiast floata -- dialog z opcja rekrutacji */
+   dude_look_at_self;
+   if (local_var(LVAR_Sleeping) == 1) then begin
+      float_msg(self_obj, mstr(106), FLOAT_MSG_NORMAL);
+      return;
+   end
+   start_dialog_at_node(NodeGreet);
+end
+
+procedure timed_event_p_proc begin
+variable sound;
+
+   if (fixed_param == 1) then begin
+      if ((local_var(4) == 0) and not(combat_is_initialized)) then begin
+         if (random(0, 1)) then begin
+            float_msg(self_obj, mstr(random(107, 112)), FLOAT_MSG_NORMAL);
+         end
+         else begin
+            self_walk_to_tile(tile_num_in_direction(local_var(LVAR_Home_Tile), random(0, 3), random(0, 5)));
+         end
+      end
+      add_timer_event(self_obj, game_ticks(random(30, 60)), 1);
+   end
+   else if ((fixed_param == 2) and (Trish_ptr != 0) and (Neal_ptr != 0)) then begin
+      float_msg(self_obj, message_str(SCRIPT_SHARK, 102), FLOAT_MSG_RED);
+      rm_timer_event(Trish_ptr);
+      rm_timer_event(Neal_ptr);
+      reg_anim_clear(self_obj);
+      reg_anim_begin();
+         reg_anim_obj_move_to_obj(self_obj, Trish_ptr, -1);
+         sound := sfx_build_char_name(self_obj, ANIM_throw_punch, snd_contact);
+         reg_anim_play_sfx(self_obj, sound, 2);
+         reg_anim_animate(self_obj, ANIM_throw_punch, -1);
+
+         sound := sfx_build_char_name(Trish_ptr, ANIM_fall_back, snd_knock_down);
+         reg_anim_animate(Trish_ptr, ANIM_fall_back, 4);
+         reg_anim_play_sfx(Trish_ptr, sound, 1);
+         reg_anim_animate(Trish_ptr, ANIM_fall_back_sf, -1);
+         reg_anim_animate(Trish_ptr, ANIM_back_to_standing, -1);
+         reg_anim_obj_run_to_tile(Trish_ptr, 19889, -1);
+      reg_anim_end();
+      add_timer_event(Neal_ptr, game_ticks(3), 1);
+   end
+   else if (fixed_param == 3) then begin
+      tmp_dest_tile := 26297;
+      sleeping_disabled := 1;
+   end
+end
+
+procedure set_sleep_tile begin
+   if CUR_MAP_JUNKKILL then begin
+      if (home_tile == 13502) then begin
+         sleep_tile := 13093;
+      end
+      else if (home_tile == 13516) then begin
+         sleep_tile := 13719;
+      end
+      else if (home_tile == 13717) then begin
+         sleep_tile := 13721;
+      end
+      sleep_time := random(2200, 2215);
+      wake_time := random(800, 815);
+   end
+   else if CUR_MAP_JUNKCSNO then begin
+      sleep_tile := 7000;
+      sleep_time := 300;
+      wake_time := 1600;
+      night_person := 1;
+   end
+   else if CUR_MAP_JUNKENT then begin
+      sleep_tile := home_tile;
+      sleep_time := 2200;
+      wake_time := 1000;
+   end
+end
+
+procedure NodeGreet begin
+   Reply(mstr(102 + random(0, 3)));
+   NOption("Join me.", NodeRecruit, 4);
+   NOption("Later.", NodePartyDone, 4);
+end
+
+procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   call camp_grant_barter(self_obj);
+   display_msg(obj_name(self_obj) + " joins your party.");
+end
+
+procedure NodeCampWakeUp;
+// camp_active_here / camp_searched_here -- provided by camp_actions.h
+// Camp actions -- INLINE via camp_actions.h macros (vanilla pattern).
+
+procedure NodeCampWakeUp begin
+   variable bed_lst;
+   variable bed_obj;
+   variable best_bed;
+   variable best_d;
+   variable d;
+   set_local_var(13, 1);
+   reg_anim_begin();
+   reg_anim_animate(self_obj, ANIM_back_to_standing, -1);
+   reg_anim_end();
+   // Take nearest bedroll with us (remove it from map).
+   best_bed := 0;
+   best_d := 99999;
+   bed_lst := list_begin(LIST_SCENERY);
+   bed_obj := list_next(bed_lst);
+   while (bed_obj) do begin
+      if (bed_obj != 0 and (obj_pid(bed_obj) == PID_BED_1 or obj_pid(bed_obj) == PID_BED_2)) then begin
+         d := tile_distance_objs(bed_obj, self_obj);
+         if (d < best_d) then begin
+            best_bed := bed_obj;
+            best_d := d;
+         end
+      end
+      bed_obj := list_next(bed_lst);
+   end
+   list_end(bed_lst);
+   if (best_bed != 0) then destroy_object(best_bed);
+   display_msg(obj_name(self_obj) + " gets up and follows you.");
+end

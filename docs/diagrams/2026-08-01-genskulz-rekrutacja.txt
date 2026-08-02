@@ -1,0 +1,51 @@
+FEAT: Skulzowie rekrutowalni jak raidersi (GENSKULZ.ssl -- nowe nadpisanie)
+===========================================================================
+
+CEL (Borys): budowa armii na inwazje -- generyczni Skulzowie (Junktown,
+Skum Pitt / Kill's bar) rekrutowalni jak generyczni raidersi.
+
+FLOW DIALOGU:
+
+  klik na Skulza
+      |
+      v
+  self_team == TEAM_PLAYER? ---TAK---> NodePartyMain (party_dialog.h)
+      |                                 [Tactics/Follow/Needs/oboz -- jak
+      NIE                                kazdy rekrut w modsecie]
+      |
+      v
+  spi? --TAK--> float "Zzzzz" (bez budzenia sciezka dialogowa)
+      |
+      NIE
+      v
+  NodeGreet: Reply = losowy gangowy tekst {102-105}
+      |                  ("You're on Skulz turf, stranger...")
+      +-- "Join me."  --> NodeRecruit: party_add + TEAM_PLAYER
+      |                   + camp_grant_barter + "X joins your party."
+      +-- "Later."    --> NodePartyDone (wyjscie)
+
+GUARDY TEAM_PLAYER (bez nich rekrut byl KASOWANY lub wracal do gangu):
+
+  map_enter_p_proc  --> early return
+        vanilla: set_self_team(TEAM_JUNKTOWN_SKULZ)  <- reset rekruta!
+                 destroy_object gdy GVAR_BUST_SKULZ==2 poza JUNKENT
+                 kill_critter gdy junktown_invaded    <- smierc rekruta!
+  map_exit_p_proc   --> early return
+        vanilla: destroy_object przy quest_join_skullz (czyszczenie sceny)
+  critter_p_proc    --> party_follow_dude_point(5,3) + return
+        vanilla: attack(dude) przy REP_ENEMY, gangowe sleeping/waypointy
+  pickup_p_proc     --> return (dostep do ekwipunku bez agresji)
+
+NIETKNIETE (vanilla dziala jak dawniej dla nie-rekrutow):
+  - bar fight w Skum Pitt (MVAR_bar_fight, waypointy, Trish/Neal scenka)
+  - quest Join the Skulz (quest_join_skullz_active)
+  - quest Bust the Skulz (GVAR_BUST_SKULZ)
+  - spanie wg mapy (JUNKKILL/JUNKCSNO/JUNKENT), night_person w barze
+  - destroy: GVAR_DUDE_ENEMY_SKULZ gdy zabity przez gracza
+
+ZRODLO vanilla: rotators/Fo1in2 master
+  Mapper/source/scripts/03junktown/GENSKULZ.ssl (291 linii)
+DEPLOY: out/invasion/GENSKULZ.int -> mods/fo1_mod_npc_party/scripts/
+
+DALEJ (do decyzji Borysa): imienni Skulzowie -- VINNIE(385), VICTOR(386),
+SHARK(387), SHERRY(388) -- osobne konwersje, maja wlasne dialogi questowe.
