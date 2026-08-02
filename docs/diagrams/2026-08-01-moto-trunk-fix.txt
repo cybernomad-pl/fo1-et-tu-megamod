@@ -1,0 +1,51 @@
+FIX: trunk motocykla ladowal "niewiadomo gdzie" (rozjazd grafiki)
+==================================================================
+
+PRZED (bug w Create_Moto1/2, scenepid.h):
+
+  Hex_Num (hex motocykla)
+     |
+     v
+  Scenery_Creation_Hex := Hex_Num          <- OK, zapamietany hex motoru
+     |
+     v
+  Blocking_Cycle(2,2) ----.
+  Blocking_Cycle(4,2) ----+--> KAZDY KROK MUTUJE Scenery_Creation_Hex!
+  Blocking_Cycle(5,1) ----'    (przesuwa go o 1 hex na iteracje = 5 krokow)
+     |
+     v
+  trunk stawiany na Scenery_Creation_Hex   <- JUZ NIE hex motoru,
+                                              tylko koncowka spirali blockerow
+
+  EFEKT W GRZE:
+        [MOTO]  . . .
+           .  .
+             .   [TRUNK moto4.frm]   <- sakwa 46x34 px lezy 4-5 hexow dalej
+                                        wyglada jak "rozjechana grafika"
+
+PO (fix 2026-08-01):
+
+  trunk stawiany na tile_num_in_direction(Hex_Num, 2, 1)
+                                            = ZAWSZE 1 hex na SE od motoru
+  Hex_Num nie jest mutowany (parametr makra), Blocking_Cycle bez zmian
+  (blockery zostaja gdzie byly -- one sa poprawne).
+
+  EFEKT W GRZE:
+        [MOTO]
+           [TRUNK]      <- sakwa przy motocyklu, klikalna, nie przykryta
+                           sprite'em motoru (SE = nizej na ekranie)
+
+ZAKRES:
+  - scenepid.h: Create_Moto1 (2 miejsca: move_to + create_object_sid)
+                Create_Moto2 (2 miejsca: move_to + create_object_sid)
+  - rekompilacja: gl_mod_car_encounter.int -> deploy do
+    mods/fo1_mod_car_encounter/scripts/
+  - UWAGA: skrypty map miast w fo1_base (car spoty w miastach) maja ten sam
+    bug WKOMPILOWANY (binaria Et Tu) -- fix obejmuje na razie tylko
+    encountery. Miasta = osobna decyzja (rekompilacja skryptow map et tu).
+
+POWIAZANE (nie ruszone, do decyzji):
+  - USE motocykla: dziala poprawnie (MOTRCYCL.int z fo1_base) -- bez zmian.
+  - Ryzyko NIEPEWNE: Trunk_Ptr (party_member_obj PID 532) moze byc 0 gdy
+    silnik rejestruje trunk Highwaymana (PID 455) -> nowy pusty trunk co
+    encounter, gubienie lootu. Do weryfikacji w grze po tym fixie.

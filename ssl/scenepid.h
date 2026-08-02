@@ -420,12 +420,14 @@ variable Scenery_Creation_Ptr;
                                              Blocking_Cycle(5,1,Elevation)                                                                 \
                                              Blocking_Cycle(3,1,Elevation)                                                                 \
                                              Blocking_Cycle(1,2,Elevation)                                                                 \
+                                             /* FIX 2026-08-01: trunk na stalym hexie SE od motoru -- Blocking_Cycle       */              \
+                                             /* mutuje Scenery_Creation_Hex, trunk ladowal 4 hexy od motocykla (rozjazd).  */              \
                                              if (Trunk_Ptr != 0) then begin                                                                \
-                                                move_to(Trunk_Ptr,Scenery_Creation_Hex,Elevation);                                         \
+                                                move_to(Trunk_Ptr,tile_num_in_direction(Hex_Num,2,1),Elevation);                           \
                                                 debug_msg("Moving the Car Trunk");                                                         \
                                              end                                                                                           \
                                              else begin                                                                                    \
-                                                create_object_sid(PID_MOTO1_TRUNK,Scenery_Creation_Hex,Elevation,SCRIPT_MOTRTRNK);         \
+                                                create_object_sid(PID_MOTO1_TRUNK,tile_num_in_direction(Hex_Num,2,1),Elevation,SCRIPT_MOTRTRNK); \
                                                 debug_msg("Making new Trunk.");                                                            \
                                              end                                                                                           \
                                              Blocking_Cycle(2,1,Elevation)                                                                 \
@@ -439,12 +441,14 @@ variable Scenery_Creation_Ptr;
                                              Blocking_Cycle(2,2,Elevation)                                                                 \
                                              Blocking_Cycle(4,2,Elevation)                                                                 \
                                              Blocking_Cycle(5,1,Elevation)                                                                 \
+                                             /* FIX 2026-08-01: trunk na stalym hexie SE od motoru -- Blocking_Cycle       */              \
+                                             /* mutuje Scenery_Creation_Hex, trunk ladowal 5 hexow od motocykla (rozjazd). */              \
                                              if (Trunk_Ptr != 0) then begin                                                                \
-                                                move_to(Trunk_Ptr,Scenery_Creation_Hex,Elevation);                                         \
+                                                move_to(Trunk_Ptr,tile_num_in_direction(Hex_Num,2,1),Elevation);                           \
                                                 debug_msg("Moving the Car Trunk");                                                         \
                                              end                                                                                           \
                                              else begin                                                                                    \
-                                                create_object_sid(PID_MOTO1_TRUNK,Scenery_Creation_Hex,Elevation,SCRIPT_MOTRTRNK);         \
+                                                create_object_sid(PID_MOTO1_TRUNK,tile_num_in_direction(Hex_Num,2,1),Elevation,SCRIPT_MOTRTRNK); \
                                                 debug_msg("Making new Trunk.");                                                            \
                                              end                                                                                           \
                                              Blocking_Cycle(5,0,Elevation)                                                                 \
