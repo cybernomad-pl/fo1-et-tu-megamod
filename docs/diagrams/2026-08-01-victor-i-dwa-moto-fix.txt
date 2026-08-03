@@ -1,0 +1,59 @@
+FIX x2: Victor sterowalny bez rekrutacji + dwa motocykle na encounterze
+=======================================================================
+
+BUG 1: VICTOR W CONTROLLABLE CRITTERS (gl_partycontrol.ssl)
+-----------------------------------------------------------
+
+PRZED:
+  AllowControl(pid, critter):
+     return party_member_obj(pid)      <- gate po SAMYM PID (proto)
+
+  Rekrutacja generycznego Skulza
+     |
+     v
+  party_member_obj(PID_skulz) != 0     <- PID "jest w party"
+     |
+     v
+  KAZDY critter z tym proto = sterowalny w walce
+  (Victor dzieli proto z generykami -> "nagle controllable")
+
+PO:
+  AllowControl(pid, critter):
+     if (get_team(critter) == TEAM_PLAYER) then
+        return party_member_obj(pid)   <- obiekt MUSI byc TEAM_PLAYER
+     return 0                             (= faktycznie zrekrutowany)
+
+  Victor: TEAM_JUNKTOWN_SKULZ -> NIE sterowalny
+  Rekrut: TEAM_PLAYER + PID w party -> sterowalny
+  (dziala tez dla WIELU rekrutow o tym samym proto)
+
+PRZY OKAZJI NAPRAWIONE SRODOWISKO BUILD:
+  sfall/main.h w build tree byl OKROJONY (15 linii, same include'y)
+  -- brak GetConfig/GetConfigListInt => gl_partycontrol NIE KOMPILOWAL
+  sie naszym pipeline (deployowany .int z 26.07 powstal poza nim).
+  Uzupelniono main.h trescia upstream sfall-team/sfall
+  artifacts/mods/main.h (GetIniConfig/GetConfig*/Translate).
+
+BUG 2: DWA MOTOCYKLE (gl_mod_car_encounter.ssl)
+-----------------------------------------------
+
+PRZED:
+  hex := wyliczony punkt postoju (dir 2 dist 4 od gracza)
+  guard: tile_contains_obj_pid(hex, MOTO1/MOTO2)   <- sprawdza JEDEN hex
+     |
+     v
+  pojazd stojacy GDZIEKOLWIEK INDZIEJ na mapie -> guard slepy
+     -> Create_Car stawia DRUGI motocykl
+
+PO:
+  skan CALEJ mapy (list_begin LIST_SCENERY):
+     jakikolwiek PID_DRIVABLE_MOTO1/MOTO2 na mapie?
+        TAK -> return (log dup_guard_hit_hex do testing.ini)
+        NIE -> wylicz hex i Create_Car jak dotad
+
+  Zrodlo duplikatu (kto postawil pierwszego) widoczne w
+  testing.ini|car_enc_enter|dup_guard_hit_hex po nastepnym encounterze.
+
+DEPLOY:
+  out/gl_partycontrol.int     -> mods/fo1_mod_combatcontrol/scripts/
+  out/gl_mod_car_encounter.int -> mods/fo1_mod_car_encounter/scripts/

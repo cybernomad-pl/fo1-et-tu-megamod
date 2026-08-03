@@ -45,6 +45,8 @@ procedure map_enter_p_proc begin
    variable Scenery_Creation_Count;
    variable hex;
    variable elev;
+   variable scan_lst;
+   variable scan_obj;
 
    // 1. Gracz musi posiadac pojazd (1=bike, 2=upgraded). 0 = brak -> nic.
    if (global_var(GVAR_PLAYER_GOT_CAR) == 0) then return;
@@ -54,17 +56,29 @@ procedure map_enter_p_proc begin
 
    elev := elevation(dude_obj);
 
-   // 3. Punkt postoju: kilka hexow od gracza. Guard na skraj malej mapy --
+   // 3. Guard na duplikat -- FIX 2026-08-01: skan CALEJ mapy, nie jednego
+   //    hexa. Stary guard sprawdzal tylko wyliczony hex docelowy; gdy
+   //    pojazd stal juz GDZIEKOLWIEK indziej (inny przebieg placementu),
+   //    guard go nie widzial i na mapie ladowaly DWA motocykle.
+   scan_lst := list_begin(LIST_SCENERY);
+   scan_obj := list_next(scan_lst);
+   while (scan_obj) do begin
+      if (obj_pid(scan_obj) == PID_DRIVABLE_MOTO1 or obj_pid(scan_obj) == PID_DRIVABLE_MOTO2) then begin
+         list_end(scan_lst);
+         LOG("enter", "dup_guard_hit_hex", tile_num(scan_obj));
+         return;
+      end
+      scan_obj := list_next(scan_lst);
+   end
+   list_end(scan_lst);
+
+   // 4. Punkt postoju: kilka hexow od gracza. Guard na skraj malej mapy --
    //    proboj kolejne kierunki, dopiero na koniec tile gracza. To nie
    //    fallback zachowania, tylko ponawianie wyboru poprawnego hexu.
    hex := tile_num_in_direction(tile_num(dude_obj), 2, 4);
    if (hex < 0) then hex := tile_num_in_direction(tile_num(dude_obj), 5, 4);
    if (hex < 0) then hex := tile_num_in_direction(tile_num(dude_obj), 0, 3);
    if (hex < 0) then hex := tile_num(dude_obj);
-
-   // 4. Guard na duplikat: jesli na tym hexie juz stoi pojazd -> nie stawiaj.
-   if (tile_contains_obj_pid(hex, elev, PID_DRIVABLE_MOTO1)) then return;
-   if (tile_contains_obj_pid(hex, elev, PID_DRIVABLE_MOTO2)) then return;
 
    // 5. Postaw. Create_Car sam wybiera Moto1/Moto2 wg GVAR_PLAYER_GOT_CAR
    //    i reuzywa Trunk_Ptr (party-bagaznik z zawartoscia).

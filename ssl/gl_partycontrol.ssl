@@ -55,7 +55,12 @@ procedure AllowControl(variable pid, variable critter) begin
    if (pidList) then begin
       return scan_array(pidList, pid bwand 0xFFFFFF) != -1;
    end
-   return party_member_obj(pid);
+   /* FIX 2026-08-01: party_member_obj(pid) gate'uje po SAMYM PID -- kazdy
+      critter dzielacy proto ze zrekrutowanym party memberem stawal sie
+      sterowalny (Victor po rekrutacji generycznego Skulza). Sterowalny
+      jest TYLKO faktyczny rekrut: team TEAM_PLAYER + PID w party. */
+   if (get_team(critter) == TEAM_PLAYER) then return party_member_obj(pid);
+   return 0;
 end
 
 procedure SetLight(variable critter, variable lInt, variable lDist) begin
