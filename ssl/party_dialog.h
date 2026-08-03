@@ -33,6 +33,8 @@ procedure NodePartyHolster;
 procedure NodePartyDone;
 procedure CampScoutTrigger;
 procedure CampScoutExecute;
+procedure CampRemakeTrigger;
+procedure CampRemakeExecute;
 procedure CampPackTrigger;
 procedure CampPackExecute;
 procedure CampBuryTrigger;
@@ -69,6 +71,8 @@ procedure NodePartyMain begin
       end
       else if not(camp_searched_here) then
          NOption("Let's scout this area and set up for the night.", CampScoutTrigger, 4);
+      else
+         NOption("Let's set up camp again.", CampRemakeTrigger, 4);
    end
    NOption("Got a minute?", NodePartyNeeds, 4);
    NOption("Relax. Tell me something.", NodePartyTalkNormal, 4);
@@ -202,6 +206,31 @@ end
 
 procedure CampScoutExecute begin
    CAMP_DO_SCOUT_AND_CAMP
+end
+
+// ============================================================
+// RE-CAMP -- area already scavenged (camp_searched_here == 1): build the
+// camp again WITHOUT the scout haul / iguana bonus. Borys 2026-08-03:
+// second camp on the same map must NOT farm items.
+// ============================================================
+procedure CampRemakeTrigger begin
+   if (not(map_is_encounter)) then begin
+      Reply("No place to camp here. Too exposed, too close to trouble. We need the wild.");
+      NOption("Forget it.", NodePartyMain, 4);
+   end
+   else if (combat_is_initialized) then begin
+      Reply("Bit busy for that right now, boss. Bullets first, blankets later.");
+      NOption("Forget it.", NodePartyMain, 4);
+   end
+   else begin
+      Reply("We've already picked this place clean, but we can roll out the bedrolls again.");
+      NOption("Do it.", CampRemakeExecute, 4);
+      NOption("Forget it.", NodePartyMain, 4);
+   end
+end
+
+procedure CampRemakeExecute begin
+   CAMP_DO_MAKE
 end
 
 // ============================================================

@@ -1,5 +1,12 @@
 /*
-    Outdoorsman Mod v4 -- camping + debug PID/FID dump
+    Outdoorsman Mod v5 -- camping + survival (Borys rework 2026-08-03)
+
+    v5 CHANGES:
+    - K camp rest: heal NATURAL rate only (Healing Rate x2 for 7h), not max
+    - bed rest REMOVED (owned beds = future separate mod)
+    - G auto-craft REMOVED (crafting via party dialog only)
+    - L camp requires FIREWOOD: ground next to you > pack > FORAGE
+      (Outdoorsman check, success = firewood + margin bonuses, 1h, once/map)
 
     === LIGHTER (USE from inventory) ===
     USE lighter in WILDERNESS (random encounter map) and no camp yet:
@@ -57,7 +64,6 @@ variable last_map_idx;       // for map-change detection
 variable flicker_counter;    // map_update tick counter (flicker throttle)
 variable last_no_follow;     // edge detect GVAR 1->0 transition (hotkey wake)
 variable bury_queue;         // deferred corpse-destroy list (see useobjon bury)
-variable bed_prompt_shown;   // edge-flag: bed-rest prompt shown this proximity
 
 procedure start;
 procedure useobj_handler;
@@ -70,13 +76,9 @@ procedure handle_firewood(variable item);
 procedure handle_shovel_use;
 procedure handle_shovel_on_firepit;
 procedure handle_player_bedroll_rest;
-procedure near_a_bed;
-procedure handle_bed_rest;
-procedure handle_autocraft;
-procedure ac_can(variable r);
-procedure ac_do(variable r);
-procedure ac_out(variable r);
 procedure dude_consume_pid(variable pid);
+procedure find_ground_firewood;
+procedure do_forage;
 procedure is_wilderness;
 procedure map_has_campfire;
 procedure create_campfire_adjacent;
@@ -136,7 +138,6 @@ procedure start begin
         last_no_follow  := global_var(GVAR_PARTY_NO_FOLLOW);
         // Stale obj pointers from a previous session are invalid after load.
         bury_queue := 0;
-        bed_prompt_shown := 0;
 
         // NEW GAME only -- give LIGHTER / SHOVEL / ROPE once.
         // is_loading_game proved unreliable (2026-04-18: fired FALSE on load),
@@ -176,6 +177,7 @@ procedure keypress_handler begin
     variable pressed;
     variable key;
     variable arr;
+    variable ground_wood;
 
     pressed := get_sfall_arg;
     key := get_sfall_arg;
@@ -188,36 +190,20 @@ procedure keypress_handler begin
     // Block in dialog/inventory/char screen/pipboy/etc. (keep worldmap+localmap allowed)
     if ((get_game_mode bwand (DIALOG bwor INVENTORY bwor CHARSCREEN bwor PIPBOY bwor ESCMENU bwor SAVEGAME bwor LOADGAME)) != 0) then return;
 
-    // DIK_K (37) = rest. Camp (wilderness + campfire) OR next to any bed.
+    // DIK_K (37) = rest at YOUR camp only. Bed rest disabled (Borys
+    // 2026-08-03) -- owned beds will come as a separate mod. Auto-craft
+    // hotkey (G) also removed same day: crafting lives in party dialog.
     if (key == 37) then begin
         if (combat_is_initialized) then begin
             display_msg("Can't rest during combat.");
             return;
         end
-        // Preferred: full camp rest (packs the camp on wake).
+        // Full camp rest (packs the camp on wake).
         if (is_wilderness and map_has_campfire) then begin
             call handle_player_bedroll_rest;
             return;
         end
-        // Otherwise: sleep at any adjacent bed/mattress/bedroll, anywhere.
-        if (near_a_bed) then begin
-            call handle_bed_rest;
-            return;
-        end
-        display_msg("You need a campfire in the wild, or a bed nearby, to rest.");
-        return;
-    end
-
-    // DIK_G (34) = auto-craft: make everything possible from your pack,
-    // highest in-game value first, max of each (Borys cz.3).
-    // NOTE 2026-07-25: moved off DIK_C (46) -- C is the vanilla Character
-    // screen hotkey, pressing it opened char screen AND triggered craft.
-    if (key == 34) then begin
-        if (combat_is_initialized) then begin
-            display_msg("No time for crafting in a fight.");
-            return;
-        end
-        call handle_autocraft;
+        display_msg("You need a campfire in the wild to rest.");
         return;
     end
 
@@ -241,7 +227,11 @@ procedure keypress_handler begin
         return;
     end
 
-    // DIK_L (38) = lighter toggle (fallback when USE action on lighter fails)
+    // DIK_L (38) = lighter. Camp path REQUIRES firewood (Borys 2026-08-03):
+    //   1. firewood on the ground next to you -> burn it, camp THERE
+    //   2. firewood in your pack             -> burn it, camp here
+    //   3. no firewood -> FORAGE: Outdoorsman check, success gives firewood
+    //      (+ bonus loot at high margin), fail gives nothing. 1h game time.
     if (key == 38) then begin
         LOG("key", "L_invoked", 1);
         LOG("key", "L_has_lighter", obj_is_carrying_obj_pid(dude_obj, PID_LIGHTER));
@@ -257,8 +247,19 @@ procedure keypress_handler begin
             if (is_wilderness
                 and not(map_has_campfire)
                 and not(combat_is_initialized)) then begin
-                call create_campfire_adjacent;
-                play_sfx("FLAMETHR");
+                ground_wood := find_ground_firewood;
+                if (ground_wood != 0) then begin
+                    destroy_object(ground_wood);
+                    call create_campfire_adjacent;
+                    play_sfx("FLAMETHR");
+                end
+                else if (dude_consume_pid(PID_FIREWOOD)) then begin
+                    call create_campfire_adjacent;
+                    play_sfx("FLAMETHR");
+                end
+                else begin
+                    call do_forage;
+                end
             end
         end
         else begin
@@ -544,6 +545,10 @@ procedure gamemode_handler begin
         free_array(tmp_empty);
         tmp_empty := create_array_map;
         save_array("camp_searched", tmp_empty);
+        free_array(tmp_empty);
+        // forage (L-search) success flag -- also once per map.
+        tmp_empty := create_array_map;
+        save_array("forage_done", tmp_empty);
         free_array(tmp_empty);
 
         // Party follow behaviour: release hold from previous camp.
@@ -962,8 +967,9 @@ procedure handle_player_bedroll_rest begin
     // 1 hour = 36000 ticks (10 ticks/sec * 3600 sec).
     game_time_advance(7 * 36000);
 
-    // Heal dude: restore HP to max via stat_current.
-    critter_heal(dude_obj, get_critter_stat(dude_obj, STAT_max_hp));
+    // Heal dude -- FIX 2026-08-03 (Borys): NOT to max. Natural rate only,
+    // FO2 mechanics: Healing Rate HP per full 3h of rest -> 7h = 2 cycles.
+    critter_heal(dude_obj, get_critter_stat(dude_obj, STAT_heal_rate) * 2);
 
     // Pack up the camp on waking (Borys 2026-07-21). Screen is STILL faded
     // to black from the rest fade above, so handle_shovel_on_firepit tears
@@ -971,80 +977,93 @@ procedure handle_player_bedroll_rest begin
     // Dropped loot on the ground is NOT touched -- it stays where it was.
     call handle_shovel_on_firepit;
 
-    display_msg("You rest for 7 hours. The party is rested, and you pack up the camp.");
+    display_msg("You rest for 7 hours, then pack up the camp.");
 end
 
 // ============================================================
-// NEAR A BED -- scan dude tile + 6 adjacent tiles for a bed / mattress /
-// bedroll. Returns 1 if any found. (Borys task 7: rest anywhere by a bed.)
+// FIND GROUND FIREWOOD -- scan dude tile + 6 adjacent tiles for a
+// firewood item lying on the ground. Returns the obj or 0.
 // ============================================================
-procedure near_a_bed begin
+procedure find_ground_firewood begin
     variable dir;
     variable t;
     variable elev;
     variable ctr;
+    variable obj;
     elev := elevation(dude_obj);
     ctr := tile_num(dude_obj);
-    if (tile_contains_obj_pid(ctr, elev, PID_MATTRESS_1)) then return 1;
-    if (tile_contains_obj_pid(ctr, elev, PID_MATTRESS_2)) then return 1;
-    if (tile_contains_obj_pid(ctr, elev, PID_BED_1)) then return 1;
-    if (tile_contains_obj_pid(ctr, elev, PID_BED_2)) then return 1;
+    obj := tile_contains_pid_obj(ctr, elev, PID_FIREWOOD);
+    if (obj != 0) then return obj;
     for (dir := 0; dir < 6; dir++) begin
         t := tile_num_in_direction(ctr, dir, 1);
         if (t > 0) then begin
-            if (tile_contains_obj_pid(t, elev, PID_MATTRESS_1)) then return 1;
-            if (tile_contains_obj_pid(t, elev, PID_MATTRESS_2)) then return 1;
-            if (tile_contains_obj_pid(t, elev, PID_BED_1)) then return 1;
-            if (tile_contains_obj_pid(t, elev, PID_BED_2)) then return 1;
+            obj := tile_contains_pid_obj(t, elev, PID_FIREWOOD);
+            if (obj != 0) then return obj;
         end
     end
     return 0;
 end
 
 // ============================================================
-// BED REST -- sleep the night at any bed, heal the whole party. No camp
-// here, so nothing to tear down -- just fade, advance 8h, heal, fade in.
+// FORAGE (Borys 2026-08-03) -- L with no firewood = search the area.
+// Outdoorsman check: roll d100 vs skill. Fail = nothing (1h lost, can
+// retry). Success = firewood + bonus loot by margin. Success is ONCE
+// per map ("forage_done" save_array, reset on map change).
 // ============================================================
-procedure handle_bed_rest begin
-    variable lst;
-    variable npc;
-    if (combat_is_initialized) then begin
-        display_msg("Not a good time to sleep.");
+procedure do_forage begin
+    variable skill;
+    variable roll;
+    variable margin;
+    variable map_key;
+    variable done_arr;
+
+    map_key := "" + cur_map_index;
+    done_arr := load_array("forage_done");
+    if (done_arr != 0 and done_arr[map_key] == 1) then begin
+        display_msg("You've already scoured this area for supplies.");
         return;
     end
+
+    skill := has_skill(dude_obj, SKILL_OUTDOORSMAN);
+    roll := random(1, 100);
+    LOG("forage", "skill", skill);
+    LOG("forage", "roll", roll);
+
     gfade_out(600);
-    reg_anim_begin();
-    reg_anim_animate(dude_obj, ANIM_magic_hands_ground, -1);
-    reg_anim_end();
-    game_time_advance(8 * 36000);   // 8 hours -- a full night
-
-    critter_heal(dude_obj, get_critter_stat(dude_obj, STAT_max_hp));
-    lst := list_begin(LIST_CRITTERS);
-    npc := list_next(lst);
-    while (npc) do begin
-        if (npc != 0 and npc != dude_obj) then begin
-            if (get_team(npc) == TEAM_PLAYER) then begin
-                if (not(is_critter_dead(npc))) then begin
-                    critter_heal(npc, get_critter_stat(npc, STAT_max_hp));
-                end
-            end
-        end
-        npc := list_next(lst);
-    end
-    list_end(lst);
-
+    game_time_advance(36000);   // searching takes 1 hour of game time
     tile_refresh_display;
     gfade_in(600);
-    display_msg("You sleep until morning. The party is rested.");
+
+    if (roll > skill) then begin
+        display_msg("[Outdoorsman] An hour of searching. Dust, rock, dry brush. No usable wood.");
+        return;
+    end
+
+    margin := skill - roll;
+    add_obj_to_inven(dude_obj, create_object(PID_FIREWOOD, 0, 0));
+    if (margin >= 60) then begin
+        add_obj_to_inven(dude_obj, create_object(81, 0, 0));    // iguana-on-a-stick
+        add_obj_to_inven(dude_obj, create_object(278, 0, 0));   // flint
+        display_msg("[Outdoorsman] A good haul: firewood, a chunk of flint, and a fat iguana.");
+    end
+    else if (margin >= 30) then begin
+        add_obj_to_inven(dude_obj, create_object(81, 0, 0));    // iguana-on-a-stick
+        display_msg("[Outdoorsman] You gather firewood and snag an iguana on the way back.");
+    end
+    else begin
+        display_msg("[Outdoorsman] You scrape together enough dry wood for a fire.");
+    end
+    give_exp_points(10);
+
+    if (done_arr == 0) then done_arr := create_array_map;
+    done_arr[map_key] := 1;
+    save_array("forage_done", done_arr);
 end
 
 // ============================================================
-// AUTO-CRAFT (Borys cz.3) -- one key, make everything possible from the
-// DUDE's inventory. Each iteration crafts ONE unit of the highest in-game
-// VALUE recipe that can currently be made (pid_cost ranking); the loop
-// repeats until nothing is craftable -> max of each, and chains resolve
-// (a spear made this pass feeds a sharpened spear next pass).
-// Recipes (5). SPEAR uses ONLY the plain KNIFE (4), NEVER combat knife (236).
+// DUDE CONSUME PID -- remove+destroy ONE item of given pid from the
+// dude's pack. Used by the L firewood camp path. (Auto-craft hotkey
+// removed 2026-08-03 -- crafting lives in the party dialog only.)
 // ============================================================
 procedure dude_consume_pid(variable pid) begin
     variable i;
@@ -1061,124 +1080,6 @@ procedure dude_consume_pid(variable pid) begin
         item := inven_ptr(dude_obj, i);
     end
     return 0;
-end
-
-// Output PID of recipe r -- used for value ranking (pid_cost).
-procedure ac_out(variable r) begin
-    if (r == 0) then return 7;    // spear
-    if (r == 1) then return 280;  // sharpened spear
-    if (r == 2) then return 273;  // healing powder
-    if (r == 3) then return 49;   // antidote
-    if (r == 4) then return 159;  // molotov
-    return 0;
-end
-
-// Can recipe r be crafted from the dude's pack right now? Nested guards not
-// needed -- obj_is_carrying / has_skill are safe on any input.
-procedure ac_can(variable r) begin
-    if (r == 0) then begin  // spear = sharpened pole(320) + PLAIN knife(4)
-        if (obj_is_carrying_obj_pid(dude_obj, 320) >= 1
-            and obj_is_carrying_obj_pid(dude_obj, 4) >= 1) then return 1;
-        return 0;
-    end
-    if (r == 1) then begin  // sharpened spear = spear(7) + flint(278)
-        if (obj_is_carrying_obj_pid(dude_obj, 7) >= 1
-            and obj_is_carrying_obj_pid(dude_obj, 278) >= 1) then return 1;
-        return 0;
-    end
-    if (r == 2) then begin  // healing powder = broc(271) + xander(272)
-        if (obj_is_carrying_obj_pid(dude_obj, 271) >= 1
-            and obj_is_carrying_obj_pid(dude_obj, 272) >= 1) then return 1;
-        return 0;
-    end
-    if (r == 3) then begin  // antidote = scorpion tail(92) + booze(125) + SCIENCE
-        if (obj_is_carrying_obj_pid(dude_obj, 92) >= 1
-            and obj_is_carrying_obj_pid(dude_obj, 125) >= 1
-            and has_skill(dude_obj, SKILL_SCIENCE) >= 50) then return 1;
-        return 0;
-    end
-    if (r == 4) then begin  // molotov = booze(125) + lighter(101, kept)
-        if (obj_is_carrying_obj_pid(dude_obj, 125) >= 1
-            and obj_is_carrying_obj_pid(dude_obj, 101) >= 1) then return 1;
-        return 0;
-    end
-    return 0;
-end
-
-// Craft ONE unit of recipe r: consume inputs, add output, grant XP.
-procedure ac_do(variable r) begin
-    if (r == 0) then begin
-        call dude_consume_pid(320);
-        call dude_consume_pid(4);
-        add_obj_to_inven(dude_obj, create_object(7, 0, 0));
-        give_exp_points(30);
-        return;
-    end
-    if (r == 1) then begin
-        call dude_consume_pid(7);
-        call dude_consume_pid(278);
-        add_obj_to_inven(dude_obj, create_object(280, 0, 0));
-        give_exp_points(40);
-        return;
-    end
-    if (r == 2) then begin
-        call dude_consume_pid(271);
-        call dude_consume_pid(272);
-        add_obj_to_inven(dude_obj, create_object(273, 0, 0));
-        give_exp_points(30);
-        return;
-    end
-    if (r == 3) then begin
-        call dude_consume_pid(92);
-        call dude_consume_pid(125);
-        add_obj_to_inven(dude_obj, create_object(49, 0, 0));
-        give_exp_points(50);
-        return;
-    end
-    if (r == 4) then begin
-        call dude_consume_pid(125);   // lighter (101) is kept
-        add_obj_to_inven(dude_obj, create_object(159, 0, 0));
-        give_exp_points(25);
-        return;
-    end
-end
-
-procedure handle_autocraft begin
-    variable done;
-    variable total;
-    variable r;
-    variable best;
-    variable best_val;
-    variable v;
-    done := 0;
-    total := 0;
-    while (done == 0) do begin
-        best := -1;
-        best_val := -1;
-        for (r := 0; r < 5; r++) begin
-            if (ac_can(r)) then begin
-                v := pid_cost(ac_out(r));
-                if (v > best_val) then begin
-                    best_val := v;
-                    best := r;
-                end
-            end
-        end
-        if (best == -1) then begin
-            done := 1;
-        end
-        else begin
-            call ac_do(best);
-            total := total + 1;
-            if (total >= 200) then done := 1;   // runaway safety cap
-        end
-    end
-    if (total == 0) then begin
-        display_msg("Nothing to make -- you're missing the materials.");
-    end
-    else begin
-        display_msg("You work through your pack. Crafted " + total + " item(s).");
-    end
 end
 
 // ============================================================
@@ -1233,27 +1134,8 @@ procedure map_update_p_proc begin
         call flicker_campfire;
     end
 
-    // Bed-rest prompt (Borys task 7): nudge ONCE when the player is worn
-    // (HP < max) AND it's evening or later AND standing by a bed. Edge-
-    // triggered so it doesn't spam every tick.
-    variable want_prompt;
-    want_prompt := 0;
-    if (not(combat_is_initialized)) then begin
-        if (get_critter_stat(dude_obj, STAT_current_hp) < get_critter_stat(dude_obj, STAT_max_hp)) then begin
-            if (evening or night) then begin
-                if (near_a_bed) then want_prompt := 1;
-            end
-        end
-    end
-    if (want_prompt == 1) then begin
-        if (bed_prompt_shown == 0) then begin
-            display_msg("There's a bed here and you're worn out. Press K to rest until morning.");
-            bed_prompt_shown := 1;
-        end
-    end
-    else begin
-        bed_prompt_shown := 0;
-    end
+    // Bed-rest prompt removed 2026-08-03 -- bed rest disabled entirely
+    // (owned beds will come as a separate mod).
     // NPC camp-action dispatch handled exclusively in gamemode_handler
     // (fires after dialog close -- avoids mid-dialog action race with
     // the map-update tick).

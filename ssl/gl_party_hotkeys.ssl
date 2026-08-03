@@ -3,6 +3,9 @@
 
     HOTKEYS:
       F (33) -- toggle GVAR_PARTY_NO_FOLLOW (party hold/follow)
+      G (34) -- GO order (Borys 2026-08-03): whole party RUNS to the hex
+                under the mouse cursor (tile_under_cursor, sfall 0x824B),
+                spiral spread around the target, then HOLD POSITION there.
       [ (26) -- FID BROWSER: cycle backward (prev sprite) on nearest party
       ] (27) -- FID BROWSER: cycle forward  (next sprite) on nearest party
 
@@ -26,6 +29,7 @@ procedure keypress_handler;
 procedure gamemode_handler;
 procedure find_nearest_party;
 procedure cycle_fid(variable direction);
+procedure order_go;
 
 variable last_map_index;
 
@@ -66,6 +70,12 @@ procedure keypress_handler begin
         return;
     end
 
+    // G (34) -- GO order: party runs to hex under cursor, holds there.
+    if (key == 34) then begin
+        call order_go;
+        return;
+    end
+
     // ] (27) -- FID browser cycle forward
     if (key == 27) then begin
         call cycle_fid(1);
@@ -85,6 +95,73 @@ procedure gamemode_handler begin
     if (global_var(GVAR_PARTY_NO_FOLLOW) != 0) then begin
         set_global_var(GVAR_PARTY_NO_FOLLOW, 0);
     end
+end
+
+// ============================================================
+// GO ORDER (G) -- send the whole party to the hex under the cursor.
+// Slot 0 lands ON the target hex, the rest spiral around it
+// (dir = slot%6, dist = 1+slot/6 -- same spread as camp/teleport).
+// GVAR_PARTY_NO_FOLLOW=1 right away: they run there via reg_anim and
+// STAY (critter_p_proc skips follow while the GVAR is up). F releases.
+// ============================================================
+procedure order_go begin
+    variable target_tile;
+    variable lst;
+    variable npc;
+    variable idx;
+    variable dest;
+    variable ring;
+    variable dir_idx;
+    variable moved;
+
+    if (combat_is_initialized) then begin
+        display_msg("In combat, give orders on their turn.");
+        return;
+    end
+
+    target_tile := tile_under_cursor;
+    if (target_tile <= 0) then begin
+        display_msg("Point at open ground first.");
+        return;
+    end
+
+    moved := 0;
+    idx := 0;
+    lst := list_begin(LIST_CRITTERS);
+    npc := list_next(lst);
+    while (npc) do begin
+        if (npc != 0 and npc != dude_obj
+            and get_team(npc) == TEAM_PLAYER
+            and not(is_critter_dead(npc))) then begin
+            if (idx == 0) then begin
+                dest := target_tile;
+            end
+            else begin
+                ring := (idx - 1) / 6;
+                dir_idx := (idx - 1) % 6;
+                dest := tile_num_in_direction(target_tile, dir_idx, 1 + ring);
+                // Map-edge retry: invalid ring hex -> take the target hex
+                // itself (retry of destination choice, not behavior).
+                if (dest <= 0) then dest := target_tile;
+            end
+            reg_anim_clear(npc);
+            reg_anim_begin();
+            reg_anim_obj_run_to_tile(npc, dest, -1);
+            reg_anim_end();
+            moved := moved + 1;
+            idx := idx + 1;
+        end
+        npc := list_next(lst);
+    end
+    list_end(lst);
+
+    if (moved == 0) then begin
+        display_msg("No party members to send.");
+        return;
+    end
+
+    set_global_var(GVAR_PARTY_NO_FOLLOW, 1);
+    display_msg("Party: GO -- " + moved + " moving. They'll hold there (F to recall).");
 end
 
 // ============================================================

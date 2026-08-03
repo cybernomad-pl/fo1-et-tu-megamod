@@ -1,0 +1,70 @@
+REWORK: Outdoorsman v5 + rozkaz GO (G) -- spec Borysa 2026-08-03
+================================================================
+
+1. REST K (oboz, 7h) -- HEAL NATURALNY, NIE DO MAX
+   PRZED: critter_heal(dude, MAX_HP)          <- full heal za darmo
+   PO:    critter_heal(dude, heal_rate * 2)   <- FO2: Healing Rate HP
+                                                 co pelne 3h restu;
+                                                 7h = 2 cykle
+
+2. REST W LOZKACH -- WYLACZONY CALKIEM
+   - usuniete: near_a_bed, handle_bed_rest, prompt "Press K to rest"
+   - K dziala TYLKO przy wlasnym obozie w dziczy
+   - owned beds = przyszly osobny mod
+
+3. KLAWISZ G -- JUZ NIE CRAFT, TYLKO ROZKAZ "GO"
+   - autocraft USUNIETY z outdoorsmana (crafting tylko przez dialog party)
+   - G (gl_party_hotkeys): cale party BIEGNIE do hexa pod KURSOREM
+     (sfall tile_under_cursor, opcode 0x824B -- ten sam hex ktory engine
+     zna z pathfindingu kursora)
+
+        kursor na hexie X, wcisniecie G
+             |
+             v
+        slot 0  -> hex X                      (pierwszy NPC na cel)
+        slot 1+ -> spirala wokol X            (dir=slot%6, dist=1+slot/6)
+             |
+             v
+        reg_anim_obj_run_to_tile (biegna)
+        GVAR_PARTY_NO_FOLLOW := 1             (HOLD od razu -- nie
+             |                                 zawracaja do gracza)
+             v
+        dobiegaja i STOJA                     (critter_p_proc pomija
+                                               follow przy GVAR=1)
+        F = recall (FOLLOW)                   (F czyta GVAR na zywo --
+                                               stan hotkeya spojny)
+
+4. L -- OGNISKO WYMAGA FIREWOOD (koniec ogniska z niczego)
+        L (zapalniczka wymagana)
+             |
+        dzicz + brak obozu + brak walki?
+             |
+             +-- firewood NA ZIEMI obok (tile+6 sasiadow)?
+             |      TAK -> zuzyj z ziemi -> OBOZ
+             +-- firewood W PLECAKU?
+             |      TAK -> zuzyj z plecaka -> OBOZ
+             +-- BRAK -> FORAGE (poszukiwania, 1h czasu gry):
+                    roll d100 vs Outdoorsman
+                    fail          -> nic ("dupa"), mozna probowac znowu
+                    sukces        -> firewood
+                    margines>=30  -> + iguana-on-a-stick
+                    margines>=60  -> + flint
+                    sukces = RAZ NA MAPE (forage_done, reset przy
+                    zmianie mapy)
+
+5. ANTI-FARM CAMPU (party_dialog.h -- rekompilacja 66 NPC)
+   PRZED: po scoutcie (camp_searched) na tej samej mapie NIE DALO SIE
+          w ogole rozbic obozu ponownie (opcja znikala)
+   PO:    scout+camp (farmi itemy)  -- pierwszy raz na mapie
+          "Set up camp again" (CAMP_DO_MAKE, ZERO farmu) -- kolejne razy
+
+DEPLOY:
+  gl_party_hotkeys.int   -> fo1_mod_party_hotkeys/scripts/
+  gl_mod_outdoorsman.int + gl_good_deeds.int + gl_party_teleport.int
+                         -> fo1_mod_outdoorsman/scripts/
+  67x NPC .int (nowy party_dialog.h) -> fo1_mod_npc_party/scripts/
+
+OTWARTE: zgloszony "craft wlоczni zuzywa line" -- w kodzie craftingu
+liny (127) NIKT nie zuzywa (dialog: pole 320 + noz 4/236). Jedyne
+zuzycie liny w aktywnym kodzie: encounter-eventy et tu (mapenc.h,
+zejscia lina). Do obserwacji przy nastepnym krafcie.
