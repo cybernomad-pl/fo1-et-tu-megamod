@@ -1,0 +1,53 @@
+LIVE INVASION v1 -- Shady Sands + mapa mechanizmow smierci per miasto
+=====================================================================
+
+DLACZEGO SHADY ZYJE A HUB/BONEYARD NIE (wynik zwiadu):
+
+  mechanizm 1: critter-script wola invasion_kill_critter (makro)
+     -> u nas NO-OP (fo1.h:383), 44/44 skryptow nadpisanych
+     -> RATUJE: Shady, V13, Raiders, Ian, Tandi...
+  mechanizm 2: critter-script hardcoded kill_critter przy *_invaded
+     -> np. vanilla GENSKULZ (Junktown) -- NASZ FIX: kill usuniety
+  mechanizm 3: MAP-SCRIPT zabija po proto-PID (kill_critter_type)
+     -> HUBENT (~26 PID), LAADYTUM (~34 PID), LAGUNRUN (Gunrunnersi,
+        Gabriel!) -- NO-OP NIC nie daje, zabija mapa nie skrypt NPC
+     -> jedyny ratunek: NADPISAC map-script (wyciac kill, zostawic
+        spawn najezdzcow) -- NASTEPNY KROK
+  Shady map-script (SHADYET/SHADYWST): kill_critter_type ZAKOMENTOWANY
+     w vanilla -> tylko spawnuje mutantow. Dlatego Shady zyje.
+
+NAJEZDZCY (z map-scriptow et tu):
+  SCRIPT_INVADER(912)/SCSUPMUT(277), TEAM_NECROPOLIS_MUTANT(34),
+  AI_SUPER_MUTANT_AGGRESSIVE(48). Obojetni wobec mieszkancow (inny
+  team), agresywni do gracza. Hub "aresztant" = TROY(604), scena
+  join-or-die (eskorta do Katedry) -- zostaje.
+
+KICKSTART WALKI (gl_mod_invasion.ssl, NOWY MOD fo1_mod_invasion):
+
+  map_update (pierwszy tick na mapie)
+     |
+     gate: mapa SHADYE/SHADYW + shady_invaded + poza walka + raz/wejscie
+     |
+     v
+  petla po critterach mapy:
+     TEAM 34 (mutant)  -> WHO_HIT_ME := najblizszy TEAM_SHADY_SANDS
+     TEAM_SHADY_SANDS  -> WHO_HIT_ME := najblizszy TEAM 34
+     (dude + party TEAM_PLAYER: NIE targetowani -- gracz sam decyduje)
+     |
+     v
+  AI obu stron przejmuje -> RZEZNIA przy graczu
+  "The people of Shady Sands turn on the invaders. The fight is on!"
+
+TIMERY (fo1_settings.ini): wszystkie miasta = 1 dzien.
+  V13 = 0 (wyjatek -- timer V13 konczy gre; do decyzji Borysa).
+
+DEPLOY: fo1_mod_invasion/scripts/gl_mod_invasion.int (nowy wpis w
+mods_order po fo1_mod_npc_party) + GENSKULZ.int (fix), GUNRNR.int.
+
+NASTEPNY KROK (do potwierdzenia):
+  - nadpisania map-scriptow: LAADYTUM + LAGUNRUN (Boneyard zyje,
+    Gunrunnersi zyja), JUNK* (sprawdzic czy zabijaja), HUBOLDTN +
+    HUBDWNTN (wyciac z kill-list TYLKO Loxleya, jego ludzi i Deckera
+    -- podziemia przetrwaly, reszta Hub zmasakrowana jak jest)
+  - kickstart walki rozszerzyc na Junktown/Boneyard (te same teamy 34
+    vs TEAM_JUNKTOWN/TEAM_LA_GUN_RUNNERS)
