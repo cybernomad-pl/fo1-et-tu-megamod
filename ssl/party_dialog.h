@@ -35,6 +35,11 @@ procedure CampScoutTrigger;
 procedure CampScoutExecute;
 procedure CampRemakeTrigger;
 procedure CampRemakeExecute;
+procedure NodePartyGarrison;
+procedure PartyGarrisonExecute;
+procedure PartyRejoinExecute;
+// megamod_garrison_here -- zdefiniowana w command.h (uzywana takze
+// przez skrypty bez party_dialog.h: IAN, TANDI, VASQUEZ).
 procedure CampPackTrigger;
 procedure CampPackExecute;
 procedure CampBuryTrigger;
@@ -63,6 +68,11 @@ procedure NodePartyMain begin
    if (global_var(GVAR_PARTY_NO_FOLLOW) == 1 and local_var(13) == 0 and is_critter_prone(self_obj)) then begin
       NOption("On your feet. Let's go.", NodeCampWakeUp, 4);
    end
+   // GARNIZON (Borys 2026-08-08): powrot do party widoczny TYLKO dla
+   // garnizonowego NPC (poza party, TEAM_PLAYER, czeka na rozkazy).
+   if (megamod_garrison_here) then begin
+      NOption("Fall in. We're moving out.", PartyRejoinExecute, 4);
+   end
    NOption("About your orders...", NodePartyTactics, 4);
    if (map_is_encounter) then begin
       if (camp_active_here) then begin
@@ -86,8 +96,54 @@ procedure NodePartyTactics begin
    Reply_Blank;
    NOption("Follow me.", NodePartyFollow, 4);
    NOption("Hold this spot.", NodePartyWait, 4);
+   if (not(megamod_garrison_here)) then begin
+      NOption("Stay here for good. Hold this ground until I come back.", NodePartyGarrison, 4);
+   end
    NOption("Put away your weapon.", NodePartyHolster, 4);
    NOption("On second thought...", NodePartyMain, 4);
+   NOption("Later.", NodePartyDone, 4);
+end
+
+// ============================================================
+// GARNIZON (Borys 2026-08-08) -- "zostan tu na stale, jak Dogmeat".
+// party_remove: NPC wypada z party (nie podrozuje z graczem), team
+// ZOSTAJE TEAM_PLAYER (walczy po stronie gracza), follow zablokowany
+// przez megamod_garrison_here w party_follow_dude_point (command.h).
+// Stan: save_array "garrison", klucz = sfall unique_id (przezywa save).
+// ============================================================
+procedure NodePartyGarrison begin
+   Reply("You want me to hold this ground while you move on? Say the word.");
+   NOption("That's an order. I'll be back for you.", PartyGarrisonExecute, 4);
+   NOption("Forget it.", NodePartyTactics, 4);
+end
+
+procedure PartyGarrisonExecute begin
+   variable grsn_arr;
+   variable grsn_id;
+   grsn_arr := load_array("garrison");
+   if (grsn_arr == 0) then begin
+      grsn_arr := create_array_map;
+   end
+   grsn_id := set_unique_id(self_obj);
+   grsn_arr[grsn_id] := 1;
+   save_array("garrison", grsn_arr);
+   party_remove(self_obj);
+   Reply("Understood. This ground is mine. Nothing gets past me.");
+   NOption("Later.", NodePartyDone, 4);
+end
+
+procedure PartyRejoinExecute begin
+   variable grsn_arr;
+   variable grsn_id;
+   grsn_arr := load_array("garrison");
+   if (grsn_arr != 0) then begin
+      grsn_id := set_unique_id(self_obj);
+      grsn_arr[grsn_id] := 0;
+      save_array("garrison", grsn_arr);
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   Reply("Good to be moving again. Lead on.");
    NOption("Later.", NodePartyDone, 4);
 end
 

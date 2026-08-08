@@ -82,7 +82,22 @@ variable global_temp;
                                                    anim_move_to_point_rate(tile_num_in_direction(tile_num(the_obj), rotation_to_tile(tile_num(the_obj), self_tile), the_dist), get_follow_point_dist(the_obj))  \
                                                 end                                                             \
                                             end
+/* MEGAMOD 2026-08-08 (Borys): GARNIZON. NPC w save_array "garrison"
+   (klucz = sfall unique_id) NIE podaza za graczem, mimo TEAM_PLAYER.
+   Procedura TUTAJ (nie w party_dialog.h) -- follow makra uzywaja tez
+   skrypty bez party_dialog.h (IAN, TANDI, VASQUEZ). sfall_func1 jest
+   natywnym opcodem sslc -- zero zaleznosci od sfall headerow. */
+procedure megamod_garrison_here;
+procedure megamod_garrison_here begin
+   variable grsn_arr;
+   grsn_arr := load_array("garrison");
+   if (grsn_arr == 0) then return 0;
+   if (grsn_arr[sfall_func1("set_unique_id", self_obj)] == 1) then return 1;
+   return 0;
+end
+
 #define party_follow_dude_point(the_range, the_dist)                                                              \
+                                            if (megamod_garrison_here == false) then begin                        \
                                             if (Current_Distance_From_Dude > the_range) then begin                \
                                                 if (anim_busy(self_obj) == false) then begin                      \
                                                    dest_tile := tile_num_in_direction(tile_num_in_direction(dude_tile, Run_Away_From_Dude_Dir, the_dist), random(0, 5), random(0, 2)); \
@@ -94,6 +109,7 @@ variable global_temp;
                                                 end else if (self_distance_from_dude < tile_distance(self_tile, dest_tile)) then begin  \
                                                    reg_anim_clear(self_obj);                                      \
                                                 end                                                               \
+                                            end                                                                   \
                                             end
 #define follow_dude_point(the_range, the_dist)     follow_obj_point(the_range, the_dist, dude_obj)
 

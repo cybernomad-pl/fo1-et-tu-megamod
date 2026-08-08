@@ -1,0 +1,55 @@
+FEAT: GARNIZON -- "zostan tu na stale, jak Dogmeat" (spec Borysa)
+=================================================================
+
+CEL: rekrut wypada z party (nie podrozuje), zostaje NA MAPIE,
+     dalej PO STRONIE GRACZA, czeka na rozkazy do odwolania.
+
+DIALOG (party_dialog.h, wspolny dla wszystkich rekrutow):
+
+  rekrut -> "About your orders..." (Tactics)
+     |
+     +-- "Stay here for good. Hold this ground until I come back."
+            |                     (opcja ukryta gdy juz w garnizonie)
+            v
+        potwierdzenie "That's an order." -> PartyGarrisonExecute:
+            save_array["garrison"][unique_id] := 1
+            party_remove(self_obj)          <- poza party (podroze)
+            team ZOSTAJE TEAM_PLAYER        <- walczy po stronie gracza
+            "Understood. This ground is mine."
+
+  powrot: klik na garnizonowego NPC -> NodePartyMain
+     +-- "Fall in. We're moving out."  (widoczne TYLKO dla garnizonu)
+            -> garrison[uid] := 0, party_add, team PLAYER
+            -> "Good to be moving again. Lead on."
+
+BLOKADA FOLLOW (command.h):
+
+  party_follow_dude_point(range, dist)      <- makro w critter_p_proc
+     |                                          KAZDEGO party NPC
+     v
+  if (megamod_garrison_here == false) ...oryginalny follow...
+     ^
+     procedura w command.h: load_array("garrison") + sfall unique_id
+     (sfall_func1 natywne w sslc -- dziala tez w IAN/TANDI/VASQUEZ,
+      ktore nie wlaczaja party_dialog.h)
+
+WLASNOSCI:
+  - stan przezywa save/load i wyjscia z mapy (save_array + unique_id)
+  - garnizon walczy z wrogami gracza (TEAM_PLAYER, AI aktywne)
+  - rozkaz GO (G) NIE rusza garnizonu (petla GO idzie po TEAM_PLAYER --
+    UWAGA: rusza! patrz KNOWN ISSUE nizej)
+
+KNOWN ISSUE (do nastepnej iteracji):
+  order_go (gl_party_hotkeys) wysyla WSZYSTKICH TEAM_PLAYER critterow
+  na mapie -- garnizonowy NPC tez pobiegnie na wskazany hex (choc po
+  dobiegnieciu dalej stoi w miejscu). Jesli to przeszkadza -- dodac
+  gate megamod_garrison_here w petli order_go.
+
+LEKCJE KOMPILACJI (sslc):
+  - NIE MOZNA indeksowac wyniku funkcji w makrze: arr(x)[y] = blad
+    "Mismatched parenthesis" -> procedura zamiast makra
+  - procedura w command.h a nie party_dialog.h -- IAN/TANDI/VASQUEZ
+    uzywaja follow makr bez party_dialog.h
+  - sfall_funcX to natywne opcode'y sslc -- nie wymagaja headerow
+
+DEPLOY: pelny rebuild (command.h) -- 67 NPC + wszystkie aktywne gl_*.
