@@ -1,0 +1,194 @@
+/*
+
+   Boneyard - Generic gunrunner guarding the weapons
+   MEGAMOD: rekrutowalny najemnik (wzorzec GENSKULZ/GENGHOUL).
+   Guardy TEAM_PLAYER: brak resetu teamu po load, brak flagowania
+   calej frakcji Gunrunnersow jako wrogiej przy friendly fire /
+   smierci wlasnego najemnika.
+
+*/
+
+/* Include Files */
+#include "define.h"
+
+#define NAME                    SCRIPT_GUNRNR
+#define TOWN_REP_VAR            (GVAR_TOWN_REP_BONEYARD)
+
+#include "command.h"
+#include "modreact.h"
+#include "party_dialog.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure look_at_p_proc;
+procedure description_p_proc;
+procedure talk_p_proc;
+procedure critter_p_proc;
+procedure damage_p_proc;
+procedure destroy_p_proc;
+procedure timed_event_p_proc;
+procedure pickup_p_proc;
+
+procedure NodeGreet;
+procedure NodeRecruit;
+
+variable Only_Once := 1;
+variable PsstTime;
+variable In_Timed_Event;
+
+#define EVENT_MOVE   (1)
+
+procedure Start begin
+   /* MEGAMOD: rekrut nie wraca do frakcji po load game */
+   if (self_team == TEAM_PLAYER) then return;
+   if Only_Once then begin
+      Only_Once := 0;
+      set_self_team(TEAM_LA_GUN_RUNNERS);
+      set_self_ai(AI_GUNRUNNERS);
+   end
+end
+
+procedure map_enter_p_proc begin
+   if map_first_run then
+      self_caps_adjust(random(2, 20));
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(116));
+end
+
+procedure description_p_proc begin
+end
+
+procedure talk_p_proc begin
+   /* MEGAMOD: party dialog dla rekruta */
+   if (self_team == TEAM_PLAYER and not(party_wants_normal_talk)) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+
+   dude_look_at_self;
+   if REP_ENEMY_LA_GUNRUNNERS then begin
+      float_msg(self_obj, message_str(SCRIPT_ENEMY, random(100, 105)), FLOAT_MSG_RED);
+      return;
+   end
+   /* MEGAMOD: zamiast floata -- dialog z opcja rekrutacji */
+   start_dialog_at_node(NodeGreet);
+end
+
+procedure critter_p_proc begin
+   variable LVar0 := 0;
+
+   /* MEGAMOD: rekrut podaza za graczem, zero frakcyjnego AI */
+   if (self_team == TEAM_PLAYER) then begin
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0 and local_var(13) != 0) then set_local_var(13, 0);
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0 or local_var(13) != 0) then party_follow_dude_point(5, 3)
+      return;
+   end
+
+   LVar0 := global_var(GVAR_GUNRNR_SOMETHING_0);
+
+   if ((((game_time / 10) - LVar0) >= 10) and (tile_distance_objs(self_obj, dude_obj) <= 4) and not(REP_ENEMY_LA_GUNRUNNERS)) then begin
+      float_msg(self_obj, mstr(random(100, 115)), FLOAT_MSG_NORMAL);
+      LVar0 := game_time / 10;
+      set_global_var(GVAR_GUNRNR_SOMETHING_0, LVar0);
+   end
+
+   if ((global_var(GVAR_DEATHCLAWS_KILLED) == 2) and (In_Timed_Event == 0)) then begin
+      In_Timed_Event := 1;
+      add_timer_event(self_obj, game_ticks(random(2, 6)), EVENT_MOVE);
+   end
+
+   if (self_can_see_dude) then begin
+      if REP_ENEMY_LA_GUNRUNNERS then begin
+         attack(dude_obj);
+      end
+   end
+end
+
+procedure damage_p_proc begin
+   /* MEGAMOD: friendly fire w rekruta nie flaguje frakcji */
+   if (self_team == TEAM_PLAYER) then return;
+   if source_is_dude then begin
+      set_global_var(GVAR_ENEMY_GUN_RUNNERS, 1);
+   end
+end
+
+procedure destroy_p_proc begin
+   /* MEGAMOD: smierc najemnika nie robi frakcji wrogiem */
+   if (self_team != TEAM_PLAYER) then begin
+      if source_is_dude then begin
+         set_global_var(GVAR_ENEMY_GUN_RUNNERS, 1);
+      end
+   end
+   inc_good_critter
+end
+
+procedure timed_event_p_proc begin
+   if (fixed_param == EVENT_MOVE) then begin
+      self_walk_to_tile(tile_num_in_direction(self_tile, random(0, 5), random(1, 5)));
+   end
+   In_Timed_Event := 0;
+end
+
+procedure pickup_p_proc begin
+   /* MEGAMOD: dostep do ekwipunku rekruta bez wrogosci */
+   if (self_team == TEAM_PLAYER) then return;
+   set_global_var(GVAR_ENEMY_GUN_RUNNERS, 1);
+end
+
+procedure NodeGreet begin
+   Reply(mstr(random(100, 115)));
+   NOption("Join me.", NodeRecruit, 4);
+   NOption("Later.", NodePartyDone, 4);
+end
+
+procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   call camp_grant_barter(self_obj);
+   display_msg(obj_name(self_obj) + " joins your party.");
+end
+
+procedure NodeCampWakeUp;
+// camp_active_here / camp_searched_here -- provided by camp_actions.h
+// Camp actions -- INLINE via camp_actions.h macros (vanilla pattern).
+
+procedure NodeCampWakeUp begin
+   variable bed_lst;
+   variable bed_obj;
+   variable best_bed;
+   variable best_d;
+   variable d;
+   set_local_var(13, 1);
+   reg_anim_begin();
+   reg_anim_animate(self_obj, ANIM_back_to_standing, -1);
+   reg_anim_end();
+   // Take nearest bedroll with us (remove it from map).
+   best_bed := 0;
+   best_d := 99999;
+   bed_lst := list_begin(LIST_SCENERY);
+   bed_obj := list_next(bed_lst);
+   while (bed_obj) do begin
+      if (bed_obj != 0 and (obj_pid(bed_obj) == PID_BED_1 or obj_pid(bed_obj) == PID_BED_2)) then begin
+         d := tile_distance_objs(bed_obj, self_obj);
+         if (d < best_d) then begin
+            best_bed := bed_obj;
+            best_d := d;
+         end
+      end
+      bed_obj := list_next(bed_lst);
+   end
+   list_end(bed_lst);
+   if (best_bed != 0) then destroy_object(best_bed);
+   display_msg(obj_name(self_obj) + " gets up and follows you.");
+end

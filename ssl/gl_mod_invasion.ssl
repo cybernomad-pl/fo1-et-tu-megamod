@@ -1,0 +1,132 @@
+/*
+    fo1_mod_invasion -- fo1-et-tu-megamod (Borys 2026-08-08)
+
+    LIVE INVASION v1: SHADY SANDS.
+    Et tu po inwazji spawnuje mutantow (SCRIPT_INVADER, TEAM 34,
+    AI aggressive), ale mieszkancy (nasze nadpisania, invasion_kill =
+    no-op) stoja obojetnie obok -- inne teamy, nikt nikogo nie atakuje.
+
+    Ten skrypt przy wejsciu gracza na najechana mape Shady KICKSTARTUJE
+    walke: kazdy mieszkaniec dostaje WHO_HIT_ME = najblizszy mutant,
+    kazdy mutant WHO_HIT_ME = najblizszy mieszkaniec. AI obu stron
+    przejmuje walke (wzorzec sprawdzony w gl_emergency_radio).
+
+    Party gracza (TEAM_PLAYER=0) NIE jest targetowana automatycznie --
+    gracz sam decyduje, czy sie wlaczyc. Mutanci vanilla i tak atakuja
+    gracza gdy go widza (INVADER.ssl) -- to zostaje.
+
+    Kick jest JEDNORAZOWY per wejscie na mape (kicked flag, reset przy
+    zmianie mapy). Dziala tez na save wczytanym na mapie.
+
+    v2 (pozniej): Junktown/Boneyard po nadpisaniu ich map-scriptow
+    (tam mieszkancow zabija kill_critter_type po PID -- osobny krok).
+*/
+
+#include "define.h"
+#include "command.h"
+#include "sfall/sfall.h"
+#include "sfall/define_extra.h"
+#include "sfall/define_lite.h"
+
+#define LOG(s, k, v) set_ini_setting("testing.ini|invasion_" + s + "|" + k, v)
+
+procedure start;
+procedure map_update_p_proc;
+procedure kickstart_battle;
+procedure nearest_of_team(variable from_obj, variable team_id);
+
+variable kicked;
+variable last_map;
+
+procedure start begin
+    if game_loaded then begin
+        kicked := 0;
+        last_map := cur_map_index;
+        LOG("start", "loaded", 1);
+    end
+end
+
+// Nearest LIVING critter of team_id, measured from from_obj. 0 if none.
+procedure nearest_of_team(variable from_obj, variable team_id) begin
+    variable lst;
+    variable obj;
+    variable best;
+    variable best_d;
+    variable d;
+    best := 0;
+    best_d := 99999;
+    lst := list_begin(LIST_CRITTERS);
+    obj := list_next(lst);
+    while (obj) do begin
+        if (obj != 0 and obj != from_obj and obj != dude_obj
+            and not(is_critter_dead(obj))
+            and get_team(obj) == team_id) then begin
+            d := tile_distance_objs(obj, from_obj);
+            if (d < best_d) then begin
+                best := obj;
+                best_d := d;
+            end
+        end
+        obj := list_next(lst);
+    end
+    list_end(lst);
+    return best;
+end
+
+procedure kickstart_battle begin
+    variable lst;
+    variable obj;
+    variable target;
+    variable civ_count;
+    variable mut_count;
+
+    civ_count := 0;
+    mut_count := 0;
+
+    lst := list_begin(LIST_CRITTERS);
+    obj := list_next(lst);
+    while (obj) do begin
+        if (obj != 0 and obj != dude_obj and not(is_critter_dead(obj))) then begin
+            if (get_team(obj) == TEAM_NECROPOLIS_MUTANT) then begin
+                // Invader: sic him on the nearest townsperson.
+                target := nearest_of_team(obj, TEAM_SHADY_SANDS);
+                if (target != 0) then begin
+                    set_object_data(obj, OBJ_DATA_WHO_HIT_ME, target);
+                    mut_count := mut_count + 1;
+                end
+            end
+            else if (get_team(obj) == TEAM_SHADY_SANDS) then begin
+                // Townsperson (Seth first among equals): fight the invaders.
+                target := nearest_of_team(obj, TEAM_NECROPOLIS_MUTANT);
+                if (target != 0) then begin
+                    set_object_data(obj, OBJ_DATA_WHO_HIT_ME, target);
+                    civ_count := civ_count + 1;
+                end
+            end
+        end
+        obj := list_next(lst);
+    end
+    list_end(lst);
+
+    LOG("kick", "civs", civ_count);
+    LOG("kick", "muts", mut_count);
+    if (civ_count > 0 and mut_count > 0) then begin
+        display_msg("The people of Shady Sands turn on the invaders. The fight is on!");
+    end
+end
+
+procedure map_update_p_proc begin
+    // Reset the one-shot flag when the map changes.
+    if (cur_map_index != last_map) then begin
+        last_map := cur_map_index;
+        kicked := 0;
+    end
+
+    if (kicked != 0) then return;
+    if not(CUR_MAP_SHADYE or CUR_MAP_SHADYW) then return;
+    if not(shady_invaded) then return;
+    if (combat_is_initialized) then return;
+
+    kicked := 1;
+    call kickstart_battle;
+end

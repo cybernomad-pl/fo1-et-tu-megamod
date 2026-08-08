@@ -159,14 +159,12 @@ procedure map_enter_p_proc begin
          end
       end
       else begin
-         if not(junktown_invaded) then begin
-            if not(is_loading_game) then begin
-               set_self_visible;
-            end
+         if not(is_loading_game) then begin
+            set_self_visible;
          end
-         else begin
-            kill_critter(self_obj, ANIM_stand);
-         end
+         /* MEGAMOD 2026-08-08: vanilla zabijal Skulza przy junktown_invaded
+            (hardcoded kill_critter, nie makro). Mieszkancy maja ZYC i
+            walczyc z mutantami (spec Borysa) -- kill usuniety. */
       end
    end
 
