@@ -1,0 +1,36 @@
+LIVE INVASION v2 -- mutanci NAPRAWDE atakuja (fix "tekst jest, walki nie ma")
+=============================================================================
+
+PROBLEM v1:
+  gl_mod_invasion ustawial WHO_HIT_ME mieszkancom i mutantom
+  -> WHO_HIT_ME jest czytane przez AI dopiero W TRAKCIE walki
+  -> nikt walki nie zaczynal -> komunikat byl, rzezni nie bylo
+
+MECHANIZM v2 (trop Borysa: zamach na Killiana):
+  opcode attack(cel) wolany Z WLASNEGO skryptu crittera WYMUSZA
+  wejscie w combat. Wiec zamiast dyrygowac z zewnatrz -- nadpisujemy
+  skrypty SAMYCH najezdzcow:
+
+  INVADER.ssl  (SID 912 -- Shady, Hub)         } + find_civilian +
+  SCSUPMUT.ssl (SID 277 -- Boneyard)           }   attack() w critter_p_proc
+
+  critter_p_proc (kazdy tick poza walka):
+     civ := najblizszy zywy critter w dist<=25,
+            team != TEAM_NECROPOLIS_MUTANT(34) i != TEAM_PLAYER(0)
+     civ znaleziony -> attack(civ)  <- combat startuje, engine wciaga
+                                       pobliskich (mieszkancy z bronia
+                                       i garnizony oddaja)
+     brak celu -> vanilla (wander / zaczepki do gracza)
+
+  Party gracza NIE jest auto-celem (TEAM_PLAYER wykluczony z hunt);
+  vanilla agresja na dude'a zostaje (canseeme/tmp_hostile).
+
+DEPLOY: fo1_mod_invasion/scripts/INVADER.int + SCSUPMUT.int
+  (nadpisanie SID z fo1_base -- fo1_mod_invasion jest pozniej w
+   mods_order, ostatni wygrywa)
+
+gl_mod_invasion (WHO_HIT_ME kick) ZOSTAJE -- w combat pomaga AI
+wybrac cele, nie szkodzi.
+
+TEST (na zywym save): wejdz do Shady -- mutanci rusza na mieszkancow
+w pierwszych sekundach, combat odpali sie sam.

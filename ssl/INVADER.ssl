@@ -1,0 +1,201 @@
+/*
+
+   Super Mutant invaders (Necropolis, etc.)
+
+   MEGAMOD 2026-08-08 (Borys): HUNT CIVILIANS. Vanilla invader atakowal
+   tylko gracza -- mieszkancy stali obok mutantow i nikt nie walczyl.
+   Teraz kazdy invader poza walka szuka najblizszego cywila (team inny
+   niz mutanci i niz party gracza, dist <= 25) i atakuje go WLASNYM
+   opcode attack() -- to wymusza wejscie w combat (mechanizm jak zamach
+   na Killiana). Combat engine wciaga pobliskich critterow -> rzeznia.
+
+*/
+
+/* Include Files */
+#include "define.h"
+//#include "area/necropolis.h"
+
+#define NAME                    SCRIPT_INVADER
+//#define TOWN_REP_VAR            (GVAR_TOWN_REP_CATHEDRAL)
+
+#include "command.h"
+//#include "modreact.h"
+
+/* Standard Script Procedures */
+procedure start;
+procedure map_enter_p_proc;
+procedure destroy_p_proc;
+procedure critter_p_proc;
+procedure combat_p_proc;
+
+procedure mutant00;
+procedure canseeme;
+procedure find_civilian;
+
+#define LVAR_Home_Tile            (0)
+#define LVAR_SpawnInitial         (1)
+
+variable tmp_hostile;
+
+procedure start begin
+   if (local_var(LVAR_Home_Tile) == 0) then begin
+      set_local_var(LVAR_Home_Tile, self_tile);
+      set_self_team(TEAM_NECROPOLIS_MUTANT);
+      set_self_ai(AI_SUPER_MUTANT_NECRO);
+   end
+end
+
+procedure map_enter_p_proc begin
+   variable Item, weaponPtr, WeaponID, AmmoID;
+
+   if (fixt_enabled or not(CUR_AREA_NECROPOLIS)) then begin
+      if (local_var(LVAR_SpawnInitial) == 0) then begin
+         set_local_var(LVAR_SpawnInitial, 1);
+
+         if (random(0, 1) == 1) then begin
+            // Add items:
+            Item := create_object(PID_RADIO, 0, 0);
+            add_mult_objs_to_inven(self_obj, Item, 1);
+
+            Item := random(0, 1);
+            if (Item == 1) or (Item == 2) then begin
+               Item := create_object(PID_STIMPAK, 0, 0);
+               add_mult_objs_to_inven(self_obj, Item, random(1, 2));
+            end
+
+            WeaponID := (random(1, 20));
+            debug("WeaponID for Invader:  " + WeaponID);
+            if (WeaponID == 1) or (WeaponID == 2) or (WeaponID == 3) or (WeaponID == 4) or (WeaponID == 18) then begin
+               AmmoID := create_object(PID_5MM_JHP, 0, 0);
+               add_mult_objs_to_inven(self_obj, AmmoID, random(1, 3));
+               AmmoID := create_object(PID_5MM_AP, 0, 0);
+               add_mult_objs_to_inven(self_obj, AmmoID, random(1, 3));
+               weaponPtr := create_object(PID_MINIGUN, 0, 0);
+            end
+            else if (WeaponID == 5) or (WeaponID == 6) or (WeaponID == 7) or (WeaponID == 8) then begin
+               AmmoID := create_object(PID_STIMPAK, 0, 0);
+               add_mult_objs_to_inven(self_obj, AmmoID, 1);
+               weaponPtr := create_object(PID_SPIKED_KNUCKLES, 0, 0);
+            end
+            else if (WeaponID == 9) or (WeaponID == 10) or (WeaponID == 11) or (WeaponID == 19) then begin
+               AmmoID := create_object(PID_MICRO_FUSION_CELL, 0, 0);
+               add_mult_objs_to_inven(self_obj, AmmoID, random(1, 2));
+               weaponPtr := create_object(PID_LASER_RIFLE, 0, 0);
+            end
+            else if (WeaponID == 12) or (WeaponID == 13) or (WeaponID == 14) then begin
+               AmmoID := create_object(PID_FLAMETHROWER_FUEL, 0, 0);
+               add_mult_objs_to_inven(self_obj, AmmoID, random(1, 3));
+               weaponPtr := create_object(PID_FLAMER, 0, 0);
+            end
+            else if (WeaponID == 15) or (WeaponID == 16) then begin
+               AmmoID := create_object(PID_MICRO_FUSION_CELL, 0, 0);
+               add_mult_objs_to_inven(self_obj, AmmoID, random(1, 2));
+               weaponPtr := create_object(PID_PLASMA_RIFLE, 0, 0);
+            end
+            else if (WeaponID == 17) then begin
+               AmmoID := create_object(PID_MICRO_FUSION_CELL, 0, 0);
+               add_mult_objs_to_inven(self_obj, AmmoID, random(2, 4));
+               weaponPtr := create_object(PID_GATLING_LASER, 0, 0);
+            end
+            else begin
+               AmmoID := create_object(PID_EXPLOSIVE_ROCKET, 0, 0);
+               add_mult_objs_to_inven(self_obj, AmmoID, random(1, 6));
+               AmmoID := create_object(PID_ROCKET_AP, 0, 0);
+               add_mult_objs_to_inven(self_obj, AmmoID, random(1, 5));
+               weaponPtr := create_object(PID_ROCKET_LAUNCHER, 0, 0);
+            end
+            add_obj_to_inven(self_obj, weaponPtr);
+            wield_obj_critter(self_obj, weaponPtr);
+         end
+      end
+   end
+end
+
+procedure talk_p_proc begin
+   call mutant00;
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   display_msg(mstr(100));
+end
+
+procedure pickup_p_proc begin
+   tmp_hostile := 1;
+end
+
+procedure mutant00 begin
+   float_msg(self_obj, mstr(random(101, 107)), FLOAT_MSG_RED);
+   tmp_hostile := 1;
+end
+
+// MEGAMOD: najblizszy zywy cywil (nie mutant, nie party gracza, nie
+// dude) w promieniu 25 hexow. 0 gdy brak.
+procedure find_civilian begin
+   variable lst;
+   variable obj;
+   variable t;
+   variable best;
+   variable best_d;
+   variable d;
+   best := 0;
+   best_d := 26;
+   lst := list_begin(LIST_CRITTERS);
+   obj := list_next(lst);
+   while (obj) do begin
+      if (obj != 0 and obj != self_obj and obj != dude_obj
+          and not(is_critter_dead(obj))) then begin
+         t := get_team(obj);
+         if (t != TEAM_NECROPOLIS_MUTANT and t != TEAM_PLAYER) then begin
+            d := tile_distance_objs(obj, self_obj);
+            if (d < best_d) then begin
+               best := obj;
+               best_d := d;
+            end
+         end
+      end
+      obj := list_next(lst);
+   end
+   list_end(lst);
+   return best;
+end
+
+procedure critter_p_proc begin
+   variable civ;
+   if (critter_state(self_obj) != CRITTER_IS_PRONE) and not(combat_is_initialized) then begin
+      if (tmp_hostile) then begin
+         tmp_hostile := 0;
+         attack(dude_obj);
+      end
+      else begin
+         // MEGAMOD: rzeznia -- atakuj najblizszego cywila (wymusza combat).
+         civ := find_civilian;
+         if (civ != 0) then begin
+            attack(civ);
+            return;
+         end
+         if (random(0, 4000) == 7) then begin
+            if (anim_busy(self_obj) == 0) and not(anim_busy(self_obj)) then begin
+               self_walk_to_tile(tile_num_in_direction(self_tile, random(0, 5), random(2, 4)));
+            end
+         end
+         call canseeme;
+      end
+   end
+end
+
+procedure destroy_p_proc begin
+   inc_evil_critter
+end
+
+procedure combat_p_proc begin
+// call canseeme;
+end
+
+procedure canseeme begin
+   if (critter_state(self_obj) != CRITTER_IS_PRONE) then begin
+      if (self_can_see_dude and (tile_distance_objs(self_obj, dude_obj) <= 12)) or (tile_distance_objs(self_obj, dude_obj) <= 6) and obj_on_screen(self_obj) then begin
+         call mutant00;
+      end
+   end
+end
