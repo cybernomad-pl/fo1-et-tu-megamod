@@ -169,7 +169,7 @@ procedure map_enter_p_proc begin
       end
    end
 
-   display_msg("[party] " + placed + "/" + total + " rozstawionych, " + forced + " wciagnietych, " + failed + " BLEDOW, " + next_sektor + " klastrow");
+   // MEGAMOD 2026-08-08: debug display usuniety (Borys) -- diagnostyka zostaje w debug_msg ponizej.
    debug_msg("gl_party_teleport: placed=" + placed + " total=" + total + " forced=" + forced + " failed=" + failed + " clusters=" + next_sektor);
    // Log przezywajacy crash (ini flushowany na dysk od razu).
    LOG("last", "map", cur_map_index);

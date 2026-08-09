@@ -1,0 +1,116 @@
+/*
+   MEGAMOD OVERRIDE 2026-08-08 (Borys): live invasion -- WSZYSTKIE
+   kill_critter_type wyciete z proc Invasion. Mieszkancy zyja, mutanci
+   (create_la_invader / SCSUPMUT hunt-civilians) sami zaczynaja walke.
+
+
+   Boneyard - Blades
+
+*/
+
+#include "define.h"
+#include "command.h"
+#include "updatmap.h"
+
+#include "maps/lablades.h"
+#include "area/boneyard.h"
+
+procedure start;
+procedure map_enter_p_proc;
+procedure map_update_p_proc;
+procedure map_exit_p_proc;
+
+procedure Invasion;
+
+#define MaxKids            (3)
+#define KidsSpawnHex       (31533)
+
+export variable InBladePtr1;
+export variable InBladePtr2;
+export variable InBladePtr3;
+export variable InBladePtr4;
+export variable InBladePtr5;
+export variable RazorPtr;
+
+variable invaderPtr;
+variable kidPtr;
+variable KidCount;
+
+procedure start begin
+end
+
+procedure map_enter_p_proc begin
+   set_global_var(GVAR_MARK_LA_2, 1);
+   Lighting;
+
+   if ((map_first_run) and not(boneyard_invaded)) then begin
+      display_msg(message_str(SCRIPT_SHADYWST, 113));
+   end
+
+   call Invasion;
+
+   if get_car_from_worldmap then begin
+      override_map_start_hex(28517, 0, 5);
+
+      // This will spawn yelling kids around the motorcycle
+      if (map_var(MVAR_Car_Kids_created) == 0) and not(boneyard_invaded) and day then begin
+         set_map_var(MVAR_Car_Kids_created, 1);
+         debug("spawning kids!");
+         while (KidCount < MaxKids) do begin
+            KidCount := KidCount + 1;
+            kidPtr := create_object_sid(PID_BOY, 0, 0, SCRIPT_LAKIDS);
+            critter_attempt_placement(kidPtr, KidsSpawnHex, 0);
+            set_ai(kidPtr, AI_LITTLE_KIDS);
+            set_team(kidPtr, TEAM_LA_BLADES);
+         end
+      end
+   end
+
+   set_global_var(GVAR_LOAD_MAP_INDEX, 0);
+end
+
+procedure map_update_p_proc begin
+   Lighting;
+
+   if get_blades_attacking_alone then begin
+      if not(is_loading_game) then begin  set_obj_invisible(RazorPtr);  end
+      move_to(RazorPtr, 0, 0);
+      kill_critter(RazorPtr, ANIM_stand);
+      gfade_in(1);
+   end
+
+end
+
+procedure map_exit_p_proc begin
+   if (get_blades_attacking or get_blades_attacking_wait) then begin
+      if not(is_loading_game) then begin  set_obj_invisible(RazorPtr);  end
+      move_to(RazorPtr, 0, 0);
+      kill_critter(RazorPtr, ANIM_stand);
+   end
+end
+
+procedure Invasion begin
+   if (boneyard_invaded and not(is_loading_game) and (map_var(1) == 0)) then begin
+      set_map_var(1, 1);
+
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_LOSER, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_PEASANT_BLACK, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_LEATHER_JACKET_WOMAN, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_PEASANT_GREEN, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_PEASANT_FEMALE_CUTE, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_PEASANT_YELLOW_FEMALE, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_PEASANT_2_FEMALE, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_BOY, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_RUTGER, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_DUGAN, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_HAMMER, 1))
+
+      create_la_invader(20306);
+      create_la_invader(15904);
+      create_la_invader(22480);
+      create_la_invader(21538);
+
+      // Any player party member was waiting in the map before?
+      check_invasion_party_waiting;
+   end
+end

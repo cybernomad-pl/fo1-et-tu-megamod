@@ -28,7 +28,6 @@
 #include "sfall/define_extra.h"
 #include "sfall/define_lite.h"
 
-#define LOG(s, k, v) set_ini_setting("testing.ini|invasion_" + s + "|" + k, v)
 
 procedure start;
 procedure map_update_p_proc;
@@ -42,7 +41,6 @@ procedure start begin
     if game_loaded then begin
         kicked := 0;
         last_map := cur_map_index;
-        LOG("start", "loaded", 1);
     end
 end
 
@@ -108,8 +106,6 @@ procedure kickstart_battle begin
     end
     list_end(lst);
 
-    LOG("kick", "civs", civ_count);
-    LOG("kick", "muts", mut_count);
     if (civ_count > 0 and mut_count > 0) then begin
         display_msg("The people of Shady Sands turn on the invaders. The fight is on!");
     end

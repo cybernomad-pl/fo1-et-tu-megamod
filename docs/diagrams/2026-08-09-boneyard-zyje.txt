@@ -1,0 +1,32 @@
+LIVE INVASION v3 -- BONEYARD ZYJE + czystka debugow
+===================================================
+
+BONEYARD (4 map-scripty nadpisane w fo1_mod_invasion):
+
+  LAADYTUM (Adytum)      -- 34x kill_critter_type WYCIETE
+  LAGUNRUN (Gun Runners) -- 10x kill WYCIETE (w tym Gabriel!)
+  FOLLMAP  (Followers)   -- 10x kill WYCIETE
+  LABLADES (Blades)      -- 11x kill WYCIETE
+
+  ZOSTALO w kazdej mapie: spawn najezdzcow (create_la_invader ->
+  SCSUPMUT z hunt-civilians) + komunikat inwazji + party-waiting check.
+
+  EFEKT: wchodzisz do Boneyard -> wszyscy zyja (Gunrunnersi TEZ,
+  rekrutowalni przez Join me) -> mutanci-najezdzcy sami atakuja
+  najblizszych cywili (attack z wlasnego skryptu) -> wojna miejska.
+
+CZYSTKA DEBUGOW (Borys po tescie Shady):
+  gl_mod_invasion:   LOG-i do testing.ini usuniete (zostal tylko
+                     fabularny komunikat "The fight is on!")
+  gl_party_teleport: display "[party] X/Y rozstawionych..." usuniety
+                     (diagnostyka zostala w cichym debug_msg)
+
+STAN MIAST PO TEJ ZMIANIE (timery: wszystko dzien 1, V13 off):
+  Shady Sands  ZYWE + wojna     [dziala, przetestowane przez Borysa]
+  Boneyard     ZYWE + wojna     [wdrozone, do testu]
+  Junktown     crittery chronione (GENSKULZ fix, ISMARC/VASQUEZ);
+               mapy JUNK* NIE nadpisane -- do sprawdzenia czy zabijaja
+  Hub          martwy (decyzja Borysa) -- TODO: uratowac Loxleya,
+               podziemie i Deckera (wyciecie ich PID z HUB* kill-list)
+  Necropolis   timer 1 -- vanilla zachowanie (ghule+mutanci to inna
+               mechanika, nieanalizowana)

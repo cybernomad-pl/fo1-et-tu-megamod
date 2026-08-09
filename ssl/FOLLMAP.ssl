@@ -1,0 +1,153 @@
+/*
+   MEGAMOD OVERRIDE 2026-08-08 (Borys): live invasion -- WSZYSTKIE
+   kill_critter_type wyciete z proc Invasion. Mieszkancy zyja, mutanci
+   (create_la_invader / SCSUPMUT hunt-civilians) sami zaczynaja walke.
+
+
+   Boneyard - Followers Library
+
+*/
+
+
+#include "define.h"
+#include "command.h"
+#include "updatmap.h"
+
+#include "area/boneyard.h"
+
+procedure start;
+procedure map_enter_p_proc;
+procedure map_update_p_proc;
+procedure map_exit_p_proc;
+
+procedure map_lightning;
+procedure Invasion;
+
+#define default_start_hex     (23680)
+#define bike_start_hex        (18121)
+#define orfeo_start_hex       (18890)
+
+export variable Uthern_ptr;
+export variable Orfeo_ptr;
+export variable removal_ptr;
+
+variable party_elevation;
+variable dude_start_hex;
+variable player_elevation;
+variable dude_carrying_bomb;
+variable invaderPtr;
+
+procedure start begin
+end
+
+procedure map_enter_p_proc begin
+   set_global_var(GVAR_MARK_LA_2, 1);
+   call map_lightning;
+
+   if ((map_first_run) and not(boneyard_invaded)) then begin
+      display_msg(message_str(SCRIPT_SHADYWST, 114));
+   end
+
+   if (global_var(GVAR_QUEST_BONEYARD_3_BOMBFOLL) == 2) then begin
+      if (dude_skill_success(SKILL_TRAPS, 0)) then
+         display_msg(message_str(SCRIPT_SHADYWST, 118));
+      else
+         display_msg(message_str(SCRIPT_SHADYWST, 117));
+   end
+
+   call Invasion;
+
+   if (dude_item_count(PID_BRIEFCASE) != 0) then begin
+      dude_carrying_bomb := 1;
+   end
+
+   if (global_var(GVAR_LOAD_MAP_INDEX) == 11) then
+      override_map_start_hex(orfeo_start_hex, 0, 5);
+   else if get_car_from_worldmap then
+      override_map_start_hex(bike_start_hex, 0, 1);
+   else
+      override_map_start_hex(default_start_hex, 0, 5);
+
+   set_global_var(GVAR_LOAD_MAP_INDEX, 0);
+end
+
+procedure map_update_p_proc begin
+   call map_lightning;
+   if (removal_ptr) then begin
+      destroy_object(removal_ptr);
+      removal_ptr := 0;
+   end
+end
+
+procedure map_exit_p_proc begin
+   if (dude_carrying_bomb == 1) then begin
+      if (dude_item_count(PID_BRIEFCASE) == 0) then begin
+         set_global_var(GVAR_QUEST_BONEYARD_3_BOMBFOLL, 2);
+      end
+   end
+end
+
+procedure map_lightning begin
+   if (dude_elevation == 1) then
+      Darkness;
+   else
+      Lighting;
+end
+
+procedure Invasion begin
+variable elev := 0;
+
+   if (boneyard_invaded and not(is_loading_game) and (map_var(2) == 0)) then begin
+      set_map_var(2, 1);
+
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_THUG_BLACK_METAL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_THUG_MALE_METAL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_THUG_FEMALE_YELLOW, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_AVELLONE, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_CITIZEN_MALE_LEATHER, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_THUG_MALE_LEATHER, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_CITIZEN_PUNK, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_NICOLE, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_TALIUS, 0))
+
+      if (global_var(GVAR_KATJA_HIRELING_STATUS) != 2) then begin
+         // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_KATJA, 0))
+      end
+
+      create_foa_invader(PID_MASTER_NIGHTKIN, 11517, SCRIPT_UTHERN);
+      create_foa_invader(PID_MASTERS_PET_MAN, 18490, SCRIPT_ORFEO);
+
+      create_foa_invader(PID_SUPER_NIGHTKIN, 12102, SCRIPT_THSUPMUT);
+      create_foa_invader(PID_SUPER_NIGHTKIN, 17119, SCRIPT_THSUPMUT);
+      create_foa_invader(PID_SUPER_NIGHTKIN, 13115, SCRIPT_THSUPMUT);
+      create_foa_invader(PID_TOUGH_NIGHTKIN, 12706, SCRIPT_FLSUPMUT);
+      create_foa_invader(PID_TOUGH_NIGHTKIN, 12094, SCRIPT_FLSUPMUT);
+      create_foa_invader(PID_TOUGH_NIGHTKIN, 16723, SCRIPT_FLSUPMUT);
+      create_foa_invader(PID_TOUGH_NIGHTKIN, 18323, SCRIPT_FLSUPMUT);
+      create_foa_invader(PID_CHILD_OF_CATHEDRAL, 20286, SCRIPT_CHIDSCOL);
+      create_foa_invader(PID_CHILD_OF_CATHEDRAL, 18478, SCRIPT_CHIDSCOL);
+      create_foa_invader(PID_CHILD_OF_CATHEDRAL, 16082, SCRIPT_CHIDSCOL);
+      create_foa_invader(PID_CHILD_OF_CATHEDRAL, 20095, SCRIPT_CHIDINIT);
+      create_foa_invader(PID_CHILD_OF_CATHEDRAL, 20500, SCRIPT_CHIDINIT);
+      create_foa_invader(PID_CHILD_OF_CATHEDRAL, 18468, SCRIPT_CHIDINIT);
+      create_foa_invader(PID_MASTERS_PET_MAN, 21718, SCRIPT_CHDSCOUT);
+      create_foa_invader(PID_MASTERS_PET_MAN, 23712, SCRIPT_CHDSCOUT);
+      create_foa_invader(PID_MASTERS_PET_MAN, 20307, SCRIPT_CHDSCOUT);
+      create_foa_invader(PID_MASTERS_PET_MAN, 22486, SCRIPT_CHDGUARD);
+      create_foa_invader(PID_MASTERS_PET_MAN, 22679, SCRIPT_CHDGUARD);
+      create_foa_invader(PID_MASTERS_PET_MAN, 15867, SCRIPT_CHDGUARD);
+
+      elev := 1;
+      create_foa_invader(PID_CHILD_OF_CATHEDRAL, 16472, SCRIPT_CHIDSCOL);
+      create_foa_invader(PID_CHILD_OF_CATHEDRAL, 18872, SCRIPT_CHIDSCOL);
+      create_foa_invader(PID_CHILD_OF_CATHEDRAL, 15282, SCRIPT_CHIDSCOL);
+      create_foa_invader(PID_CHILD_OF_CATHEDRAL, 15496, SCRIPT_CHIDSCOL);
+      create_foa_invader(PID_CHILD_OF_CATHEDRAL, 20489, SCRIPT_CHIDSCOL);
+      create_foa_invader(PID_CHILD_OF_CATHEDRAL, 18082, SCRIPT_CHIDINIT);
+      create_foa_invader(PID_CHILD_OF_CATHEDRAL, 17698, SCRIPT_CHIDINIT);
+      create_foa_invader(PID_CHILD_OF_CATHEDRAL, 17896, SCRIPT_CHIDINIT);
+
+      // Any player party member was waiting in the map before?
+      check_invasion_party_waiting;
+   end
+end

@@ -1,0 +1,237 @@
+/*
+   MEGAMOD OVERRIDE 2026-08-08 (Borys): live invasion -- WSZYSTKIE
+   kill_critter_type wyciete z proc Invasion. Mieszkancy zyja, mutanci
+   (create_la_invader / SCSUPMUT hunt-civilians) sami zaczynaja walke.
+
+
+   Boneyard - Adytum
+
+*/
+
+#include "define.h"
+#include "command.h"
+#include "updatmap.h"
+
+#include "maps/laadytum.h"
+#include "area/boneyard.h"
+#include "sfall/main.h"
+
+procedure start;
+procedure map_enter_p_proc;
+procedure map_update_p_proc;
+procedure map_exit_p_proc;
+
+procedure map_lightning;
+procedure AddInBlades;
+procedure Invasion;
+
+variable party_elevation;
+variable dude_start_hex;
+
+export variable warned;
+export variable AdyStor1_ptr;
+export variable AdyStor2_ptr;
+export variable Tine_barter;
+export variable JonPtr;
+export variable InBladePtr1;
+export variable InBladePtr2;
+export variable InBladePtr3;
+export variable InBladePtr4;
+export variable InBladePtr5;
+export variable InBladePtr6;
+export variable InBladePtr7;
+export variable InBladePtr8;
+export variable RazorPtr;
+export variable RegGuard1;
+export variable RegGuard2;
+
+variable invaderPtr;
+
+#define blade_laser_1Ptr   (InBladePtr3)
+#define blade_laser_2Ptr   (InBladePtr6)
+#define blade_laser_3Ptr   (InBladePtr7)
+
+#define blade_arifle_1Ptr  (InBladePtr1)
+#define blade_arifle_2Ptr  (InBladePtr2)
+#define blade_arifle_3Ptr  (InBladePtr4)
+#define blade_arifle_4Ptr  (InBladePtr5)
+
+#define blade_plasmaPtr    (InBladePtr8)
+
+procedure start begin
+end
+
+procedure map_enter_p_proc begin
+   set_global_var(GVAR_MARK_LA_1, 1);
+   call map_lightning;
+
+   if (map_first_run) then begin
+      if not(boneyard_invaded) then
+         display_msg(message_str(SCRIPT_SHADYWST, 115));
+      else
+         display_msg(message_str(SCRIPT_SHADYWST, random(150, 154)));
+   end
+
+   call Invasion;
+
+   override_map_start(100, 53, 0, 2);
+
+   set_global_var(GVAR_LOAD_MAP_INDEX, 0);
+end
+
+procedure map_update_p_proc begin
+   call map_lightning;
+
+   // The player talked to Zimmerman and triggers the Blades attack via dialog:
+   // GVAR_BLADES_INVASION_READY is set inside INBLADE.ssl to check if all object pointers are "fresh"
+   if (get_blades_attacking and (map_var(MVAR_AddedBlades) == 0) and (global_var(GVAR_BLADES_INVASION_READY) == 1)) then begin
+      set_global_var(GVAR_BLADES_COUNTER, 0);
+      call AddInBlades;
+   end
+   // The player wanted to talk to Zimmerman first, but then attacked Regulators instead:
+   else if (get_blades_attacking_wait and global_var(GVAR_DUDE_ENEMY_REGULATORS) and (global_var(GVAR_BLADES_INVASION_READY) == 1)) then begin
+      gfade_out(1);
+      set_global_var(GVAR_BLADES_COUNTER, 0);
+      call AddInBlades;
+   end
+
+   // Blades are attacking while the player isn't around:
+   else if (get_blades_attacking_alone and (map_var(MVAR_AddedBlades) == 0)) then begin
+      set_map_var(MVAR_AddedBlades, 1);
+
+      set_obj_invisible(JonPtr);
+      kill_critter(JonPtr, ANIM_fall_front_sf);
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_TOWNSMAN_METAL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_MALE_GUARD_METAL_BLACK, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_DOG, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GREENE, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_CALEB, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_TRAVELER_BLACK_METAL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_STRANGER_HMBMET, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_THUG_BLACK_METAL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_MERCENARY_HMBMET, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GUARD_HMBMET, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_TRAVELER_NFMETL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_STRANGER_NFMETL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_THUG_FEMALE_YELLOW, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_MERCENARY_NFMETL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GUARD_NFMETL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_TRAVELER_HMMETL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_STRANGER_HMMETL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_THUG_MALE_METAL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_MERC_MALE_METAL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GUARD_HMMETL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_TRAVELER_HFMETL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_STRANGER_HFMETL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_THUG_HFMETL, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_MALE_GUARD_CA, 0))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GUARD_HFMETL, 0))
+
+      critter_attempt_placement(RazorPtr, 12700, 0);
+
+      set_blades_attack_finished;
+      inc_general_rep(2);
+
+      give_xp(EXP_BLADES_ATTACKED_ADYTUM);
+   end
+
+   // The attack is done: (Also check if Razor is a valid target already)
+   else if ((map_var(MVAR_RegulatorCount) == 0) and get_blades_attacking) and RazorPtr != 0 then begin
+      gfade_out(1);
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_INITIATE_KNIGHT_MAN, 0)) // "Senior Knights" are the attacking Blade critter
+      critter_attempt_placement(RazorPtr, 12700, 0);
+
+      set_blades_attack_finished;
+      set_global_var(GVAR_ADYTUM_RAZOR_SOMETHING_1, 1);
+      inc_general_rep(2);
+      set_quest_kill_razor_completed; // Strike out the PipBoy quest log
+
+      give_xp(EXP_BLADES_ATTACKED_ADYTUM);
+      gfade_in(1);
+   end
+
+   // I have no idea:
+   else begin
+      if ((map_var(MVAR_RegulatorCount) == 0) and (global_var(GVAR_BLADES_STATUS) != 2) and (global_var(GVAR_ADYTUM_CALEB_SOMETHING_0) == 1)) then begin
+         set_global_var(GVAR_BLADES_STATUS, 2);
+         set_global_var(GVAR_ADYTUM_RAZOR_SOMETHING_0, 1);
+      end
+   end
+
+end
+
+procedure map_exit_p_proc begin
+end
+
+procedure map_lightning begin
+   if (dude_elevation == 1) then
+      Darkness;
+   else
+      Lighting;
+end
+
+procedure AddInBlades begin
+   variable critter, critterList, hex;
+
+   set_map_var(MVAR_AddedBlades, 1);
+
+   critterList := {blade_laser_1Ptr: 9702, blade_laser_2Ptr: 9696, blade_laser_3Ptr: 24492,
+                  blade_arifle_1Ptr: 9700, blade_arifle_2Ptr: 9895, blade_arifle_3Ptr: 26717, blade_arifle_4Ptr: 26711,
+                  blade_plasmaPtr: 9698};
+   forEach (critter : hex in critterList) begin
+      critter_attempt_placement(critter, hex, 0);
+      set_obj_visible(critter);
+      obj_rotate(critter, 2);
+   end
+
+   set_blades_attacking;
+   gfade_in(1);
+end
+
+procedure Invasion begin
+   if (boneyard_invaded and not(is_loading_game) and (map_var(MVAR_InvasionForcesCreated) == 0)) then begin
+      set_map_var(MVAR_InvasionForcesCreated, 1);
+
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_TOWNSMAN_METAL, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_MALE_GUARD_METAL_BLACK, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_DOG, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GREENE, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_CALEB, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_MERCENARY_HMBMET, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GUARD_HMBMET, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_MERCENARY_NFMETL, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GUARD_NFMETL, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_TRAVELER_HMMETL, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_MERC_MALE_METAL, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GUARD_HMMETL, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_THUG_HFMETL, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GUARD_HFMETL, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_LEATHER_JACKET_WOMAN, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_INITIATE_KNIGHT_MAN, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_MERCHANT, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_LEATHER_JACKET_MAN, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_PEASANT_BLACK, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_PEASANT_GREEN, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_PEASANT_YELLOW, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_LEATHER_ARMOR_MALE, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_PEASANT_FEMALE_CUTE, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_PEASANT_2_FEMALE, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_BOY, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_WORKER_2, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_PEASANT_4, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_FARMER_2, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GEN_WORKER, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_MERCHANT_5, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GIRL, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_DOC_MORBID, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GUARD_NFMAXX, 1))
+
+      create_la_invader(13493);
+      create_la_invader(19101);
+      create_la_invader(25916);
+      create_la_invader(22887);
+
+      // Any player party member was waiting in the map before?
+      check_invasion_party_waiting;
+   end
+end

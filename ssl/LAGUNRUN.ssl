@@ -1,0 +1,95 @@
+/*
+   MEGAMOD OVERRIDE 2026-08-08 (Borys): live invasion -- WSZYSTKIE
+   kill_critter_type wyciete z proc Invasion. Mieszkancy zyja, mutanci
+   (create_la_invader / SCSUPMUT hunt-civilians) sami zaczynaja walke.
+
+
+   Boneyard - Gun Runners
+
+*/
+
+#include "define.h"
+#include "command.h"
+#include "updatmap.h"
+
+#include "area/boneyard.h"
+
+procedure start;
+procedure map_enter_p_proc;
+procedure map_update_p_proc;
+
+procedure Invasion;
+
+variable party_elevation;
+variable dude_start_hex;
+
+export variable get_Gabriel;
+export variable peaceful;
+export variable Locker_Ptr;
+export variable Being_Looted;
+
+variable invaderPtr;
+variable locker;
+variable item;
+
+procedure start begin
+end
+
+procedure map_enter_p_proc begin
+   set_global_var(GVAR_MARK_LA_4, 1);
+   if (dude_elevation == 1) then begin
+      Darkness;
+   end
+   else begin
+      Lighting;
+   end
+
+   call Invasion;
+
+   override_map_start(99, 143, 0, 5);
+   if ((map_first_run) and not(boneyard_invaded)) then begin
+      display_msg(message_str(SCRIPT_SHADYWST, 111));
+
+      // Add new items as quest rewards
+      if fo1in2_weapon_upgrades_enabled then begin
+         locker := tile_contains_pid_obj(17093, 0, PID_LOCKER_CLEAN_RIGHT);
+         item := create_object(PID_SHOCK_SPEAR, 0, 0);
+         add_mult_objs_to_inven(locker, item, 1);
+      end
+   end
+
+   set_global_var(GVAR_LOAD_MAP_INDEX, 0);
+end
+
+procedure map_update_p_proc begin
+   if (dude_elevation == 1) then begin
+      Darkness;
+   end
+   else begin
+      Lighting;
+   end
+end
+
+procedure Invasion begin
+   if (boneyard_invaded and not(is_loading_game) and (map_var(2) == 0)) then begin
+      set_map_var(2, 1);
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_COMBAT_ARMOR_FEMALE, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_COMBAT_ARMOR_MALE, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_MERCHANT_4, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GABRIEL, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_THUG_BLACK_METAL, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GUARD_HMMETL, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GUARD_NFMETL, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_MALE_GUARD_CA, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_GUARD_HFMETL, 1))
+      // MEGAMOD 2026-08-08: kill wyciety -- mieszkancy zyja i walcza (kill_critter_type(PID_INITIATE_KNIGHT_MAN, 1))
+
+      create_la_invader(22520);
+      create_la_invader(21892);
+      create_la_invader(18111);
+      create_la_invader(16279);
+
+      // Any player party member was waiting in the map before?
+      check_invasion_party_waiting;
+   end
+end
