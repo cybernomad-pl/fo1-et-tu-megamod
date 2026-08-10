@@ -44,6 +44,12 @@ variable Only_Once := 1;
 procedure start begin
    Jack_Ptr := self_obj;
 
+   /* MEGAMOD 2026-08-10: rekrut NIE wraca do TEAM_PRISONERS po load --
+      Only_Once to zmienna skryptowa (resetuje sie przy kazdym load),
+      wiec vanilla nadpisywalo team gracza => martwy dialog + brak
+      follow (zgloszone przez Borysa w V13). */
+   if (self_team == TEAM_PLAYER) then return;
+
    if not(fo1in2_cut_characters_enabled) then destroy_object(self_obj);
 
    if Only_Once then begin
@@ -54,6 +60,11 @@ procedure start begin
 end
 
 procedure map_enter_p_proc begin
+   /* MEGAMOD 2026-08-10: rekrut nie podlega questowym kasowaniom --
+      vanilla: destroy gdy Tandi widoczna (jeniec tylko bez Tandi)
+      oraz destroy na hexie 10284 (exit questowy) NA KAZDEJ mapie. */
+   if (self_team == TEAM_PLAYER) then return;
+
    // Prisoner only shows up if Tandi isn't around
    if is_visible(Tandi_ptr) then destroy_object(self_obj);
 
