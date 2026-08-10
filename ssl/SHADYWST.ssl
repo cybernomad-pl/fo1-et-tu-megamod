@@ -1,0 +1,200 @@
+#include "define.h"
+#include "command.h"
+#include "updatmap.h"
+#include "maps/shadyw.h"
+#include "area/shadysands.h"
+
+procedure start;
+procedure combat_p_proc;
+procedure map_update_p_proc;
+procedure map_enter_p_proc;
+
+procedure Tandi_Move;
+procedure Where_Is_Tandi;
+procedure Where_To_Start;
+
+variable party_elevation;
+variable dude_start_hex;
+variable invaderPtr;
+
+variable HEREBEFORE := 0;
+procedure PickMutant;
+
+#define tandi_gets_kidnapped     ((map_var(MVAR_TANDI_KIDNAPPING) == 2) and                        \
+                                 (map_var(MVAR_Map_one_Time) == 0) and                             \
+                                 (global_var(GVAR_TANDI_HIRELING_STATUS) != 2) and                 \
+                                 tandi_not_kidnapped and                                           \
+                                 (global_var(GVAR_TANDI_HIRELING_STATUS) != 3) and                 \
+                                 radscorp_quest_completed and (get_raiders_alive > 0) and          \
+                                 (global_var(GVAR_TANDI_HIRELING_STATUS) != 5) and is_garl_alive)
+
+procedure start begin
+end
+
+procedure map_enter_p_proc begin
+   // Tandi can only get kidnapped if the player has returned at least once
+   // to Shady Sands after dealing with the Rad Scorpions.
+   if (is_loading_game == false) then begin
+      if radscorp_quest_completed then begin
+         debug("radscorpion quest completed!");
+         if (map_var(MVAR_TANDI_KIDNAPPING) == 0) then begin
+            debug("start Tandi kidnapping timer!");
+            set_map_var(MVAR_TANDI_KIDNAPPING, game_time);
+         end
+         else if (game_time > (map_var(MVAR_TANDI_KIDNAPPING) + ONE_GAME_DAY)) then begin
+            debug("oh no, Tandi got kidnapped!");
+            set_map_var(MVAR_TANDI_KIDNAPPING, 2);
+         end
+      end
+   end
+
+   set_global_var(GVAR_MARK_SHADY_1, 1);
+   Lighting;
+   if (map_first_run) then begin
+      HEREBEFORE := 1;
+      if (shady_invaded != 1) then begin
+         display_msg(message_str(SCRIPT_SHADYWST, 101));
+      end
+      else begin
+         display_msg(message_str(SCRIPT_SHADYWST, random(150, 154)));
+      end
+   end
+
+   if tandi_gets_kidnapped then begin
+      set_tandi_kidnapped;
+      set_map_var(MVAR_Map_one_Time, 1);
+   end
+   else if ((global_var(GVAR_TANDI_HIRELING_STATUS) == 5) and (shady_invaded == 0)) then begin
+      set_global_var(GVAR_TANDI_HIRELING_STATUS, 2);
+      if ((map_var(MVAR_TANDI_EXP) == 0) and (map_var(MVAR_Map_Only_once) == 0)) then begin
+         set_map_var(MVAR_Map_Only_once, 1);
+         set_map_var(MVAR_TANDI_EXP, 1);
+         give_xp_msg(EXP_TANDI_RETURNED, message_str(SCRIPT_SHADYWST, 100));
+      end
+   end
+   call Where_To_Start;
+
+   if (shady_invaded and not(is_loading_game) and (map_var(MVAR_Invasion) == 0)) then begin
+      if not(HEREBEFORE) then begin
+         display_msg(message_str(SCRIPT_SHADYWST, random(150, 154)));
+      end
+      set_map_var(MVAR_Invasion, 1);
+
+      call PickMutant;
+      critter_attempt_placement(invaderPtr, 15514, 0);//was 16514
+      call PickMutant;
+      critter_attempt_placement(invaderPtr, 23900, 0);//was 19901
+      call PickMutant;
+      critter_attempt_placement(invaderPtr, 18066, 0);
+      call PickMutant;
+      critter_attempt_placement(invaderPtr, 20536, 0);
+
+      // Any player party member was waiting in the map before?
+      // MEGAMOD 2026-08-10: check_invasion_party_waiting WYCIETE -- zabijalo Iana/Tycho/Katje/Tandi/Vasqueza po PID przy kazdym wejsciu (party.h:560)
+   end
+
+   set_global_var(GVAR_LOAD_MAP_INDEX, 0);
+end
+
+procedure map_update_p_proc begin
+   Lighting;
+end
+
+procedure combat_p_proc begin
+   script_overrides;
+
+   gfade_out(1);
+      move_to(dude_obj, 12107, 0);
+      game_time_advance(game_ticks(1800));
+   gfade_in(1);
+end
+
+procedure Tandi_Move begin
+   variable rnd := 0;
+
+   rnd := game_time_hour;
+   if ((rnd > 2100) or (rnd <= 600)) then begin
+      move_to(Tandi_ptr, 24678, 0);
+   end
+   else if ((rnd > 600) and (rnd <= 610)) then begin
+      move_to(Tandi_ptr, 18709, 0);
+   end
+   else if ((rnd > 610) and (rnd <= 615)) then begin
+      move_to(Tandi_ptr, 23232, 0);
+   end
+   else if (rnd == 650) then begin
+      move_to(Tandi_ptr, 23232, 0);
+   end
+   else if ((rnd > 650) and (rnd <= 1000)) then begin
+      move_to(Tandi_ptr, 15683, 0);
+   end
+   else if ((rnd > 1000) and (rnd <= 1200)) then begin
+      move_to(Tandi_ptr, 18709, 0);
+   end
+   else if ((rnd > 1200) and (rnd <= 1300)) then begin
+      move_to(Tandi_ptr, 24678, 0);
+   end
+   else if ((rnd > 1300) and (rnd <= 1305)) then begin
+      move_to(Tandi_ptr, 23232, 0);
+   end
+   else if (rnd == 1905) then begin
+      move_to(Tandi_ptr, 23232, 0);
+   end
+   else if ((rnd > 1905) and (rnd <= 2100)) then begin
+      move_to(Tandi_ptr, 18709, 0);
+   end
+
+end
+
+procedure Where_Is_Tandi begin
+   if tandi_not_kidnapped then begin
+      if (global_var(GVAR_TANDI_HIRELING_STATUS) == 0) then
+         call Tandi_Move;
+      else if get_tandi_returned then
+         call Tandi_Move;
+   end
+end
+
+procedure Where_To_Start begin
+   if (global_var(GVAR_LOAD_MAP_INDEX) == 1) then
+      override_map_start(107, 60, 0, 2);
+   else if (global_var(GVAR_LOAD_MAP_INDEX) == 2) then
+      override_map_start(65, 93, 0, 4);
+   else if (global_var(GVAR_LOAD_MAP_INDEX) == 3) then
+      override_map_start(107, 76, 0, 5);
+   else
+      override_map_start(107, 60, 0, 2);
+end
+
+procedure PickMutant begin
+   variable rnd, Critter;
+
+   // Ten different possibles (6 green, 4 black leather).
+   rnd := random(1, 10);
+   if (rnd == 1) then begin
+      Critter := 9; // "Super Mutant" (40hp)
+   end
+   else if (rnd == 2) then begin
+      Critter := 108;  // "Tough Super Mutant"
+   end
+   else if (rnd >= 3) and (rnd <= 6) then begin
+      Critter := random(186, 189); // (each stronger than the last!!)
+      /*
+      186 = " Super Mutant Guard
+      187 = " Mean Super Mutant
+      188 = " Mad Super Mutant
+      189 = " Deadly Super Mutant
+      */
+   end
+   else if (rnd >= 7) then begin
+      Critter := random(190, 193); // (each stronger than the last!!)
+      /*
+      190 = " Tough Nightkin
+      191 = " Deadly Nightkin
+      192 = " Super Nightkin
+      193 = " Master Nightkin
+      */
+   end
+   invaderPtr := create_object_sid((16777216 + Critter), 0, 0, SCRIPT_INVADER);
+   set_ai(invaderPtr, AI_SUPER_MUTANT_AGGRESSIVE);
+end

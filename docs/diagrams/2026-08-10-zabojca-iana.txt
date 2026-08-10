@@ -1,0 +1,42 @@
+FIX: PRAWDZIWY zabojca Iana -- check_invasion_party_waiting
+===========================================================
+
+BORYS MIAL RACJE: "cos go zabija w skrypcie". Zabijal go MAP-SCRIPT,
+nie jego wlasny skrypt (ten byl czysty -- no-op zweryfikowany).
+
+MECHANIZM (party.h:560, makro wolane z proc Invasion map-scriptow):
+
+  wejscie na najechana mape (SHADYET/SHADYWST/LAADYTUM/LAGUNRUN/...)
+     |
+     v
+  check_invasion_party_waiting:
+     Ian nie w party?     -> kill_critter_type(PID_IAN, 1)     <- TO
+     Tycho nie w party?   -> kill_critter_type(PID_TYCHO, 1)
+     Katja nie w party?   -> kill_critter_type(PID_KATJA, 1)
+     Tandi nie w party?   -> kill_critter_type(PID_TANDI, 1)
+     Vasquez nie w party? -> kill_critter_type(PID_VASQUEZ, 1)
+
+  Zabojstwo po PROTO-PID, z mapy -- niewrazliwe na no-op makra
+  (to nie skrypt crittera) i na wykluczenia z walki (to nie walka).
+  Ian lezal martwy od wejscia. Intencja vanilla: "kompanioni ktorych
+  nie zabrales zgineli w inwazji". U nas maja ZYC.
+
+FIX: makro WYCIETE z proc Invasion w SZESCIU mapach:
+  SHADYET, SHADYWST (nowe nadpisania -- wczesniej stockowe!)
+  LAADYTUM, LAGUNRUN, FOLLMAP, LABLADES (poprawka moich nadpisan --
+  zostawilam tam to makro przy wycinaniu kill_critter_type. Moj blad.)
+
+DEPLOY: 6x .int -> fo1_mod_invasion/scripts/
+
+UWAGA HUB: mapy HUB* (stockowe, Hub celowo martwy) TEZ wolaja to makro
+-- wejscie do Huba zabije niezabranych kompanionow! Do wyciecia razem
+z operacja Loxley/Decker (TODO #1).
+
+UWAGA SAVE: trup Iana zapisany w savie (mapa odwiedzona) NIE ozyje --
+potrzebny load sprzed pierwszego wejscia do Shady po inwazji.
+
+PRZY OKAZJI ZNALEZIONE (gl_pipboytimer.ssl upstream):
+  check_invasions NIE MA guarda na timer==0 -- get_v13_days_left <= 0
+  przy V13=0 oznaczaloby OVERRUN_MOVIE + koniec gry. Gra Borysa dziala
+  z V13=0 od tygodni => jego wersja/settings-loader jakos to obsluguje.
+  NIEPEWNE gdzie -- NIE ruszac V13 z 0 na 1 bez zbadania tego lancucha.

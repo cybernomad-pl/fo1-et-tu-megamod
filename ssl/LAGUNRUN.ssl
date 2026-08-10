@@ -90,6 +90,6 @@ procedure Invasion begin
       create_la_invader(16279);
 
       // Any player party member was waiting in the map before?
-      check_invasion_party_waiting;
+      // MEGAMOD 2026-08-10: check_invasion_party_waiting WYCIETE (zabijalo kompanionow po PID)
    end
 end
