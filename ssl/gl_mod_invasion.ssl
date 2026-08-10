@@ -95,10 +95,16 @@ procedure kickstart_battle begin
             end
             else if (get_team(obj) == TEAM_SHADY_SANDS) then begin
                 // Townsperson (Seth first among equals): fight the invaders.
-                target := nearest_of_team(obj, TEAM_NECROPOLIS_MUTANT);
-                if (target != 0) then begin
-                    set_object_data(obj, OBJ_DATA_WHO_HIT_ME, target);
-                    civ_count := civ_count + 1;
+                // MEGAMOD 2026-08-09: questowi NPC (Ian/Tandi/Aradesh) NIE
+                // sa pchani do walki -- gineli zanim gracz ich poznal.
+                if (get_script(obj) != SCRIPT_IAN
+                    and get_script(obj) != SCRIPT_TANDI
+                    and get_script(obj) != SCRIPT_ARADESH) then begin
+                    target := nearest_of_team(obj, TEAM_NECROPOLIS_MUTANT);
+                    if (target != 0) then begin
+                        set_object_data(obj, OBJ_DATA_WHO_HIT_ME, target);
+                        civ_count := civ_count + 1;
+                    end
                 end
             end
         end

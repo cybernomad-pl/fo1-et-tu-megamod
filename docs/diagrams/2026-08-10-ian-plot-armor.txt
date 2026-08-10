@@ -1,0 +1,28 @@
+FIX: Ian ginal w rzezni Shady + tekst rozkazu garnizonu
+=======================================================
+
+DIAGNOZA (Borys: "Ian nie zyje! pewnie ma cos w skrypcie co go zabija"):
+  - skrypt Iana NIE zabija: invasion_kill_critter = no-op (fo1.h:383),
+    IAN.int wdrozony aktualny -- zweryfikowane
+  - Ian ginal W WALCE: team TEAM_SHADY_SANDS = legalny cel polowania
+    mutantow (INVADER hunt-civilians), a kickstart WHO_HIT_ME dodatkowo
+    pchal go NA mutantow. Skorzana kurtka vs minigun = trup w 1. turze.
+
+FIX -- questowi NPC poza wojna (zanim gracz ich pozna):
+
+  WYKLUCZENI z hunt (INVADER + SCSUPMUT find_civilian)
+  i z kicka (gl_mod_invasion):
+     SCRIPT_IAN      -- pierwszy kompan
+     SCRIPT_TANDI    -- quest porwania + kompanka
+     SCRIPT_ARADESH  -- quest-giver (Tandi)
+  Seth, Razlo, straznicy, cywile -- WALCZA jak dotad (rzeznia zostaje).
+
+  Ryzyko resztkowe: combat AI moze ich wziac za cel gdy sa jedynym
+  wrogiem w zasiegu -- akceptowane (nie strzelaja pierwsi, WHO_HIT_ME
+  mutantow wskazuje walczacych).
+
+UWAGA SAVE: zmiana chroni ZYWYCH -- martwego Iana w biezacym save nie
+wskrzesza. Load sprzed wejscia do Shady albo respawn konsola/skryptem.
+
+TEKST: "Stay here for good. Hold this ground until I come back."
+    -> "Wait for me here until I say otherwise."  (spec Borysa)

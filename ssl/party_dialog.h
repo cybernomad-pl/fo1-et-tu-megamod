@@ -97,7 +97,7 @@ procedure NodePartyTactics begin
    NOption("Follow me.", NodePartyFollow, 4);
    NOption("Hold this spot.", NodePartyWait, 4);
    if (not(megamod_garrison_here)) then begin
-      NOption("Stay here for good. Hold this ground until I come back.", NodePartyGarrison, 4);
+      NOption("Wait for me here until I say otherwise.", NodePartyGarrison, 4);
    end
    NOption("Put away your weapon.", NodePartyHolster, 4);
    NOption("On second thought...", NodePartyMain, 4);

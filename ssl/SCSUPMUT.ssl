@@ -76,10 +76,16 @@ procedure find_civilian begin
           and not(is_critter_dead(obj))) then begin
          t := get_team(obj);
          if (t != TEAM_NECROPOLIS_MUTANT and t != TEAM_PLAYER) then begin
-            d := tile_distance_objs(obj, self_obj);
-            if (d < best_d) then begin
-               best := obj;
-               best_d := d;
+            /* MEGAMOD 2026-08-09: questowi NPC poza polowaniem
+               (jak INVADER.ssl -- Ian/Tandi/Aradesh). */
+            if (get_script(obj) != SCRIPT_IAN
+                and get_script(obj) != SCRIPT_TANDI
+                and get_script(obj) != SCRIPT_ARADESH) then begin
+               d := tile_distance_objs(obj, self_obj);
+               if (d < best_d) then begin
+                  best := obj;
+                  best_d := d;
+               end
             end
          end
       end
