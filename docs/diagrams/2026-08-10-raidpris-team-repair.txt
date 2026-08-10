@@ -1,0 +1,32 @@
+FIX: jeniec raidersow (RAIDPRIS) -- martwy dialog i brak follow
+===============================================================
+
+OBJAWY (Borys, V13): rekrut-jeniec nie podaza, nie da sie zagadac.
+
+PRZYCZYNA:
+  RAIDPRIS.start (vanilla):
+     Only_Once  <- ZMIENNA SKRYPTOWA, resetuje sie przy KAZDYM load
+        |
+        v
+     set_self_team(TEAM_PRISONERS)   <- rekrut TRACI team gracza
+        |
+        v
+     talk_p_proc: nie-TEAM_PLAYER -> dialog tylko w celi -> POZA CELA
+     KLIK NIE ROBI NIC; critter_p_proc: party branch niedostepny ->
+     BRAK FOLLOW. Oba objawy = jeden korzen.
+
+  Bonusowe bomby w map_enter (tez bez guarda):
+     is_visible(Tandi) -> destroy jenca   <- z Tandi w party rekrut
+                                             ZNIKA przy wejsciu
+     self_tile == 10284 -> destroy        <- questowy exit-hex, ale
+                                             sprawdzany na KAZDEJ mapie
+
+FIX:
+  start + map_enter: if (self_team == TEAM_PLAYER) then return;
+
+NAPRAWA STARYCH SAVE'OW (gl_mod_invasion.repair_party_teams):
+  map_update, one-shot per mapa, KAZDA mapa:
+     critter jest party memberem wg ENGINE (party_member_obj(pid)==obj)
+     a team != TEAM_PLAYER?  -> set_team(TEAM_PLAYER)
+  Naprawia jenca w istniejacym savie Borysa + kazdy przyszly drift
+  teamow z vanilla skryptow.
