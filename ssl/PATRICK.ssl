@@ -1,0 +1,361 @@
+/*
+
+   Encounter, Patrick the singing bard
+   MEGAMOD 2026-08-11 (Borys): rekrutowalny (wzorzec GENSKULZ/GUNRNR).
+   Pelny vanilla dialog zostaje (wiesci o miastach, nauka CHA); "Join
+   me." w obu wezlach wejsciowych. Guardy TEAM_PLAYER: brak resetu
+   teamu po load (initial to zmienna skryptowa), brak gangowego AI.
+
+*/
+
+/* Include Files */
+#include "define.h"
+
+#define NAME                    SCRIPT_PATRICK
+
+#include "command.h"
+#include "modreact.h"
+#include "party_dialog.h"
+
+procedure start;
+procedure critter_p_proc;
+procedure destroy_p_proc;
+procedure look_at_p_proc;
+procedure pickup_p_proc;
+procedure talk_p_proc;
+
+procedure Patrick01;
+procedure Patrick02;
+procedure Patrick03;
+procedure Patrick04;
+procedure Patrick05;
+procedure Patrick06;
+procedure Patrick06a;
+procedure Patrick07;
+procedure Patrick08;
+procedure Patrick09;
+procedure Patrick10;
+procedure Patrick11;
+procedure Patrick12;
+procedure Patrick13;
+procedure Patrick14;
+procedure Patrick15;
+procedure Patrick16;
+procedure Patrick17;
+procedure PatrickCombat;
+procedure Node999;
+procedure NodeRecruit;
+
+variable tmp_hostile;
+variable initial := 0;
+variable known;
+variable scared;
+
+procedure start begin
+   /* MEGAMOD: rekrut nie wraca do TEAM_PATRICK po load */
+   if (self_team == TEAM_PLAYER) then return;
+   if not(initial) then begin
+      initial := 1;
+      set_self_team(TEAM_PATRICK);
+      set_self_ai(AI_CAREFUL);
+   end
+end
+
+procedure critter_p_proc begin
+   /* MEGAMOD: rekrut podaza za graczem */
+   if (self_team == TEAM_PLAYER) then begin
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0 and local_var(13) != 0) then set_local_var(13, 0);
+      if (global_var(GVAR_PARTY_NO_FOLLOW) == 0 or local_var(13) != 0) then party_follow_dude_point(5, 3)
+      return;
+   end
+   if (scared) then begin
+      if (tile_distance_objs(self_obj, dude_obj) < 8) then begin
+         call flee_dude;
+      end
+   end
+   else begin
+      if (tmp_hostile) then begin
+         tmp_hostile := 0;
+         scared := 1;
+         attack(dude_obj);
+      end
+   end
+end
+
+procedure destroy_p_proc begin
+   set_global_var(GVAR_IS_PATRICK_DEAD, 1);
+   inc_good_critter
+end
+
+procedure look_at_p_proc begin
+   script_overrides;
+   known := global_var(GVAR_IS_PATRICK_KNOWN);
+   if (known) then begin
+      display_msg(mstr(101));
+   end
+   else begin
+      display_msg(mstr(100));
+   end
+end
+
+procedure pickup_p_proc begin
+   /* MEGAMOD: dostep do ekwipunku rekruta bez agresji */
+   if (self_team == TEAM_PLAYER) then return;
+   tmp_hostile := 1;
+end
+
+procedure talk_p_proc begin
+   /* MEGAMOD: party dialog dla rekruta */
+   if (self_team == TEAM_PLAYER and not(party_wants_normal_talk)) then begin
+      start_gdialog(NAME, self_obj, 4, -1, -1);
+      gSay_Start;
+      call NodePartyMain;
+      gSay_End;
+      end_dialogue;
+      return;
+   end
+
+   dude_look_at_self;
+   known := global_var(GVAR_IS_PATRICK_KNOWN);
+   if (scared) then begin
+      float_msg(self_obj, message_str(SCRIPT_ENEMY, random(100, 105)), FLOAT_MSG_RED);
+   end
+   else begin
+      start_gdialog(667, self_obj, 4, -1, -1);
+      gsay_start;
+      if (known) then begin
+         call Patrick17;
+      end
+      else begin
+         call Patrick01;
+      end
+      gsay_end;
+      end_dialogue;
+   end
+end
+
+procedure Patrick01 begin
+   known := 1;
+   set_global_var(GVAR_IS_PATRICK_KNOWN, known);
+   Reply(102);
+   NOption("Join me. The road is safer with company.", NodeRecruit, 4);
+   NOption(103, Patrick02, 4);
+   NOption(104, Patrick03, 4);
+   if looking_for_waterchip then begin
+      NOption(105, Patrick04, 4);
+   end
+   if (has_rep_berserker) then begin
+      BOption(106, PatrickCombat, 4);
+   end
+   NLowOption(107, Node999);
+end
+
+procedure Patrick02 begin
+   Reply(108);
+   NOption(109, Patrick05, 4);
+   NOption(110, Patrick06, 4);
+   NOption(111, Patrick05, 4);
+   NOption(112, Node999, 4);
+end
+
+procedure Patrick03 begin
+   Reply(113);
+   NOption(114, Node999, 4);
+   NOption(115, Patrick05, 4);
+end
+
+procedure Patrick04 begin
+   Reply(116);
+   if (dude_iq > 6) then begin
+      NOption(117, Patrick07, 7);
+   end
+   else begin
+      NOption(118, Patrick07, 4);
+   end
+end
+
+procedure Patrick05 begin
+   Reply(119);
+   NOption(120, Patrick08, 4);
+   NOption(121, Patrick09, 4);
+   NOption(110, Patrick06, 4);
+   NOption(122, Node999, 4);
+end
+
+procedure Patrick06 begin
+   Reply(123);
+
+   mark_on_map(AREA_SHADY_SANDS)
+   mark_on_map(AREA_JUNKTOWN)
+   mark_on_map(AREA_HUB)
+   mark_on_map(AREA_NECROPOLIS)
+
+   call Patrick06a;
+end
+
+procedure Patrick06a begin
+   NOption(124, Patrick10, 4);
+   NOption(125, Patrick11, 4);
+   NOption(126, Patrick12, 4);
+   NOption(127, Patrick13, 4);
+   NOption(g_bye, Node999, 4);
+end
+
+procedure Patrick07 begin
+   Reply(128);
+   NOption(g_bye, Node999, 4);
+   NOption(115, Patrick05, 4);
+end
+
+procedure Patrick08 begin
+   Reply(129);
+   if looking_for_waterchip then begin
+      NOption(130, Patrick07, 4);
+   end
+   NOption(110, Patrick06, 4);
+   NOption(112, Node999, 4);
+end
+
+procedure Patrick09 begin
+   Reply(131);
+   if (dude_skill_success(SKILL_SPEECH, 0)) then begin
+      GOption(132, Patrick15, 7);
+   end
+   NOption(133, Patrick05, 4);
+   NOption(122, Node999, 4);
+end
+
+procedure Patrick10 begin
+   if shady_invaded then begin
+      Reply(141);
+   end
+   else if not(is_aradesh_alive) then begin
+      Reply(135);
+   end
+   else begin
+      Reply(134);
+   end
+   call Patrick06a;
+end
+
+procedure Patrick11 begin
+   if junktown_invaded then begin
+      Reply(141);
+   end
+   else if not(is_killian_alive) then begin
+      if not(is_gizmo_alive) then begin
+         Reply(138);
+      end
+      else begin
+         Reply(137);
+      end
+   end
+   else begin
+      Reply(136);
+   end
+   call Patrick06a;
+end
+
+procedure Patrick12 begin
+   if hub_invaded then begin
+      Reply(141);
+   end
+   else begin
+      Reply(139);
+   end
+   call Patrick06a;
+end
+
+procedure Patrick13 begin
+   if necropolis_invaded then begin
+      Reply(141);
+   end
+   else begin
+      Reply(140);
+   end
+   if (dude_iq > 5) then begin
+      NOption(142, Patrick14, 6);
+   end
+   else begin
+      call Patrick06a;
+   end
+end
+
+procedure Patrick14 begin
+   Reply(143);
+   call Patrick06a;
+end
+
+procedure Patrick15 begin
+   Reply(144);
+   GOption(145, Patrick16, 4);
+   NOption(146, Node999, 4);
+end
+
+procedure Patrick16 begin
+   gfade_out(1);
+      set_critter_stat(dude_obj, STAT_ch, 1);
+      display_msg(gen_mstr(164));
+   gfade_in(1);
+   GMessage(147);
+end
+
+procedure Patrick17 begin
+   Reply(148);
+   NOption("Join me. The road is safer with company.", NodeRecruit, 4);
+   NOption(149, Patrick06, 4);
+   NOption(150, Node999, 4);
+   NLowOption(107, Node999);
+end
+
+procedure PatrickCombat begin
+   tmp_hostile := 1;
+end
+
+procedure Node999 begin
+end
+
+procedure NodeRecruit begin
+   if (self_team == TEAM_PLAYER) then begin
+      display_msg(obj_name(self_obj) + " is already with you.");
+      return;
+   end
+   party_add(self_obj);
+   set_team(self_obj, TEAM_PLAYER);
+   call camp_grant_barter(self_obj);
+   display_msg(obj_name(self_obj) + " joins your party.");
+end
+
+procedure NodeCampWakeUp;
+// camp_active_here / camp_searched_here -- provided by camp_actions.h
+// Camp actions -- INLINE via camp_actions.h macros (vanilla pattern).
+
+procedure NodeCampWakeUp begin
+   variable bed_lst;
+   variable bed_obj;
+   variable best_bed;
+   variable best_d;
+   variable d;
+   set_local_var(13, 1);
+   reg_anim_begin();
+   reg_anim_animate(self_obj, ANIM_back_to_standing, -1);
+   reg_anim_end();
+   // Take nearest bedroll with us (remove it from map).
+   best_bed := 0;
+   best_d := 99999;
+   bed_lst := list_begin(LIST_SCENERY);
+   bed_obj := list_next(bed_lst);
+   while (bed_obj) do begin
+      if (bed_obj != 0 and (obj_pid(bed_obj) == PID_BED_1 or obj_pid(bed_obj) == PID_BED_2)) then begin
+         d := tile_distance_objs(bed_obj, self_obj);
+         if (d < best_d) then begin
+            best_bed := bed_obj;
+            best_d := d;
+         end
+      end
+      bed_obj := list_next(bed_lst);
+   end
+   list_end(bed_lst);
+   if (best_bed != 0) then destroy_object(best_bed);
+   display_msg(obj_name(self_obj) + " gets up and follows you.");
+end
