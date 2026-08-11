@@ -38,6 +38,7 @@ procedure CampRemakeExecute;
 procedure NodePartyGarrison;
 procedure PartyGarrisonExecute;
 procedure PartyRejoinExecute;
+procedure camp_clear_whm_refs(variable corpse);
 // megamod_garrison_here -- zdefiniowana w command.h (uzywana takze
 // przez skrypty bez party_dialog.h: IAN, TANDI, VASQUEZ).
 procedure CampPackTrigger;
@@ -326,6 +327,27 @@ procedure CampBuryTrigger begin
    end
 end
 
+// CRASH FIX 2026-08-11: destroying a corpse other critters still point
+// at via OBJ_DATA_WHO_HIT_ME (our invasion kick/hunt sets it en masse)
+// leaves dangling pointers -> engine "Critter pointer invalid!" -> CTD
+// (repro: bury right after a city battle). Clear every live critter's
+// WHO_HIT_ME that references the corpse BEFORE destroy_object.
+procedure camp_clear_whm_refs(variable corpse) begin
+   variable lst;
+   variable c;
+   lst := list_begin(LIST_CRITTERS);
+   c := list_next(lst);
+   while (c) do begin
+      if (c != 0 and c != corpse) then begin
+         if (get_object_data(c, OBJ_DATA_WHO_HIT_ME) == corpse) then begin
+            set_object_data(c, OBJ_DATA_WHO_HIT_ME, 0);
+         end
+      end
+      c := list_next(lst);
+   end
+   list_end(lst);
+end
+
 procedure CampBuryExecute begin
    variable lst;
    variable obj;
@@ -337,6 +359,14 @@ procedure CampBuryExecute begin
    variable elev;
    variable cnt;
    variable guard;
+
+   // CRASH FIX 2026-08-11: no burying mid-combat -- combat AI iterates
+   // targets while we would be freeing them.
+   if (combat_is_initialized) then begin
+      Reply("Not while we're fighting. Dead can wait.");
+      NOption("Right.", NodePartyMain, 4);
+      return;
+   end
 
    // Pass 1: collect dead critters. Never destroy while iterating the
    // engine's LIST_CRITTERS (stale-pointer crash) -- collect, then act.
@@ -379,6 +409,8 @@ procedure CampBuryExecute begin
                guard := guard + 1;
                item := inven_ptr(corpse, 0);
             end
+            // CRASH FIX 2026-08-11: clear dangling WHO_HIT_ME refs first.
+            call camp_clear_whm_refs(corpse);
             destroy_object(corpse);
             cnt := cnt + 1;
          end

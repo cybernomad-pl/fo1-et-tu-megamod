@@ -65,15 +65,26 @@ procedure camp_has_fire_here begin
 end
 
 // Returns 1 if any camp is set up on current map (WITH or WITHOUT fire).
-// Camp exists = bedrolls placed + party sleeping. Fire is optional (needs
-// firewood). Dialog Make/Pack gate uses THIS, not camp_has_fire_here.
+// FIX 2026-08-11 (Borys: "jeden zestaw flag"): NO separate flag anymore.
+// Camp truth = the SAME arrays the outdoorsman scripts write/reset
+// (campfire_map = fire tile, campfire_bedrolls = bedroll list). The old
+// "camp_active_map" flag desynced: outdoorsman map-change reset and
+// shovel/K teardown never cleared it -> "Time to break camp" with no
+// camp (and encounter maps share indices, so the stale flag resurfaced).
 procedure camp_active_here begin
     variable arr;
     variable key;
+    variable beds;
     key := "" + cur_map_index;
-    arr := load_array("camp_active_map");
+    arr := load_array("campfire_map");
+    if (arr != 0) then begin
+        if (arr[key] > 0) then return 1;
+    end
+    arr := load_array("campfire_bedrolls");
     if (arr == 0) then return 0;
-    if (arr[key] == 1) then return 1;
+    beds := arr[key];
+    if (beds == 0) then return 0;
+    if (len_array(beds) > 0) then return 1;
     return 0;
 end
 
@@ -271,7 +282,8 @@ procedure camp_build_camp begin
     list_end(lst);
     if (had_sleeper) then set_global_var(398, 1);
     tile_refresh_display;
-    call camp_save_map_entry(map_key, 1, "camp_active_map");
+    // camp_active_map flag REMOVED (2026-08-11) -- camp_active_here reads
+    // campfire_map/campfire_bedrolls directly (single source of truth).
     if (fire != 0) then begin
         call camp_save_map_entry(map_key, fire_tile, "campfire_map");
         call camp_save_map_entry(map_key, fire, "campfire_firepit_obj");
@@ -391,7 +403,6 @@ procedure camp_teardown_camp begin
     call camp_clear_map_entry(map_key, "campfire_firepit_obj");
     call camp_clear_map_entry(map_key, "campfire_map");
     call camp_clear_map_entry(map_key, "campfire_player_bedroll");
-    call camp_clear_map_entry(map_key, "camp_active_map");
     set_global_var(398, 0);
     tile_refresh_display;
 end

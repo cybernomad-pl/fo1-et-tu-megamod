@@ -1109,6 +1109,8 @@ end
 procedure map_update_p_proc begin
     variable bi;
     variable c;
+    variable whm_lst;
+    variable whm_c;
 
     // Deferred corpse burial -- destroy queued corpses OUTSIDE the USEOBJON
     // hook (destroying the hook's target object mid-op crashes the game).
@@ -1118,6 +1120,20 @@ procedure map_update_p_proc begin
             for (bi := 0; bi < len_array(bury_queue); bi++) begin
                 c := bury_queue[bi];
                 if (c != 0) then begin
+                    // CRASH FIX 2026-08-11: clear dangling WHO_HIT_ME refs
+                    // (see camp_clear_whm_refs in party_dialog.h) before
+                    // freeing the corpse -- engine dereferences stale ptrs.
+                    whm_lst := list_begin(LIST_CRITTERS);
+                    whm_c := list_next(whm_lst);
+                    while (whm_c) do begin
+                        if (whm_c != 0 and whm_c != c) then begin
+                            if (get_object_data(whm_c, OBJ_DATA_WHO_HIT_ME) == c) then begin
+                                set_object_data(whm_c, OBJ_DATA_WHO_HIT_ME, 0);
+                            end
+                        end
+                        whm_c := list_next(whm_lst);
+                    end
+                    list_end(whm_lst);
                     destroy_object(c);
                     give_exp_points(XP_CAMPFIRE_SMOTHER);
                 end

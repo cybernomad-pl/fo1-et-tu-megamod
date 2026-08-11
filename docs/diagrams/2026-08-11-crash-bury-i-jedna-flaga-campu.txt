@@ -1,0 +1,40 @@
+FIX x2: CTD przy pochowku + rozjazd flag campu (debug.log + spec Borysa)
+========================================================================
+
+CRASH (dowod z debug.log, DebugMode=2):
+  "Ghoul gets up and follows you."
+  "The party buries the dead. Their belongings are left on the ground."
+  "Critter pointer invalid!" x6        <- I CTD
+
+  MECHANIZM:
+     pochowek = destroy_object(trup)   <- obiekt USUNIETY z pamieci
+     ale WHO_HIT_ME innych critterow   <- nadal wskazuje na trupa
+     (nasza inwazja ustawia WHO_HIT_ME masowo: kick + hunt + combat)
+     engine czyta wskaznik -> invalid -> crash to desktop
+
+  FIX:
+     przed KAZDYM destroy trupa: petla po zywych critterach,
+     WHO_HIT_ME == trup -> 0   (dialog bury: camp_clear_whm_refs;
+                                lopata: inline w bury_queue)
+     + ZAKAZ pochowku w trakcie walki (dialog: "Not while we're
+       fighting.") -- combat AI iteruje cele podczas zwalniania
+
+JEDEN ZESTAW FLAG CAMPU (spec Borysa):
+  PRZED: DWA zrodla prawdy
+     dialog:      camp_active_map[mapa]     <- osobna flaga
+     outdoorsman: campfire_map + bedrolls   <- wlasciwy stan
+     teardown lopata/K i map-change reset NIE czyscily camp_active_map;
+     mapy encounter WSPOLDZIELA indeksy -> stara flaga wracala na innej
+     mapie -> "Time to break camp" bez campu (objaw Borysa)
+
+  PO: camp_active_map WYCIETA calkowicie.
+     camp_active_here := campfire_map[key] > 0
+                         OR len(campfire_bedrolls[key]) > 0
+     Budowa (dialog camp_build_camp / outdoorsman
+     create_campfire_adjacent) i teardown (dialog / lopata / K)
+     operuja na TYCH SAMYCH arrays. Jedna prawda.
+
+DEPLOY: pelny rebuild (104 skrypty), pelny deploy wszystkich modow.
+TEST: (1) camp -> lopata -> wyjdz/wroc -> dialog NIE pokazuje
+      "Time to break camp"; (2) bitwa w miescie -> pochowek trupow
+      po walce -> bez CTD; (3) pochowek w walce zablokowany.
