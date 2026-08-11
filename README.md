@@ -25,15 +25,20 @@ Our layer (load order, top to bottom):
 
 | Mod folder | What it adds |
 |---|---|
-| `fo1_mod_party_hotkeys` | Party hold/follow toggle, FID browser, party-PID dump |
+| `fo1_mod_party_hotkeys` | Party hold/follow (`F`), GO order (`G`), FID browser |
 | `fo1_mod_new_start_plus` | Starting kit + motorcycle-at-start ownership |
-| `fo1_mod_outdoorsman` | Camp / bedroll / bury / bed-rest / auto-craft + good deeds + party teleport |
+| `fo1_mod_outdoorsman` | Camp (firewood-gated) / forage / bury + good deeds + party teleport |
 | `fo1_mod_science` | General Science (use the skill on anything) + science crafting |
+| `fo1_mod_emergency_radio` | Use a radio to call location/reputation-based reinforcements |
 | `fo1_mod_combatcontrol` | Take control of your party members in combat (sfall `gl_partycontrol`) |
 | `fo1_mod_tandi` | "Sexy tribal" Tandi (hfprim sprite) + easy main-quest helper |
 | `fo1_mod_party_armor_ext` | Party members show the sprite matching their worn armor |
 | `fo1_mod_legendary_gear` | Legendary / upgraded gear support |
-| `fo1_mod_npc_party` | 66 NPC script overrides -- makes ~39 NPCs recruitable |
+| `fo1_mod_npc_party` | 68 NPC script overrides -- recruitable NPCs incl. Skulz + Gun Runners |
+| `fo1_mod_invasion` | **Live invasion**: towns stay alive, invader mutants hunt civilians, city battles |
+
+Disabled (kept in repo): `fo1_mod_car_encounter` (bike spawn on encounter maps --
+duplicate-spawn issues, to be redesigned), `fo1_mod_raiders_garage` (dropped).
 
 Global scripts (`gl_*.int`) auto-load from any active mod's `scripts/` folder and
 run every tick / on hooks. NPC scripts (uppercase, e.g. `CURTIS.int`) override the
@@ -44,10 +49,16 @@ base critter behaviour so those NPCs gain "Join me", follow, and party-order dia
 ## Features
 
 ### Party system
-- **Recruit almost anyone.** ~39 NPCs get a "Join me." dialog option (`party_add` +
-  `set_self_team(TEAM_PLAYER)`). Some are gated -- e.g. **Tandi** only offers to join
-  after she has been kidnapped by the raiders (and the option then persists).
+- **Recruit almost anyone.** 40+ NPCs get a "Join me." dialog option (`party_add` +
+  `set_self_team(TEAM_PLAYER)`) -- including generic **Skulz** gangers (Junktown) and
+  **Gun Runners** (Boneyard) for army-building. Some are gated -- e.g. **Tandi** only
+  offers to join after she has been kidnapped by the raiders.
 - **Follow / hold.** `F` toggles the whole party between FOLLOW and HOLD POSITION.
+- **GO order.** `G` sends the whole party running to the hex under your mouse cursor
+  (spiral spread around the target); they hold position there. `F` recalls.
+- **Garrison.** "Wait for me here until I say otherwise." -- the NPC leaves the party
+  (does not travel with you), stays on the map on your side, fights your enemies and
+  waits. "Fall in. We're moving out." brings them back. Survives save/load.
 - **Party dialog.** Recruited NPCs get party-order options, plus "Let's talk about
   something else." to temporarily drop back into their original (pre-recruit) dialog.
 - **Combat control.** With `gl_partycontrol` installed and the sfall `PIDList` left
@@ -57,20 +68,41 @@ base critter behaviour so those NPCs gain "Join me", follow, and party-order dia
 - **Armor sprites.** `gl_party_armor_ext` swaps a party member's sprite to match the
   armor they wear (per-FID mapping, not per-character).
 
+### Live invasion (`fo1_mod_invasion`)
+- Invasion timers set to **day 1** for every town (`config/fo1_settings.ini`;
+  Vault 13 stays off -- its timer ends the game).
+- **Towns stay alive.** All vanilla kill paths are neutralized: the
+  `invasion_kill_critter` macro is a no-op in our NPC overrides, and the map-script
+  mass-kills (`kill_critter_type` lists + `check_invasion_party_waiting`, which
+  executed Ian/Tycho/Katja/Tandi/Vasquez by PID) are cut from overridden maps:
+  SHADYET, SHADYWST, LAADYTUM, LAGUNRUN, FOLLMAP, LABLADES.
+- **Invaders hunt.** Overridden invader scripts (INVADER, SCSUPMUT) make each mutant
+  attack the nearest civilian on its own (`attack()` from the critter's script forces
+  combat) -- city battles start around you without your input. Your party is never
+  auto-targeted. Quest NPCs (Ian, Tandi, Aradesh) are excluded from the hunt.
+- The **Hub stays fallen** (by design); a TROY "join or die" escort scene runs there.
+- Team repair: any engine-registered party member that lost `TEAM_PLAYER` (vanilla
+  script drift) gets it back on map enter.
+
 ### Camp & survival (`gl_mod_outdoorsman`)
-- **Build a camp** in the wilderness: use **firewood + lighter** to light a campfire.
-- **Rest.** `K` rests -- full camp rest in the wild (packs the camp on wake), or
-  sleep at any adjacent bed/mattress/bedroll anywhere (8h, heals the party). An
-  on-screen prompt appears when you're hurt, it's evening/night, and a bed is near.
+- **Build a camp** in the wilderness -- **requires firewood**: firewood on the ground
+  next to you, or in your pack, + a lighter (`L` or USE firewood).
+- **Forage.** `L` with no firewood searches the area (1h game time): an Outdoorsman
+  check -- fail finds nothing (retry allowed), success gives firewood, high margins
+  add an iguana / flint. One successful forage per map.
+- **Rest.** `K` rests 7h at your own camp only (packs the camp on wake). Healing is
+  the **natural rate** (Healing Rate per 3h, FO2 mechanics) -- no more free full
+  heal. Bed rest is disabled (owned beds planned as a separate mod).
 - **Tear down** the camp with the shovel; dropped items stay on the ground.
 - **Bury the dead.** Shovel on a corpse buries it; a party order buries all corpses
   around an encounter camp (loot is dropped to the ground first).
+- **No item farming on re-camp**: scout+camp (with loot) works once per map; after
+  that "Let's set up camp again" rebuilds the camp with no loot.
 
 ### Crafting
-- **Auto-craft** (`G`): makes everything craftable from your pack, highest in-game
-  value first, max of each, chaining intermediate results. Recipes include spear
-  (pole + **plain knife only**), sharpened spear (+flint), healing powder, antidote
-  (Science 50+), molotov.
+- **Party dialog crafting only** (the auto-craft hotkey was removed): spear
+  (pole + knife), sharpened spear (+flint), healing powder, antidote (Science 50+),
+  molotov -- via "Got any ideas we can put together?".
 - **Science crafting** (`fo1_mod_science`): use Science on a scorpion tail while
   carrying booze -> antidote (skill check).
 
@@ -102,13 +134,12 @@ people with better gear. **Source present, not fully wired into the active layer
 
 | Key | Scancode | Action |
 |---|---|---|
-| `K` | 37 | Rest (camp in the wild, or any nearby bed) |
-| `G` | 34 | Auto-craft everything possible |
+| `K` | 37 | Rest 7h at your camp (natural healing rate; packs camp on wake) |
+| `G` | 34 | **GO order** -- party runs to the hex under the cursor, then holds |
 | `X` | 45 | Quick exit to worldmap (encounter maps, out of combat) |
-| `L` | 38 | Lighter toggle |
-| `F` | 33 | Party HOLD / FOLLOW toggle |
+| `L` | 38 | Lighter; in the wild: camp if firewood (ground/pack), else forage |
+| `F` | 33 | Party HOLD / FOLLOW toggle (also recalls after GO) |
 | `[` `]` | 26 / 27 | FID browser (cycle a party member's sprite) |
-| `;` | 39 | **temp/diagnostic** -- dump party protos to `party_pids.ini` |
 
 Vanilla Et Tu hotkeys (Character `C`, Inventory `I`, Pipboy `P`, Skilldex `S`,
 attack `A`, automap `TAB`) are avoided.
@@ -172,15 +203,22 @@ Every code commit ships an ASCII change diagram in
 
 ## Known issues
 
-- **Crash in Vault 15 on an old save** (under investigation). Appeared during the
-  combat-control / Tandi / FID work. sfall debug logging is enabled to capture the
-  next repro; likely suspects are the newly-added global scripts (`gl_partycontrol`,
-  `gl_mod_tandi`) or old-save incompatibility.
+- **Hub maps still call `check_invasion_party_waiting`** -- entering the Hub with
+  companions NOT in your party kills them by PID. Will be cut together with the
+  planned Loxley/Decker survival override.
+- **Junktown map scripts** not yet audited for invasion kills (critter overrides are
+  protected; JUNK* maps pending).
+- **`gl_pipboytimer` (upstream) has no timer==0 guard** in `check_invasions` --
+  do not flip `GVAR_VAULT_13_INVASION_DAYS` from 0 without tracing that chain
+  (a 0 timer would read as "already invaded" -> endgame movie).
+- **Rope consumed on spear craft** reported once -- no such consumption exists in
+  the crafting code; awaiting a repro with details.
+- **GO also moves garrisoned NPCs** -- treated as a feature (garrison repositioning
+  without rejoin); gate it if unwanted.
+- **Crash in Vault 15 on an old save** (under investigation, sfall debug enabled).
 - **Radio factions** and **biker gang** are partially implemented (source present,
   not fully wired into the active layer).
-- The **talisman** item (control any critter that carries it) is not yet deployed --
-  it needs a `SCRIPTS.LST` entry and a recompile of `gl_peace` / `TALISMAN` against
-  our headers. Tracked as part of the MyMod -> megamod migration.
+- The **talisman** item (control any critter that carries it) is not yet deployed.
 
 See [`docs/V6_ROADMAP.md`](docs/V6_ROADMAP.md) for the full roadmap and status.
 

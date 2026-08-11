@@ -1,6 +1,6 @@
 # Project status -- fo1-et-tu-megamod
 
-**As of:** 2026-07-26. This file tracks the *actual* deployed state (README is the
+**As of:** 2026-08-10. This file tracks the *actual* deployed state (README is the
 overview; `V6_ROADMAP.md` is the plan). When code and docs disagree, this file is
 the tiebreaker for "what is really live right now".
 
@@ -10,90 +10,73 @@ the tiebreaker for "what is really live right now".
   `C:\Program Files (x86)\GOG Galaxy\Games\Fallout 2\Fallout1in2\`.
 - Our scripts compiled with the sfall **4.4.7** SSL compiler
   (`KLAUDIA/megamod-build/`). Backward-compatible so far.
-- Note: the game + saves were lost once (deleted folders) and reinstalled fresh.
-  All code is triple-safe: disk + local git + GitHub. The megamod as a whole is not
-  a single backup -- base game and third-party mods must be re-downloaded (see
-  `RESTORE-INSTALL.md`).
+- Game settings: 1920x1080 (f2_res), combat speed max + player speedup,
+  vanilla 4 AP inventory (InventoryAPcosts disabled).
+- Invasion timers (`config/fo1_settings.ini`): **all towns = day 1**;
+  Vault 13 = 0 (its timer ends the game -- see known issue on the 0-guard).
 
 ## Active mod layer (load order)
 
 ```
-fo1_mod_party_hotkeys
+fo1_mod_party_hotkeys      <- F hold/follow, G GO-order, FID browser
 fo1_mod_new_start_plus
-fo1_mod_outdoorsman
+fo1_mod_outdoorsman        <- v5: firewood-gated camp, forage, natural heal
 fo1_mod_science
-fo1_mod_combatcontrol      <- new (2026-07-26)
-fo1_mod_tandi              <- new (2026-07-26)
+fo1_mod_emergency_radio
+fo1_mod_combatcontrol      <- AllowControl: TEAM_PLAYER + party PID (Victor fix)
+fo1_mod_tandi
 fo1_mod_party_armor_ext
 fo1_mod_legendary_gear
-fo1_mod_npc_party          <- 66 NPC .int, loaded LAST (wins)
+fo1_mod_npc_party          <- 68 NPC .int (66 + GENSKULZ + GUNRNR), wins
+fo1_mod_invasion           <- live invasion: 6 map overrides + INVADER/SCSUPMUT
 ```
 
-## Done and live
+Disabled: `fo1_mod_car_encounter` (bike duplicates -- redesign pending),
+`fo1_mod_raiders_garage` (dropped), `InventoryAPcosts` (vanilla 4 AP wanted).
+
+## Done and live (2026-08 session on top of the 2026-07 base)
 
 | System | State | Notes |
 |---|---|---|
-| NPC recruit ("Join me") | LIVE | ~39 NPCs, `party_add` + `set_self_team(TEAM_PLAYER)` |
-| Party follow / hold (`F`) | LIVE | toggles `GVAR_PARTY_NO_FOLLOW` |
-| Party dialog + "talk about something else" | LIVE | temporary drop to original NPC dialog |
-| Camp: firewood+lighter build / shovel teardown | LIVE | same camp object both ways |
-| Bury corpse (shovel) + bulk bury order | LIVE | deferred-destroy; loot dropped first |
-| Bed rest `K` (camp or any bed, 8h, heals) + prompt | LIVE | edge-triggered evening/night prompt |
-| Auto-craft `G` (value-priority, chained) | LIVE | moved off `C` (Character screen clash) |
-| General Science (use skill, once/proto, autopsy) | LIVE | `fo1_mod_science` |
-| Good deeds (food/water -> XP + local rep) | LIVE | `gl_good_deeds` |
-| New-start kit + motorcycle ownership | LIVE | `gl_mod_new_start_plus` |
-| Party armor sprite swap | LIVE | per-FID (B2 fix) |
-| **Combat control** | LIVE | `gl_partycontrol` + empty `PIDList` -> `party_member_obj` gate |
-| Tandi tribal sprite (hfprim) | LIVE | `fo1_mod_tandi` (was not deployed before) |
-| Curtis/Agatha tribal (hmwarr/hfprim) | LIVE | swap-once guard, no armor wipe |
-| Tandi "Join me" gated on kidnapping | LIVE | `HIRELING_STATUS >= 1`, persists after return |
+| **Live invasion: Shady Sands** | LIVE, tested | invaders hunt civilians (attack() from INVADER script); Seth & co. fight back |
+| **Live invasion: Boneyard** | LIVE, untested | LAADYTUM/LAGUNRUN/FOLLMAP/LABLADES kills cut (65 incl. Gabriel); SCSUPMUT hunts |
+| Companion executions cut | LIVE | `check_invasion_party_waiting` (killed Ian/Tycho/Katja/Tandi/Vasquez by PID) cut from 6 maps |
+| Quest NPC protection | LIVE | Ian/Tandi/Aradesh excluded from hunt + battle kick |
+| **Garrison order** | LIVE | "Wait for me here until I say otherwise." -- out of party, player's side, waits; "Fall in" returns; survives save/load |
+| **GO order (`G`)** | LIVE | party runs to `tile_under_cursor`, spiral spread, then holds; F recalls |
+| Skulz recruitable (GENSKULZ) | LIVE | vanilla invasion kill_critter also removed |
+| Gun Runners recruitable (GUNRNR) | LIVE | faction-hostility guards for recruits |
+| Party team repair | LIVE | engine party member without TEAM_PLAYER -> team restored on map enter (fixes save drift) |
+| RAIDPRIS (raider prisoner) recruit | LIVE | team reset on load + 2 quest-despawns guarded |
+| Outdoorsman v5 | LIVE | camp requires firewood (ground > pack > forage w/ Outdoorsman check, once/map); K = 7h natural-rate heal at own camp only; bed rest & auto-craft removed |
+| Re-camp without farming | LIVE | "Set up camp again" after the one scout/loot per map |
+| Motorcycle trunk fix | LIVE | trunk 1 hex SE of the bike (Blocking_Cycle hex-drift fixed); encounter spawn disabled |
+| Build env repair | DONE | sfall `main.h` restored (GetConfig*), gl_partycontrol compiles in-pipeline again |
 
-## Bugs fixed this cycle
-
-- **B2 -- FID per-PID -> per-FID.** Party armor sprites map by base FID, generic for
-  all party NPCs (not hardcoded per character).
-- **B3 -- team reset on map change.** 18 NPCs whose `map_enter_p_proc` reset team +
-  teleported home now guard `if (self_team == TEAM_PLAYER) then return;` -- recruited
-  NPCs stay in party across maps. (Confirmed on Marcelle, Trish, Sinthia.)
-- **Combat control leak.** Was controlling every critter on the map; root cause was
-  the missing `gl_partycontrol.int` (sfall 4.5 moved this out of the engine into a
-  mod). Deployed it; with an empty `PIDList` control is gated to real party members.
-- **FID re-swap wiping armor.** Tribal sprite swaps ran every `map_enter`; now
-  applied once / only when not in party.
-- **Auto-craft key clash.** `C` opened the Character screen; moved auto-craft to `G`.
-
-## Partial / not wired
-
-- **Radio factions** (`gl_radio` + faction travel): source present, not in the active
-  load order yet.
-- **Biker gang** (extra motorcycles as decoration): design only (roadmap F2).
-- **Stat boosters, mutagenic serum, firewood item chain**: roadmap, not built.
+Earlier base (2026-07): recruit ~39 NPCs, party dialog + camp actions, combat
+control, armor sprites, General Science, good deeds, new-start kit + motorcycle,
+Tandi content -- see git history / diagrams.
 
 ## Open issues
 
-- **CRASH: Vault 15, old save.** Appeared after the combat-control / Tandi / FID
-  deploy. Save loads fine (per `sfall-log.txt`); the crash happens during play in
-  Vault 15. sfall `[Debugging] Enable=1` is set to capture the next repro. Prime
-  suspects: `gl_partycontrol` (foreign pre-compiled binary), `gl_mod_tandi` (freshly
-  deployed, iterates critters on every gamemode change), or old-save/global-script
-  incompatibility. Not yet root-caused -- no mods were disabled (per request).
+- **Hub maps** still call `check_invasion_party_waiting` (companion PID kills) --
+  cut planned together with the Loxley/Decker survival override (Hub stays fallen
+  otherwise, by design; TROY escort scene active).
+- **Junktown JUNK\* maps** not audited for invasion kills yet.
+- **`gl_pipboytimer` upstream: no ==0 guard** in `check_invasions` -- V13 timer must
+  stay untouched until that chain is traced.
+- **Rope consumed on spear craft** -- reported once, not found in code; needs repro.
+- **GO moves garrisoned NPCs** -- accepted as garrison repositioning; gate if needed.
+- **CRASH: Vault 15, old save** -- still open, sfall debug on.
+
+## Next up (task queue)
+
+1. Junktown map audit + Hub Loxley/Decker survival (cut their PIDs from kill lists).
+2. Emergency radio: INVASION broadcast when <7 days to invasion.
+3. Alternate start: Shady Sands spawn + Overseer intro + bike waiting + day-1 timer.
+4. Motorcycle on encounter maps -- redesign from engine behavior up.
 
 ## Deferred: MyMod -> megamod migration
 
-`KLAUDIA/OUTPUT/fallout-mods-backup/` (recovered from NordLocker) holds the original
-`MyMod` package with features not yet in the megamod source:
-
-- Custom global mods: `gl_bedsL`, `gl_peace` (talisman dispenser), `gl_PTYSHVL`
-  (party shovel), `gl_raiderhunter`, `gl_reputationfix`, `gl_rope`, `gl_zippo`.
-- Custom items/scripts: `TALISMAN`, `BEDL`, `ROPEL`, `RESPEC` (therapist / stat
-  respec), `LIGHTER`, plus modified NPC/map scripts (`DOGMEAT` robodog, `TYCHO`,
-  `SHADYWST` = Tandi kidnapping, `SHADYET`, Junktown maps, `ZAX`, `YOURROOM`).
-
-Migration is a task on its own (each needs a `SCRIPTS.LST` entry, header porting from
-`sfall_headers\` -> `sfall/`, and a recompile). Planned design notes captured:
-- **rope**: sneak -> immobilize (cripple legs+arms + periodic unconscious).
-- **raiderhunter**: ears only from bad random-encounter raiders (not Khans), sellable
-  at ordinary non-essential Guards in Junktown and the Hub.
-- **reputation fix**: must coexist with charity (level 1) + good deeds (level 2).
-- **respec/respec2** = the therapist mod.
+Unchanged -- see git history of this file (gl_bedsL, gl_peace/TALISMAN, gl_PTYSHVL,
+gl_raiderhunter, gl_reputationfix, gl_rope, gl_zippo, RESPEC, robodog).
