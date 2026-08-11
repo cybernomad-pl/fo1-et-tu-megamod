@@ -52,7 +52,8 @@
 #define CLUSTER_DIST     (1)    // punkt bazowy grupy = sasiad gracza
 #define MAX_OK_DIST      (20)   // dalej niz to = nie stoi przy graczu
 
-#define LOG(s, k, v)     set_ini_setting("testing.ini|ptp_" + s + "|" + k, v)
+#include "megamod_debug.h"
+#define LOG(s, k, v) if (megamod_dbg_on) then set_ini_setting("testing.ini|ptp_" + s + "|" + k, v)
 
 procedure start;
 procedure map_enter_p_proc;
@@ -164,13 +165,13 @@ procedure map_enter_p_proc begin
          else begin
             failed := failed + 1;
             LOG("fail", "script", s);
-            debug_msg("gl_party_teleport: FAILED to place party member, script " + s);
+            LOGD("gl_party_teleport: FAILED to place party member, script " + s);
          end
       end
    end
 
    // MEGAMOD 2026-08-08: debug display usuniety (Borys) -- diagnostyka zostaje w debug_msg ponizej.
-   debug_msg("gl_party_teleport: placed=" + placed + " total=" + total + " forced=" + forced + " failed=" + failed + " clusters=" + next_sektor);
+   LOGD("gl_party_teleport: placed=" + placed + " total=" + total + " forced=" + forced + " failed=" + failed + " clusters=" + next_sektor);
    // Log przezywajacy crash (ini flushowany na dysk od razu).
    LOG("last", "map", cur_map_index);
    LOG("last", "total", total);

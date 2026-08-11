@@ -44,7 +44,8 @@
 #include "sfall/define_lite.h"
 #include "sfall/lib.arrays.h"
 
-#define LOG(s, k, v) set_ini_setting("testing.ini|outd_" + s + "|" + k, v)
+#include "megamod_debug.h"
+#define LOG(s, k, v) if (megamod_dbg_on) then set_ini_setting("testing.ini|outd_" + s + "|" + k, v)
 
 #define XP_CAMPFIRE_LIGHT    (15)
 #define XP_CAMPFIRE_SMOTHER  (10)

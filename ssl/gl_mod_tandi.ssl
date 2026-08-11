@@ -18,7 +18,8 @@
 #include "sfall/define_lite.h"
 #include "sfall/lib.arrays.h"
 
-#define LOG(s, k, v) set_ini_setting("megamod.ini|" + s + "|" + k, v)
+#include "megamod_debug.h"
+#define LOG(s, k, v) if (megamod_dbg_on) then set_ini_setting("megamod.ini|" + s + "|" + k, v)
 
 #define TANDI_ART_INDEX 86  // hfprim
 #define FID_HFPRIM_FULL 16777302
