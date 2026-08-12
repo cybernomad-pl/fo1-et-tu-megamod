@@ -42,13 +42,19 @@ variable Only_Once := 1;
 #define exit_hex        (10284)
 
 procedure start begin
-   Jack_Ptr := self_obj;
-
    /* MEGAMOD 2026-08-10: rekrut NIE wraca do TEAM_PRISONERS po load --
       Only_Once to zmienna skryptowa (resetuje sie przy kazdym load),
       wiec vanilla nadpisywalo team gracza => martwy dialog + brak
-      follow (zgloszone przez Borysa w V13). */
+      follow (zgloszone przez Borysa w V13).
+      2026-08-12: guard MUSI byc PRZED Jack_Ptr -- to external mapy
+      RAIDERS; na innych mapach przypisanie = "External variable does
+      not exist", start przerwany w pol (debug.log przy crashu). */
    if (self_team == TEAM_PLAYER) then return;
+
+   /* Jack_Ptr istnieje tylko na mapie obozu raidersow. */
+   if (cur_map_index == MAP_RAIDERS) then begin
+      Jack_Ptr := self_obj;
+   end
 
    if not(fo1in2_cut_characters_enabled) then destroy_object(self_obj);
 
