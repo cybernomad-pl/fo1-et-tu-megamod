@@ -41,6 +41,11 @@ variable rndx;
 #define LVAR_Herebefore          (4)
 
 procedure start begin
+   /* MEGAMOD 2026-08-12: rekrut NIE jest okulawiany ponownie -- init to
+      zmienna skryptowa (reset przy kazdym load), wiec vanilla crippled-leg
+      flavor kumulowal sie: po paru loadach ghoul mial OBIE nogi crippled
+      i ruch kosztowal krocie AP (zgloszone przez Borysa). */
+   if (self_team == TEAM_PLAYER) then return;
    if not(init) then begin
       init := 1;
       if (local_var(1) == 0) then begin
@@ -52,11 +57,16 @@ procedure start begin
       end
       set_self_team(TEAM_GENERIC_GHOULS);
       set_self_ai(AI_GHOUL_MINDLESS);
-      if random(0, 1) then begin
-         critter_injure(self_obj, DAM_CRIP_LEG_LEFT);
-      end
-      else begin
-         critter_injure(self_obj, DAM_CRIP_LEG_RIGHT);
+      /* MEGAMOD 2026-08-12: okulaw tylko RAZ w zyciu crittera (LVAR),
+         nie przy kazdym load (kumulacja na obie nogi). */
+      if (local_var(6) == 0) then begin
+         set_local_var(6, 1);
+         if random(0, 1) then begin
+            critter_injure(self_obj, DAM_CRIP_LEG_LEFT);
+         end
+         else begin
+            critter_injure(self_obj, DAM_CRIP_LEG_RIGHT);
+         end
       end
    end
 end
@@ -161,7 +171,10 @@ procedure NodeRecruit begin
    party_add(self_obj);
    set_team(self_obj, TEAM_PLAYER);
    call camp_grant_barter(self_obj);
-   display_msg(obj_name(self_obj) + " joins your party.");
+   /* MEGAMOD 2026-08-12: wylecz vanilla kalectwo nog przy rekrutacji --
+      kulawy kompan pali AP na kazdy hex ruchu w walce. */
+   critter_uninjure(self_obj, DAM_CRIP_LEG_LEFT bwor DAM_CRIP_LEG_RIGHT);
+   display_msg(obj_name(self_obj) + " straightens up and joins your party.");
 end
 
 procedure combat_p_proc begin

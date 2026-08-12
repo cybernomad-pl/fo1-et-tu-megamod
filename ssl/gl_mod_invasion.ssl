@@ -130,8 +130,18 @@ procedure repair_party_teams begin
     obj := list_next(lst);
     while (obj) do begin
         if (obj != 0 and obj != dude_obj and not(is_critter_dead(obj))) then begin
-            if (party_member_obj(obj_pid(obj)) == obj and get_team(obj) != TEAM_PLAYER) then begin
-                set_team(obj, TEAM_PLAYER);
+            if (party_member_obj(obj_pid(obj)) == obj) then begin
+                if (get_team(obj) != TEAM_PLAYER) then begin
+                    set_team(obj, TEAM_PLAYER);
+                end
+                // MEGAMOD 2026-08-12: ghoule-rekruci byli kumulacyjnie
+                // okulawiani przy kazdym load (vanilla flavor bez guarda)
+                // -- wylecz nogi w istniejacych save'ach. Dotyczy TYLKO
+                // ghouli (ich kalectwo pochodzi z buga, nie z walki).
+                if (get_script(obj) == SCRIPT_GENGHOUL
+                    or get_script(obj) == SCRIPT_HOTGHOUL) then begin
+                    critter_uninjure(obj, DAM_CRIP_LEG_LEFT bwor DAM_CRIP_LEG_RIGHT);
+                end
             end
         end
         obj := list_next(lst);

@@ -38,11 +38,17 @@ procedure start begin
       end
       set_self_team(TEAM_GENERIC_GHOULS);
       set_self_ai(AI_GHOUL_MINDLESS);
-      if random(0, 1) then begin
-         critter_injure(self_obj, DAM_CRIP_LEG_LEFT);
-      end
-      else begin
-         critter_injure(self_obj, DAM_CRIP_LEG_RIGHT);
+      /* MEGAMOD 2026-08-12: okulaw tylko RAZ w zyciu crittera (LVAR),
+         nie przy kazdym load -- init resetuje sie z sesja i kalectwo
+         kumulowalo sie na obie nogi (patrz GENGHOUL.ssl). */
+      if (local_var(6) == 0) then begin
+         set_local_var(6, 1);
+         if random(0, 1) then begin
+            critter_injure(self_obj, DAM_CRIP_LEG_LEFT);
+         end
+         else begin
+            critter_injure(self_obj, DAM_CRIP_LEG_RIGHT);
+         end
       end
    end
 end
