@@ -39,6 +39,8 @@
 procedure start;
 procedure gamemode_handler;
 procedure apply_bonuses;
+procedure apply_party_gear;
+procedure gear_perks_for_pid(variable pid);
 
 variable state_arr;
 
@@ -53,6 +55,81 @@ end
 
 procedure gamemode_handler begin
     call apply_bonuses;
+    call apply_party_gear;
+end
+
+// ============================================================
+// PARTY GEAR SPECIALIZATION (Borys 2026-08-13, "na probe")
+//
+// Noszony (WORN) pancerz daje party memberowi PERKI -- perki sa
+// per-critter (critter_add_trait, mechanizm sprawdzony w combat
+// control), w przeciwienstwie do set_critter_stat, ktore na NPC
+// zmienia PROTO (wszystkie crittery tego typu!).
+//
+// Katalog PID -> perki (explicit, ZERO fallbackow):
+//   LEATHER_JACKET (74): gain_perception (+1 PE, realny stat)
+//                        + sharpshooter (+2 PE do celnosci na dystans)
+//   -- czyli "kurtka zwiadowcy": czujniejszy i celniejszy strzelec.
+//
+// Stan per NPC w save_array "party_gear_spec": unique_id -> PID
+// pancerza, za ktory dostal perki. Zmiana/zdjecie -> perki zdjete.
+// ============================================================
+
+// Zwraca 1 gdy PID pancerza jest w katalogu specjalizacji.
+procedure gear_perks_for_pid(variable pid) begin
+    if (pid == PID_LEATHER_JACKET) then return 1;
+    return 0;
+end
+
+procedure apply_party_gear begin
+    variable lst;
+    variable npc;
+    variable worn;
+    variable worn_pid;
+    variable uid;
+    variable spec_arr;
+    variable applied_pid;
+
+    spec_arr := load_array("party_gear_spec");
+    if (spec_arr == 0) then spec_arr := create_array_map;
+
+    lst := list_begin(LIST_CRITTERS);
+    npc := list_next(lst);
+    while (npc) do begin
+        if (npc != 0 and npc != dude_obj
+            and not(is_critter_dead(npc))
+            and get_team(npc) == TEAM_PLAYER) then begin
+            uid := set_unique_id(npc);
+            applied_pid := spec_arr[uid];
+            worn := critter_inven_obj(npc, INVEN_TYPE_WORN);
+            worn_pid := 0;
+            if (worn != 0) then worn_pid := obj_pid(worn);
+
+            if (worn_pid != applied_pid) then begin
+                // Zdejmij perki za poprzedni pancerz (jesli byly).
+                if (gear_perks_for_pid(applied_pid)) then begin
+                    if (applied_pid == PID_LEATHER_JACKET) then begin
+                        critter_rm_trait(npc, TRAIT_PERK, PERK_gain_perception_perk, -1);
+                        critter_rm_trait(npc, TRAIT_PERK, PERK_sharpshooter, -1);
+                    end
+                end
+                // Naloz perki za aktualny pancerz (jesli w katalogu).
+                if (gear_perks_for_pid(worn_pid)) then begin
+                    if (worn_pid == PID_LEATHER_JACKET) then begin
+                        if (has_trait(TRAIT_PERK, npc, PERK_gain_perception_perk) == 0) then
+                            critter_add_trait(npc, TRAIT_PERK, PERK_gain_perception_perk, 1);
+                        if (has_trait(TRAIT_PERK, npc, PERK_sharpshooter) == 0) then
+                            critter_add_trait(npc, TRAIT_PERK, PERK_sharpshooter, 1);
+                        display_msg(obj_name(npc) + " settles into the jacket. Eyes sharper already.");
+                    end
+                end
+                spec_arr[uid] := worn_pid;
+                save_array("party_gear_spec", spec_arr);
+            end
+        end
+        npc := list_next(lst);
+    end
+    list_end(lst);
 end
 
 procedure apply_bonuses begin

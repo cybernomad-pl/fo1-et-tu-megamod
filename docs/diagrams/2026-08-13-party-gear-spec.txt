@@ -1,0 +1,45 @@
+FEAT: specjalizacja party przez noszony pancerz (proba, spec Borysa)
+====================================================================
+
+PYTANIA BORYSA -> ODPOWIEDZI Z KODU/SILNIKA:
+
+  "da sie wyciagnac statsy crittera?"
+     TAK: get_critter_stat(obj, STAT_x), has_skill(obj, SKILL_x).
+
+  "armor poprawia statsy out of the box?"
+     Tylko AC/DR/DT (obrona) -- z proto pancerza, silnikowo.
+     Bonusy do SPECIAL/skilli od itemow NIE istnieja natywnie.
+
+  "bonus po PID dla crittera -- jest taka opcja?"
+     set_critter_stat: na NPC zmienia PROTO = WSZYSTKIE crittery
+        tego typu naraz. NIE nadaje sie per-critter. PULAPKA.
+     critter_add_trait(npc, TRAIT_PERK, perk, lvl): per-OBIEKT,
+        odwracalne (critter_rm_trait), sprawdzone u nas w combat
+        control. TEGO uzywamy.
+
+IMPLEMENTACJA (gl_mod_legendary_gear -> apply_party_gear):
+
+  HOOK_GAMEMODECHANGE (zamkniecie inwentarza/dialogu, zmiana mapy)
+     |
+     v
+  petla po party memberach (TEAM_PLAYER, zywi):
+     worn := pancerz w slocie WORN -> worn_pid
+     porownaj z zapamietanym (save_array "party_gear_spec",
+                              klucz = sfall unique_id)
+     zmiana? -> zdejmij perki starego pancerza
+             -> naloz perki nowego wg KATALOGU (explicit, po PID)
+
+  KATALOG (na probe -- 1 wpis, latwo rozszerzalny):
+     LEATHER_JACKET (74) -> PERK_gain_perception (+1 PE, realny stat)
+                          + PERK_sharpshooter (+2 PE do celnosci
+                            strzalu na dystans)
+     = "kurtka zwiadowcy": NPC czujniejszy i celniejszy
+     komunikat: "X settles into the jacket. Eyes sharper already."
+
+  Zdjecie/zmiana kurtki -> perki znikaja. Stan przezywa save/load.
+
+DALEJ (pomysly Borysa do przyszlej iteracji):
+  - "nabieranie doswiadczenia": licznik zabojstw per unique_id ->
+    perki weterana co N killi (bonus_ranged_damage, toughness...)
+  - rozszerzenie katalogu: metal armor -> toughness, combat armor ->
+    bonus_rate_of_fire, robes -> ... (decyzje designowe Borysa)
